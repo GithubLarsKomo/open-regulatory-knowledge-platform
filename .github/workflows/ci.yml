@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main, develop]
+  pull_request:
+    branches: [master, main]
+
+permissions:
+  contents: read
+
+jobs:
+  lint-backlog:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+
+      - name: Run SPEC ID Linter
+        run: |
+          python tools/spec_linter.py --path . --report TRACEABILITY/lint_report.md --strict
+        shell: bash
+
+      - name: Run Backlog Generator
+        run: |
+          python tools/backlog_generator.py --path . --output-dir TRACEABILITY --task-md
+        shell: bash
+
+      - name: Verify TASK.md is up-to-date
+        run: |
+          git diff --exit-code TASK.md TRACEABILITY/backlog.md TRACEABILITY/backlog.csv TRACEABILITY/Requirements.csv \
+            && echo "All generated files are up-to-date." \
+            || { echo "::warning ::Generated files are out of date. Re-run 'python tools/backlog_generator.py --path . --output-dir TRACEABILITY --task-md' and 'python tools/spec_linter.py --path . --report TRACEABILITY/lint_report.md' to update."; }
+
+      - name: Run tests
+        run: |
+          pip install pytest
+          python -m pytest tests/ -v
+        shell: bash
