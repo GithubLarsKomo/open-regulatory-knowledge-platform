@@ -27,6 +27,22 @@ The UI covers:
 - Auditors
 - System Administrators
 
+## Domain Model
+
+### UI Views
+
+| View | Description | Access |
+|---|---|---|
+| Dashboard | Task summaries, pending approvals, evidence gaps, activity feed | All roles |
+| Object Browser | Searchable, filterable list of regulatory objects | All roles |
+| Object Detail | Object properties, version history, relationships | All roles |
+| Object Editor | Structured forms for creating/editing drafts | Author roles |
+| Relationship Graph | Interactive traceability visualization | All roles |
+| Workflow Console | Review, approval, rejection actions | Reviewer/Approver roles |
+| Report Generator | Template selection, baseline config, download | Author/Approver roles |
+| AI Drafting | AI-assisted content generation with citations | Author roles |
+| Admin Console | User management, role assignment, system config | Administrator only |
+
 ## Requirements
 
 ### REQ-UI-0001

@@ -35,7 +35,8 @@ class TestProductService:
     """Tests for ProductService."""
 
     def test_create_product(self, repo_session):
-        service = ProductService(repo_session)
+        session, repo = repo_session
+        service = ProductService(repo)
         obj, version = service.create(
             payload={
                 "product_id": "PROD-001",
@@ -47,7 +48,7 @@ class TestProductService:
             },
             owner_user_id="user-001",
         )
-        repo_session.commit()
+        session.commit()
 
         assert obj.object_type == 'product'
         assert obj.lifecycle_state == 'draft'
@@ -59,18 +60,20 @@ class TestProductService:
         assert data['payload']['name'] == 'Test IVD Kit'
 
     def test_list_products(self, repo_session):
-        service = ProductService(repo_session)
+        session, repo = repo_session
+        service = ProductService(repo)
         service.create({"product_id": "P1", "name": "Product 1"}, "u1")
         service.create({"product_id": "P2", "name": "Product 2"}, "u2")
-        repo_session.commit()
+        session.commit()
 
         products = service.list()
         assert len(products) == 2
 
     def test_submit_and_approve_product(self, repo_session):
-        service = ProductService(repo_session)
+        session, repo = repo_session
+        service = ProductService(repo)
         obj, _ = service.create({"product_id": "P1", "name": "Product 1"}, "u1")
-        repo_session.commit()
+        session.commit()
 
         assert service.submit_for_review(obj.uuid_hex, "u1") is True
         assert service.approve(obj.uuid_hex, "u2", "Approved") is True
@@ -79,9 +82,10 @@ class TestProductService:
         assert data['lifecycle_state'] == 'approved'
 
     def test_soft_delete_product(self, repo_session):
-        service = ProductService(repo_session)
+        session, repo = repo_session
+        service = ProductService(repo)
         obj, _ = service.create({"product_id": "P1", "name": "Product 1"}, "u1")
-        repo_session.commit()
+        session.commit()
 
         assert service.soft_delete(obj.uuid_hex, "u1") is True
         assert service.get(obj.uuid_hex) is None
@@ -91,7 +95,8 @@ class TestClaimService:
     """Tests for ClaimService."""
 
     def test_create_claim(self, repo_session):
-        service = ClaimService(repo_session)
+        session, repo = repo_session
+        service = ClaimService(repo)
         obj, version = service.create(
             payload={
                 "claim_type": "performance",
@@ -101,15 +106,16 @@ class TestClaimService:
             },
             owner_user_id="user-001",
         )
-        repo_session.commit()
+        session.commit()
 
         assert obj.object_type == 'claim'
         data = service.get_with_payload(obj.uuid_hex)
         assert data['payload']['wording'] == 'The device detects SARS-CoV-2 with 95% sensitivity'
 
     def test_link_evidence(self, repo_session):
-        claim_service = ClaimService(repo_session)
-        evidence_service = EvidenceService(repo_session)
+        session, repo = repo_session
+        claim_service = ClaimService(repo)
+        evidence_service = EvidenceService(repo)
 
         # Create a claim
         claim_obj, _ = claim_service.create(
@@ -121,7 +127,7 @@ class TestClaimService:
             payload={"evidence_type": "literature_reference", "title": "Study 2024", "author": "Smith et al."},
             owner_user_id="u1",
         )
-        repo_session.commit()
+        session.commit()
 
         # Link evidence to claim
         result = claim_service.link_evidence(claim_obj.uuid_hex, ev_obj.uuid_hex)
@@ -132,12 +138,13 @@ class TestClaimService:
         assert ev_obj.uuid_hex in data['payload']['evidence_links']
 
     def test_evidence_coverage_check(self, repo_session):
-        service = ClaimService(repo_session)
+        session, repo = repo_session
+        service = ClaimService(repo)
         obj, _ = service.create(
             payload={"claim_type": "safety", "jurisdiction": "EU", "language": "en", "wording": "Safe device"},
             owner_user_id="u1",
         )
-        repo_session.commit()
+        session.commit()
 
         # No evidence linked
         result = service.check_evidence_coverage(obj.uuid_hex)
@@ -145,12 +152,13 @@ class TestClaimService:
         assert result['approvable'] is False
 
     def test_claim_lifecycle(self, repo_session):
-        service = ClaimService(repo_session)
+        session, repo = repo_session
+        service = ClaimService(repo)
         obj, _ = service.create(
             payload={"claim_type": "clinical", "jurisdiction": "EU", "language": "en", "wording": "Clinical claim"},
             owner_user_id="u1",
         )
-        repo_session.commit()
+        session.commit()
 
         assert service.submit_for_review(obj.uuid_hex, "u1") is True
         assert service.approve(obj.uuid_hex, "u2", "Approved") is True
@@ -163,7 +171,8 @@ class TestEvidenceService:
     """Tests for EvidenceService."""
 
     def test_create_evidence(self, repo_session):
-        service = EvidenceService(repo_session)
+        session, repo = repo_session
+        service = EvidenceService(repo)
         obj, version = service.create(
             payload={
                 "evidence_type": "literature_reference",
@@ -174,7 +183,7 @@ class TestEvidenceService:
             },
             owner_user_id="user-001",
         )
-        repo_session.commit()
+        session.commit()
 
         assert obj.object_type == 'evidence'
         data = service.get_with_payload(obj.uuid_hex)
@@ -182,21 +191,23 @@ class TestEvidenceService:
         assert data['payload']['source_reference'] == 'PMID:12345678'
 
     def test_list_evidence(self, repo_session):
-        service = EvidenceService(repo_session)
+        session, repo = repo_session
+        service = EvidenceService(repo)
         service.create({"evidence_type": "literature_reference", "title": "Study 1"}, "u1")
         service.create({"evidence_type": "clinical_data", "title": "Study 2"}, "u2")
-        repo_session.commit()
+        session.commit()
 
         items = service.list()
         assert len(items) == 2
 
     def test_evidence_lifecycle(self, repo_session):
-        service = EvidenceService(repo_session)
+        session, repo = repo_session
+        service = EvidenceService(repo)
         obj, _ = service.create(
             payload={"evidence_type": "standards_reference", "title": "ISO 14971"},
             owner_user_id="u1",
         )
-        repo_session.commit()
+        session.commit()
 
         assert service.submit_for_review(obj.uuid_hex, "u1") is True
         assert service.approve(obj.uuid_hex, "u2", "Valid standard") is True

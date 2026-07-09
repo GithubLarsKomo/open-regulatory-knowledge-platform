@@ -4,6 +4,18 @@
 
 Define the risk management domain according to ISO 14971 and IVDR expectations.
 
+## Scope
+
+The domain covers:
+
+- Hazard identification and documentation
+- Risk estimation and evaluation
+- Risk control measures and verification
+- Residual risk evaluation
+- Benefit-risk analysis
+- Risk Management Report generation
+- Risk review and approval workflow
+
 ## Stakeholders
 
 - QM Reviewer

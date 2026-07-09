@@ -357,6 +357,49 @@ def generate_csv_backlog(existing_tasks: List[Dict], generated_tasks: List[Dict]
             ])
 
 
+def generate_task_md(existing_tasks: List[Dict], generated_tasks: List[Dict], output_path: Path) -> None:
+    """Generate TASK.md from backlog data with detailed task structure."""
+    lines = []
+    lines.append("# SWE Batch Plan (Auto-Generated)")
+    lines.append("")
+    lines.append("> This file is auto-generated from SPEC files by `tools/backlog_generator.py`.")
+    lines.append("> Do not edit manually — regenerate with `python tools/backlog_generator.py --task-md`.")
+    lines.append("")
+
+    # Group by epic
+    epics = defaultdict(list)
+    for task in existing_tasks + generated_tasks:
+        epics[task['epic']].append(task)
+
+    for epic_name in sorted(epics.keys()):
+        lines.append(f"## {epic_name}")
+        lines.append("")
+        for task in epics[epic_name]:
+            lines.append(f"### {task['task_id']}")
+            lines.append(f"{task['title']}.")
+            lines.append("")
+            lines.append("Source requirements:")
+            lines.append("")
+            for req_id in task['requirements']:
+                lines.append(f"- {req_id}")
+            lines.append("")
+            if task.get('scope'):
+                lines.append(f"Scope:")
+                lines.append("")
+                for item in task['scope'].split(', '):
+                    lines.append(f"- {item}")
+                lines.append("")
+            lines.append("Acceptance criteria:")
+            lines.append("")
+            lines.append(f"- {task['title']} implemented and tested.")
+            for req_id in task['requirements']:
+                lines.append(f"- {req_id} satisfied.")
+            lines.append("")
+
+    output_path.write_text('\n'.join(lines), encoding='utf-8')
+    print(f"   TASK.md:  {output_path}")
+
+
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
@@ -376,6 +419,11 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
         type=Path,
         default=None,
         help="Output directory for backlog files (default: TRACEABILITY/)."
+    )
+    parser.add_argument(
+        '--task-md', '-t',
+        action='store_true',
+        help="Also generate TASK.md in the repository root."
     )
     return parser.parse_args(argv)
 
@@ -406,6 +454,10 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     generate_csv_backlog(existing_tasks, generated_tasks, csv_path)
     print(f"   CSV:      {csv_path}")
+
+    if args.task_md:
+        task_md_path = repo_root / 'TASK.md'
+        generate_task_md(existing_tasks, generated_tasks, task_md_path)
 
     print(f"\n✅ Backlog generated.")
     return 0

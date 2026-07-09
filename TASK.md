@@ -1,10 +1,12 @@
-# TASK.md
-# Initial SWE Batch Plan
+# SWE Batch Plan (Auto-Generated)
+
+> This file is auto-generated from SPEC files by `tools/backlog_generator.py`.
+> Do not edit manually — regenerate with `python tools/backlog_generator.py --task-md`.
 
 ## Epic 001 — Specification Foundation
 
 ### TASK-FOUNDATION-0001
-Create repository skeleton.
+Create Repository Skeleton.
 
 Source requirements:
 
@@ -13,13 +15,12 @@ Source requirements:
 
 Acceptance criteria:
 
-- Folder structure exists.
-- Root SPEC.md exists.
-- META rules exist.
-- Initial DOMAIN, DATABASE, GRAPH, AI and REPORTS files exist.
+- Create Repository Skeleton implemented and tested.
+- REQ-CORE-0001 satisfied.
+- REQ-ARCH-0001 satisfied.
 
 ### TASK-FOUNDATION-0002
-Implement specification ID linter.
+Implement Specification ID Linter.
 
 Source requirements:
 
@@ -28,86 +29,71 @@ Source requirements:
 
 Acceptance criteria:
 
-- Script scans Markdown files.
-- Script detects duplicate IDs.
-- Script reports obsolete IDs.
-- Script outputs traceability CSV.
+- Implement Specification ID Linter implemented and tested.
+- META-ID-0001 satisfied.
+- META-TASK-0001 satisfied.
 
 ### TASK-FOUNDATION-0003
-Generate initial task backlog from SPEC files.
+Generate Initial Task Backlog from SPEC Files.
+
+Source requirements:
+
+- META-TASK-0001
 
 Acceptance criteria:
 
-- Requirements are parsed from Markdown.
-- Tasks can reference requirement IDs.
-- Output is Markdown and CSV.
+- Generate Initial Task Backlog from SPEC Files implemented and tested.
+- META-TASK-0001 satisfied.
 
 ## Epic 002 — Core Object Store
 
-### TASK-CORE-0001
-Create MariaDB schema for regulatory_object and object_version.
+### TASK-ARCH-0001
+Architecture.
 
 Source requirements:
 
-- DB-CORE-0001
-- DB-CORE-0002
-- DB-CORE-0005
-
-Acceptance criteria:
-
-- DDL migration exists.
-- Unit test inserts draft object.
-- Unit test creates version.
-- Approved version cannot be modified.
-
-### TASK-CORE-0002
-Create REST endpoint for regulatory object retrieval.
-
-Source requirements:
-
-- API-REST-0001
-- API-REST-0004
-
-Acceptance criteria:
-
-- GET object by UUID.
-- GET object version history.
-- Unauthorized access rejected.
-
-## Epic 003 — Event Store & Audit Trail
-
-### TASK-EVENT-0001
-Create event store schema and append-only event log.
-
-Source requirements:
-
+- REQ-ARCH-0002
+- REQ-ARCH-0003
 - REQ-ARCH-0004
-- DB-CORE-0003
+- REQ-ARCH-0005
+
+Scope:
+
+- Architecture enforcement
+- multi-representation support.
 
 Acceptance criteria:
 
-- Event log table exists.
-- Event append preserves history.
-- Events can be replayed for object reconstruction.
+- Architecture implemented and tested.
+- REQ-ARCH-0002 satisfied.
+- REQ-ARCH-0003 satisfied.
+- REQ-ARCH-0004 satisfied.
+- REQ-ARCH-0005 satisfied.
 
-### TASK-EVENT-0002
-Create audit trail REST endpoints.
+### TASK-DB-0002
+Database Schema.
 
 Source requirements:
 
-- SEC-RBAC-0005
-- API-REST-0001
+- DB-CORE-0003
+- DB-CORE-0004
+
+Scope:
+
+- MariaDB schema
+- migrations
+- indexing.
 
 Acceptance criteria:
 
-- GET audit log by object UUID.
-- GET audit log filtered by user, date range.
-- Audit log read-only for non-admin roles.
+- Database Schema implemented and tested.
+- DB-CORE-0003 satisfied.
+- DB-CORE-0004 satisfied.
 
 ## Epic 004 — Product & Claim Domain
 
-### TASK-PROD-0001
-Create Product domain schema and CRUD endpoints.
+### TASK-PROD-0003
+Product Domain.
 
 Source requirements:
 
@@ -115,16 +101,29 @@ Source requirements:
 - REQ-PROD-0002
 - REQ-PROD-0003
 - REQ-PROD-0004
+- REQ-PROD-0005
+- REQ-PROD-0006
 - REQ-PROD-0007
+
+Scope:
+
+- Product master data
+- device hierarchy
+- regulatory identifiers.
 
 Acceptance criteria:
 
-- Product can be created with regulatory identifiers.
-- Device variants can be added to product.
-- Product lifecycle state transitions work.
+- Product Domain implemented and tested.
+- REQ-PROD-0001 satisfied.
+- REQ-PROD-0002 satisfied.
+- REQ-PROD-0003 satisfied.
+- REQ-PROD-0004 satisfied.
+- REQ-PROD-0005 satisfied.
+- REQ-PROD-0006 satisfied.
+- REQ-PROD-0007 satisfied.
 
-### TASK-CLAIM-0001
-Create Claim domain schema and CRUD endpoints.
+### TASK-CLAIM-0004
+Claim Domain.
 
 Source requirements:
 
@@ -132,204 +131,179 @@ Source requirements:
 - REQ-CLAIM-0002
 - REQ-CLAIM-0003
 - REQ-CLAIM-0004
+- REQ-CLAIM-0005
+- REQ-CLAIM-0006
+
+Scope:
+
+- Claim management
+- evidence linking
+- consistency checking.
 
 Acceptance criteria:
 
-- Claim can be created with type, jurisdiction, language.
-- Evidence can be linked to a claim.
-- Approved claims are reusable across reports.
+- Claim Domain implemented and tested.
+- REQ-CLAIM-0001 satisfied.
+- REQ-CLAIM-0002 satisfied.
+- REQ-CLAIM-0003 satisfied.
+- REQ-CLAIM-0004 satisfied.
+- REQ-CLAIM-0005 satisfied.
+- REQ-CLAIM-0006 satisfied.
 
-### TASK-CLAIM-0002
-Implement claim consistency checking and approval workflow.
+### TASK-EVID-0005
+Evidence Domain.
 
 Source requirements:
 
-- REQ-CLAIM-0005
-- REQ-CLAIM-0006
-- WF-APP-0001
+- REQ-EVID-0001
+- REQ-EVID-0002
+- REQ-EVID-0003
+- REQ-EVID-0004
+- REQ-EVID-0005
+- REQ-EVID-0006
+- REQ-EVID-0007
+- REQ-EVID-0008
+
+Scope:
+
+- Evidence management
+- quality assessment
+- coverage analysis.
 
 Acceptance criteria:
 
-- System detects inconsistent claim wording across artifacts.
-- Claim cannot be approved without evidence or justification.
-- Approval follows lifecycle state machine.
+- Evidence Domain implemented and tested.
+- REQ-EVID-0001 satisfied.
+- REQ-EVID-0002 satisfied.
+- REQ-EVID-0003 satisfied.
+- REQ-EVID-0004 satisfied.
+- REQ-EVID-0005 satisfied.
+- REQ-EVID-0006 satisfied.
+- REQ-EVID-0007 satisfied.
+- REQ-EVID-0008 satisfied.
 
 ## Epic 005 — Risk Domain
 
-### TASK-RISK-0001
-Create Risk domain schema and CRUD endpoints.
+### TASK-RISK-0006
+Risk Domain.
 
 Source requirements:
 
 - REQ-RISK-0001
 - REQ-RISK-0002
 - REQ-RISK-0003
-
-Acceptance criteria:
-
-- Hazard, hazardous situation and harm can be created.
-- Risk controls can be linked to risks.
-- Verification evidence can be linked to controls.
-
-### TASK-RISK-0002
-Implement risk approval, residual risk evaluation and report generation.
-
-Source requirements:
-
 - REQ-RISK-0004
 - REQ-RISK-0005
 - REQ-RISK-0006
+- REQ-RISK-0007
+
+Scope:
+
+- Risk management per ISO 14971
+- control measures
+- residual risk.
 
 Acceptance criteria:
 
-- Residual risk requires documented evaluation.
-- Risk traceability to requirements and claims visible.
-- Risk Management Report section can be generated.
+- Risk Domain implemented and tested.
+- REQ-RISK-0001 satisfied.
+- REQ-RISK-0002 satisfied.
+- REQ-RISK-0003 satisfied.
+- REQ-RISK-0004 satisfied.
+- REQ-RISK-0005 satisfied.
+- REQ-RISK-0006 satisfied.
+- REQ-RISK-0007 satisfied.
 
 ## Epic 006 — Performance Domain
 
-### TASK-PERF-0001
-Create Performance domain schema and study registration.
+### TASK-PERF-0007
+Performance Domain.
 
 Source requirements:
 
 - REQ-PERF-0001
 - REQ-PERF-0002
-- REQ-PERF-0004
-
-Acceptance criteria:
-
-- Performance study can be registered with type.
-- Study results can be stored with statistical metadata.
-- Results traceable to source data.
-
-### TASK-PERF-0002
-Implement evidence coverage analysis and PER section generation.
-
-Source requirements:
-
 - REQ-PERF-0003
+- REQ-PERF-0004
 - REQ-PERF-0005
 - REQ-PERF-0006
 
+Scope:
+
+- Performance studies
+- analytical/clinical performance
+- PER.
+
 Acceptance criteria:
 
-- Performance results linkable to claims.
-- Evidence coverage can be calculated.
-- PER sections can be generated from approved evidence.
+- Performance Domain implemented and tested.
+- REQ-PERF-0001 satisfied.
+- REQ-PERF-0002 satisfied.
+- REQ-PERF-0003 satisfied.
+- REQ-PERF-0004 satisfied.
+- REQ-PERF-0005 satisfied.
+- REQ-PERF-0006 satisfied.
 
 ## Epic 007 — Report Generation MVP
 
-### TASK-REPORT-0001
-Create report generation engine for DOCX and PDF output.
+### TASK-REPORT-0008
+Report Generation.
 
 Source requirements:
 
-- REQ-CORE-0002
-- REQ-CORE-0007
 - REP-PER-0001
-- REP-PER-0005
-
-Acceptance criteria:
-
-- Report can be generated from structured data and template.
-- Output is reproducible from baseline.
-- DOCX and PDF formats supported.
-
-### TASK-REPORT-0002
-Implement PER generation with traceability and completeness report.
-
-Source requirements:
-
 - REP-PER-0002
 - REP-PER-0003
 - REP-PER-0004
+- REP-PER-0005
+
+Scope:
+
+- DOCX/PDF generation
+- PER generation
+- traceability appendix.
 
 Acceptance criteria:
 
-- PER includes traceability to source objects.
-- Approved text distinguished from AI-generated draft.
-- Completeness report lists missing evidence.
-
-## Epic 008 — Knowledge Graph
-
-### TASK-GRAPH-0001
-Create Neo4j schema and data synchronization from object store.
-
-Source requirements:
-
-- GRAPH-CORE-0001
-- GRAPH-CORE-0003
-
-Acceptance criteria:
-
-- Neo4j node types created matching object types.
-- Edge types created matching relationships.
-- Data synchronized from MariaDB object store.
-
-### TASK-GRAPH-0002
-Implement traceability queries and impact analysis.
-
-Source requirements:
-
-- GRAPH-CORE-0002
-- GRAPH-CORE-0004
-
-Acceptance criteria:
-
-- Traceability path query works (Claim → Evidence → Study).
-- Impact analysis shows affected objects on change.
-- Graph not used as primary approval record.
+- Report Generation implemented and tested.
+- REP-PER-0001 satisfied.
+- REP-PER-0002 satisfied.
+- REP-PER-0003 satisfied.
+- REP-PER-0004 satisfied.
+- REP-PER-0005 satisfied.
 
 ## Epic 009 — AI/RAG Services
 
-### TASK-AI-0001
-Create hybrid search service (keyword, vector, graph).
-
-Source requirements:
-
-- AI-CORE-0005
-
-Acceptance criteria:
-
-- Keyword search returns relevant objects.
-- Vector search returns semantically similar objects.
-- Graph traversal returns relationship-based results.
-
-### TASK-AI-0002
-Implement grounded drafting with source citation.
+### TASK-AI-0009
+AI/RAG Services.
 
 Source requirements:
 
 - AI-CORE-0001
 - AI-CORE-0002
 - AI-CORE-0003
-
-Acceptance criteria:
-
-- AI can generate draft text from retrieved evidence.
-- Generated text cites source objects.
-- Distinction between facts, inferences and generated wording visible.
-
-### TASK-AI-0003
-Implement AI audit trail and evidence gap analysis.
-
-Source requirements:
-
 - AI-CORE-0004
-- REQ-CORE-0006
-- WF-APP-0006
+- AI-CORE-0005
+
+Scope:
+
+- Hybrid search
+- grounded drafting
+- audit trail.
 
 Acceptance criteria:
 
-- Prompts, context references and draft versions stored.
-- AI-generated content requires human review before approval.
-- Evidence gaps identified and reported.
+- AI/RAG Services implemented and tested.
+- AI-CORE-0001 satisfied.
+- AI-CORE-0002 satisfied.
+- AI-CORE-0003 satisfied.
+- AI-CORE-0004 satisfied.
+- AI-CORE-0005 satisfied.
 
 ## Epic 010 — Workflow & Security
 
-### TASK-WF-0001
-Implement object lifecycle state machine and approval workflow.
+### TASK-WF-0010
+Workflow & Approval.
 
 Source requirements:
 
@@ -337,98 +311,87 @@ Source requirements:
 - WF-APP-0002
 - WF-APP-0003
 - WF-APP-0004
+- WF-APP-0005
+- WF-APP-0006
+
+Scope:
+
+- Lifecycle state machine
+- approval workflow
+- electronic signatures.
 
 Acceptance criteria:
 
-- Objects transition through defined lifecycle states.
-- Approval requires identified approver + timestamp + decision.
-- Rejected objects retain reviewer comments.
-- Approved versions immutable.
+- Workflow & Approval implemented and tested.
+- WF-APP-0001 satisfied.
+- WF-APP-0002 satisfied.
+- WF-APP-0003 satisfied.
+- WF-APP-0004 satisfied.
+- WF-APP-0005 satisfied.
+- WF-APP-0006 satisfied.
 
-### TASK-WF-0002
-Implement electronic signatures and RBAC enforcement.
+### TASK-SEC-0011
+Security & RBAC.
 
 Source requirements:
 
-- WF-APP-0005
 - SEC-RBAC-0001
 - SEC-RBAC-0002
 - SEC-RBAC-0003
 - SEC-RBAC-0004
+- SEC-RBAC-0005
+
+Scope:
+
+- Role-based access control
+- product permissions
+- audit access.
 
 Acceptance criteria:
 
-- Electronic signatures supported.
-- Role-based access enforced per object type.
-- Product-specific permissions work.
-- Read-only audit access available.
-- Approval permissions separated from authoring permissions.
+- Security & RBAC implemented and tested.
+- SEC-RBAC-0001 satisfied.
+- SEC-RBAC-0002 satisfied.
+- SEC-RBAC-0003 satisfied.
+- SEC-RBAC-0004 satisfied.
+- SEC-RBAC-0005 satisfied.
 
 ## Epic 011 — UI
 
-### TASK-UI-0001
-Create dashboard, search and object browsing views.
+### TASK-UI-0012
+User Interface.
 
 Source requirements:
 
 - REQ-UI-0001
 - REQ-UI-0002
 - REQ-UI-0003
-- REQ-UI-0009
-- REQ-UI-0010
-
-Acceptance criteria:
-
-- Dashboard shows task summaries, pending approvals.
-- Search supports faceted filters.
-- Object detail view shows version history and relationships.
-- Responsive and accessible (WCAG 2.1 AA).
-
-### TASK-UI-0002
-Create editing, workflow, AI drafting and report generation interfaces.
-
-Source requirements:
-
 - REQ-UI-0004
 - REQ-UI-0005
 - REQ-UI-0006
 - REQ-UI-0007
 - REQ-UI-0008
+- REQ-UI-0009
+- REQ-UI-0010
+
+Scope:
+
+- Dashboard
+- search
+- editing
+- workflow UI
+- AI drafting interface.
 
 Acceptance criteria:
 
-- Structured forms for draft creation and editing.
-- Traceability graph visualization.
-- Review/approve/reject workflow UI.
-- AI drafting panel with source citations.
-- Report generation with template selection.
-
-## Epic 012 — Validation & Deployment
-
-### TASK-VAL-0001
-Create validation plan and requirement-to-test traceability.
-
-Source requirements:
-
-- TEST-VAL-0001
-- TEST-VAL-0002
-
-Acceptance criteria:
-
-- Validation plan document exists.
-- Each requirement linked to one or more test cases.
-
-### TASK-VAL-0002
-Verify report generation, audit trail and AI functions.
-
-Source requirements:
-
-- TEST-VAL-0003
-- TEST-VAL-0004
-- TEST-VAL-0005
-
-Acceptance criteria:
-
-- Report generation verified against known baselines.
-- Audit trail integrity tested.
-- AI functions validated for intended use limitations.
+- User Interface implemented and tested.
+- REQ-UI-0001 satisfied.
+- REQ-UI-0002 satisfied.
+- REQ-UI-0003 satisfied.
+- REQ-UI-0004 satisfied.
+- REQ-UI-0005 satisfied.
+- REQ-UI-0006 satisfied.
+- REQ-UI-0007 satisfied.
+- REQ-UI-0008 satisfied.
+- REQ-UI-0009 satisfied.
+- REQ-UI-0010 satisfied.

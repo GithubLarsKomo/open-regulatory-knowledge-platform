@@ -3,8 +3,8 @@
 Generated on 2026-07-07
 
 - **Existing tasks:** 3
-- **Generated tasks:** 14
-- **Total requirement IDs covered:** 85
+- **Generated tasks:** 12
+- **Total requirement IDs covered:** 76
 
 ## Epic 001 — Specification Foundation
 
@@ -150,23 +150,9 @@ Generated on 2026-07-07
 
 **Phase:** 3
 
-## Epic 008 — Knowledge Graph
-
-### TASK-GRAPH-0009 — Knowledge Graph
-
-**Source requirements:**
-- GRAPH-CORE-0001
-- GRAPH-CORE-0002
-- GRAPH-CORE-0003
-- GRAPH-CORE-0004
-
-**Scope:** Neo4j schema, synchronization, impact analysis.
-
-**Phase:** 4
-
 ## Epic 009 — AI/RAG Services
 
-### TASK-AI-0010 — AI/RAG Services
+### TASK-AI-0009 — AI/RAG Services
 
 **Source requirements:**
 - AI-CORE-0001
@@ -181,7 +167,7 @@ Generated on 2026-07-07
 
 ## Epic 010 — Workflow & Security
 
-### TASK-WF-0011 — Workflow & Approval
+### TASK-WF-0010 — Workflow & Approval
 
 **Source requirements:**
 - WF-APP-0001
@@ -195,7 +181,7 @@ Generated on 2026-07-07
 
 **Phase:** 2
 
-### TASK-SEC-0012 — Security & RBAC
+### TASK-SEC-0011 — Security & RBAC
 
 **Source requirements:**
 - SEC-RBAC-0001
@@ -210,7 +196,7 @@ Generated on 2026-07-07
 
 ## Epic 011 — UI
 
-### TASK-UI-0013 — User Interface
+### TASK-UI-0012 — User Interface
 
 **Source requirements:**
 - REQ-UI-0001
@@ -227,18 +213,3 @@ Generated on 2026-07-07
 **Scope:** Dashboard, search, editing, workflow UI, AI drafting interface.
 
 **Phase:** 3
-
-## Epic 012 — Validation & Deployment
-
-### TASK-VAL-0014 — Validation & Testing
-
-**Source requirements:**
-- TEST-VAL-0001
-- TEST-VAL-0002
-- TEST-VAL-0003
-- TEST-VAL-0004
-- TEST-VAL-0005
-
-**Scope:** Validation plan, requirement-to-test traceability, audit testing.
-
-**Phase:** 6

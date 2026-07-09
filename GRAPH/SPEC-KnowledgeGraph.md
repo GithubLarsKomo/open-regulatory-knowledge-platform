@@ -36,19 +36,109 @@ Define the graph representation for regulatory traceability and impact analysis.
 - IMPACTS
 - SUPERSEDES
 
-## Requirements
+## Scope
 
-### GRAPH-CORE-0001
-The graph shall represent traceability relationships between regulatory objects.
+The knowledge graph covers:
 
-### GRAPH-CORE-0002
-The graph shall support impact analysis after changes to claims, risks, evidence or requirements.
+- Traceability relationships between all regulatory object types
+- Impact analysis for change management
+- Object version-aware graph queries
+- Cross-domain relationship visualization
+- Compliance and gap analysis queries
 
-### GRAPH-CORE-0003
-The graph shall distinguish object identity from object version where required.
+## Stakeholders
 
-### GRAPH-CORE-0004
-The graph shall not be the primary approval record; approval authority remains in the object store and event store.
+- Regulatory Authors — traceability analysis
+- QM Reviewers — impact assessment
+- Auditors — traceability verification
+- System Developers — graph queries
+
+## Domain Model
+
+### Node Types
+
+- Product, Device — product hierarchy
+- Requirement — regulatory and system requirements
+- Claim — regulatory claims
+- Hazard, Risk, RiskControl — risk management
+- Verification, Validation — evidence of conformity
+- Study, Evidence — performance and literature
+- Report, ReportSection — generated outputs
+- Standard, Regulation — applicable norms
+- Submission — regulatory submission packages
+
+### Edge Types
+
+- HAS_REQUIREMENT — product-to-requirement
+- SUPPORTS_CLAIM — evidence-to-claim
+- MITIGATES — control-to-risk
+- VERIFIED_BY — requirement-to-verification
+- VALIDATED_BY — requirement-to-validation
+- REFERENCES — object-to-literature
+- INCLUDED_IN — section-to-report
+- GENERATED_FROM — report-to-baseline
+- IMPACTS — change propagation
+- SUPERSEDES — version supersession
+
+## Interfaces
+
+- Object Store — synchronization source
+- REST API — graph query endpoints
+- UI — graph visualization
+- Report Engine — traceability appendix
+
+## Data Model
+
+### Node Properties
+
+| Property | Type | Description |
+|---|---|---|
+| node_uuid | UUID | Stable identifier |
+| node_type | VARCHAR | Node type label |
+| object_version | INT | Object version (if applicable) |
+| label | VARCHAR | Display label |
+| lifecycle_state | VARCHAR | Current state |
+
+### Edge Properties
+
+| Property | Type | Description |
+|---|---|---|
+| edge_type | VARCHAR | Relationship type |
+| source_version | INT | Source object version |
+| target_version | INT | Target object version |
+| created_at | DATETIME | Relationship timestamp |
+
+## Workflow
+
+- Graph is synchronized from object store events
+- Version changes trigger edge updates
+- Impact analysis queries are initiated by users
+- Graph does not replace object store for approval
+
+## Security
+
+- Graph access respects RBAC permissions
+- Product-scoped users see only relevant subgraph
+- Graph is read-only for non-administrators
+
+## AI Support
+
+- AI may propose graph queries in natural language
+- AI may highlight impacted paths on change
+- AI cannot modify graph structure
+
+## Acceptance Criteria
+
+- A traceability query returns all linked objects for a claim.
+- Impact analysis identifies all objects affected by a risk change.
+- Graph distinguishes object versions.
+- Approval remains in object store, not graph.
+
+## Open Questions
+
+- Should the graph be updated synchronously or asynchronously?
+- What is the maximum practical graph size?
+- Should the graph support full-text search on node properties?
 
 ## Example Query
 
