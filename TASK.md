@@ -13,6 +13,12 @@ Source requirements:
 - REQ-CORE-0001
 - REQ-ARCH-0001
 
+Scope:
+
+- Repository skeleton
+- folder structure
+- initial SPEC files.
+
 Acceptance criteria:
 
 - Create Repository Skeleton implemented and tested.
@@ -27,6 +33,12 @@ Source requirements:
 - META-ID-0001
 - META-TASK-0001
 
+Scope:
+
+- Markdown scanner
+- ID validation
+- traceability CSV.
+
 Acceptance criteria:
 
 - Implement Specification ID Linter implemented and tested.
@@ -40,12 +52,48 @@ Source requirements:
 
 - META-TASK-0001
 
+Scope:
+
+- Backlog generator
+- TASK.md generation
+- CSV output.
+
 Acceptance criteria:
 
 - Generate Initial Task Backlog from SPEC Files implemented and tested.
 - META-TASK-0001 satisfied.
 
 ## Epic 002 — Core Object Store
+
+### TASK-CORE-0001
+Core Platform.
+
+Source requirements:
+
+- REQ-CORE-0002
+- REQ-CORE-0003
+- REQ-CORE-0004
+- REQ-CORE-0005
+- REQ-CORE-0006
+- REQ-CORE-0007
+
+Scope:
+
+- Core object model
+- versioning
+- event store
+- audit trail
+- baseline.
+
+Acceptance criteria:
+
+- Core Platform implemented and tested.
+- REQ-CORE-0002 satisfied.
+- REQ-CORE-0003 satisfied.
+- REQ-CORE-0004 satisfied.
+- REQ-CORE-0005 satisfied.
+- REQ-CORE-0006 satisfied.
+- REQ-CORE-0007 satisfied.
 
 ### TASK-ARCH-0001
 Architecture.
@@ -70,13 +118,16 @@ Acceptance criteria:
 - REQ-ARCH-0004 satisfied.
 - REQ-ARCH-0005 satisfied.
 
-### TASK-DB-0002
+### TASK-DB-0001
 Database Schema.
 
 Source requirements:
 
+- DB-CORE-0001
+- DB-CORE-0002
 - DB-CORE-0003
 - DB-CORE-0004
+- DB-CORE-0005
 
 Scope:
 
@@ -87,12 +138,15 @@ Scope:
 Acceptance criteria:
 
 - Database Schema implemented and tested.
+- DB-CORE-0001 satisfied.
+- DB-CORE-0002 satisfied.
 - DB-CORE-0003 satisfied.
 - DB-CORE-0004 satisfied.
+- DB-CORE-0005 satisfied.
 
 ## Epic 004 — Product & Claim Domain
 
-### TASK-PROD-0003
+### TASK-PROD-0001
 Product Domain.
 
 Source requirements:
@@ -122,7 +176,7 @@ Acceptance criteria:
 - REQ-PROD-0006 satisfied.
 - REQ-PROD-0007 satisfied.
 
-### TASK-CLAIM-0004
+### TASK-CLAIM-0001
 Claim Domain.
 
 Source requirements:
@@ -150,7 +204,7 @@ Acceptance criteria:
 - REQ-CLAIM-0005 satisfied.
 - REQ-CLAIM-0006 satisfied.
 
-### TASK-EVID-0005
+### TASK-EVID-0001
 Evidence Domain.
 
 Source requirements:
@@ -184,7 +238,7 @@ Acceptance criteria:
 
 ## Epic 005 — Risk Domain
 
-### TASK-RISK-0006
+### TASK-RISK-0001
 Risk Domain.
 
 Source requirements:
@@ -216,7 +270,7 @@ Acceptance criteria:
 
 ## Epic 006 — Performance Domain
 
-### TASK-PERF-0007
+### TASK-PERF-0001
 Performance Domain.
 
 Source requirements:
@@ -246,7 +300,7 @@ Acceptance criteria:
 
 ## Epic 007 — Report Generation MVP
 
-### TASK-REPORT-0008
+### TASK-REPORT-0001
 Report Generation.
 
 Source requirements:
@@ -272,9 +326,35 @@ Acceptance criteria:
 - REP-PER-0004 satisfied.
 - REP-PER-0005 satisfied.
 
+## Epic 008 — Knowledge Graph
+
+### TASK-GRAPH-0001
+Knowledge Graph.
+
+Source requirements:
+
+- GRAPH-CORE-0001
+- GRAPH-CORE-0002
+- GRAPH-CORE-0003
+- GRAPH-CORE-0004
+
+Scope:
+
+- Neo4j schema
+- synchronization
+- impact analysis.
+
+Acceptance criteria:
+
+- Knowledge Graph implemented and tested.
+- GRAPH-CORE-0001 satisfied.
+- GRAPH-CORE-0002 satisfied.
+- GRAPH-CORE-0003 satisfied.
+- GRAPH-CORE-0004 satisfied.
+
 ## Epic 009 — AI/RAG Services
 
-### TASK-AI-0009
+### TASK-AI-0001
 AI/RAG Services.
 
 Source requirements:
@@ -302,7 +382,7 @@ Acceptance criteria:
 
 ## Epic 010 — Workflow & Security
 
-### TASK-WF-0010
+### TASK-WF-0001
 Workflow & Approval.
 
 Source requirements:
@@ -330,7 +410,7 @@ Acceptance criteria:
 - WF-APP-0005 satisfied.
 - WF-APP-0006 satisfied.
 
-### TASK-SEC-0011
+### TASK-SEC-0001
 Security & RBAC.
 
 Source requirements:
@@ -358,7 +438,7 @@ Acceptance criteria:
 
 ## Epic 011 — UI
 
-### TASK-UI-0012
+### TASK-UI-0001
 User Interface.
 
 Source requirements:
@@ -395,3 +475,31 @@ Acceptance criteria:
 - REQ-UI-0008 satisfied.
 - REQ-UI-0009 satisfied.
 - REQ-UI-0010 satisfied.
+
+## Epic 012 — Validation & Deployment
+
+### TASK-VAL-0001
+Validation & Testing.
+
+Source requirements:
+
+- TEST-VAL-0001
+- TEST-VAL-0002
+- TEST-VAL-0003
+- TEST-VAL-0004
+- TEST-VAL-0005
+
+Scope:
+
+- Validation plan
+- requirement-to-test traceability
+- audit testing.
+
+Acceptance criteria:
+
+- Validation & Testing implemented and tested.
+- TEST-VAL-0001 satisfied.
+- TEST-VAL-0002 satisfied.
+- TEST-VAL-0003 satisfied.
+- TEST-VAL-0004 satisfied.
+- TEST-VAL-0005 satisfied.

@@ -2,22 +2,19 @@
 """Unit tests for spec_linter.py."""
 
 import csv
-import os
 import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-# Add parent directory to path so we can import tools
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from tools.spec_linter import (
-    ID_PATTERN,
-    extract_ids_from_file,
     find_markdown_files,
     generate_csv,
     generate_report,
     is_definition_file,
+    is_heading_line,
     lint_repository,
     validate_format,
     LintResult,
@@ -25,8 +22,6 @@ from tools.spec_linter import (
 
 
 class TestValidateFormat(unittest.TestCase):
-    """Tests for the validate_format function."""
-
     def test_valid_format(self):
         self.assertTrue(validate_format('REQ-CORE-0001'))
         self.assertTrue(validate_format('DB-CORE-0001'))
@@ -56,239 +51,43 @@ class TestValidateFormat(unittest.TestCase):
         self.assertFalse(validate_format('REQ-CORE-0001-EXTRA'))
 
 
-class TestExtractIds(unittest.TestCase):
-    """Tests for ID extraction from files."""
-
-    def setUp(self):
-        self.tmpdir = Path(tempfile.mkdtemp())
-
-    def tearDown(self):
-        import shutil
-        shutil.rmtree(self.tmpdir)
-
-    def _write_file(self, name: str, content: str) -> Path:
-        path = self.tmpdir / name
-        path.write_text(content, encoding='utf-8')
-        return path
-
-    def test_extract_single_id(self):
-        f = self._write_file('test.md', '### REQ-CORE-0001\nSome requirement text.\n')
-        ids = extract_ids_from_file(f)
-        self.assertEqual(len(ids), 1)
-        self.assertEqual(ids[0][0], 'REQ-CORE-0001')
-        self.assertTrue(ids[0][2])  # is_def
-
-    def test_extract_multiple_ids(self):
-        f = self._write_file('test.md', (
-            '### REQ-CORE-0001\n'
-            '### REQ-CORE-0002\n'
-            '### DB-CORE-0001\n'
-        ))
-        ids = extract_ids_from_file(f)
-        self.assertEqual(len(ids), 3)
-        self.assertEqual([id_ for id_, _, _ in ids],
-                         ['REQ-CORE-0001', 'REQ-CORE-0002', 'DB-CORE-0001'])
-
-    def test_extract_no_ids(self):
-        f = self._write_file('test.md', '# Just a heading\n\nSome text without IDs.\n')
-        ids = extract_ids_from_file(f)
-        self.assertEqual(len(ids), 0)
-
-    def test_extract_id_in_table(self):
-        f = self._write_file('test.md', '| REQ-CORE-0001 | SPEC.md | functional | draft |\n')
-        ids = extract_ids_from_file(f)
-        self.assertEqual(len(ids), 1)
-        self.assertEqual(ids[0][0], 'REQ-CORE-0001')
-        self.assertFalse(ids[0][2])  # not a definition in a table
-
-    def test_extract_ids_with_duplicates(self):
-        f = self._write_file('test.md', (
-            '### REQ-CORE-0001\n'
-            '### REQ-CORE-0001\n'
-        ))
-        ids = extract_ids_from_file(f)
-        self.assertEqual(len(ids), 2)
+class TestIsHeadingLine(unittest.TestCase):
+    def test_heading_level_3_with_id(self):
+        self.assertTrue(is_heading_line('### REQ-CORE-0001'))
+    def test_heading_level_2(self):
+        self.assertTrue(is_heading_line('## Scope'))
+    def test_heading_level_1(self):
+        self.assertTrue(is_heading_line('# Purpose'))
+    def test_prose_not_heading(self):
+        self.assertFalse(is_heading_line('Some text with REQ-CORE-0001'))
+    def test_list_not_heading(self):
+        self.assertFalse(is_heading_line('- REQ-CORE-0001'))
+    def test_table_not_heading(self):
+        self.assertFalse(is_heading_line('| REQ-CORE-0001 | SPEC.md |'))
 
 
-class TestLintRepository(unittest.TestCase):
-    """Integration-style tests for lint_repository."""
-
-    def setUp(self):
-        self.tmpdir = Path(tempfile.mkdtemp())
-
-    def tearDown(self):
-        import shutil
-        shutil.rmtree(self.tmpdir)
-
-    def _write_file(self, path: Path, content: str):
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(content, encoding='utf-8')
-
-    def test_clean_repository_no_issues(self):
-        self._write_file(self.tmpdir / 'SPEC.md', '### REQ-CORE-0001\n')
-        self._write_file(self.tmpdir / 'DOMAIN' / 'SPEC-Claim.md', '### REQ-CLAIM-0001\n')
-        result = lint_repository(self.tmpdir)
-        self.assertEqual(result.total_ids, 2)
-        self.assertEqual(len(result.duplicates), 0)
-        self.assertEqual(len(result.invalid_format), 0)
-        self.assertEqual(len(result.errors), 0)
-        self.assertFalse(result.has_issues)
-
-    def test_duplicate_ids_detected(self):
-        self._write_file(self.tmpdir / 'SPEC.md', '### REQ-CORE-0001\n')
-        self._write_file(self.tmpdir / 'DOMAIN' / 'SPEC-Other.md', '### REQ-CORE-0001\n')
-        result = lint_repository(self.tmpdir)
-        self.assertEqual(len(result.duplicates), 1)
-        self.assertEqual(result.duplicates[0][0], 'REQ-CORE-0001')
-        self.assertTrue(result.has_issues)
-
-    def test_invalid_format_detected(self):
-        self._write_file(self.tmpdir / 'SPEC.md', '### REQ-core-0001\n')
-        result = lint_repository(self.tmpdir)
-        self.assertEqual(len(result.invalid_format), 1)
-        self.assertEqual(result.invalid_format[0][0], 'REQ-core-0001')
-        self.assertTrue(result.has_issues)
-
-    def test_reference_without_definition_detected(self):
-        self._write_file(self.tmpdir / 'TASK.md', '### REQ-CORE-0001\n')
-        result = lint_repository(self.tmpdir)
-        self.assertEqual(len(result.errors), 1)
-        self.assertIn('never defined', result.errors[0])
-        self.assertTrue(result.has_issues)
-
-    def test_exclude_dirs_ignored(self):
-        self._write_file(self.tmpdir / '.git' / 'config.md', '### REQ-CORE-0001\n')
-        self._write_file(self.tmpdir / 'node_modules' / 'pkg' / 'readme.md', '### REQ-CORE-0002\n')
-        self._write_file(self.tmpdir / 'SPEC.md', '### REQ-CORE-0003\n')
-        result = lint_repository(self.tmpdir)
-        self.assertEqual(result.total_ids, 1)
-        self.assertEqual(result.ids_found.get('REQ-CORE-0003', [])[0][0], 'SPEC.md')
-
-    def test_empty_repository(self):
-        result = lint_repository(self.tmpdir)
-        self.assertEqual(result.total_ids, 0)
-        self.assertEqual(len(result.duplicates), 0)
-        self.assertEqual(result.files_scanned, 0)
-
-
-class TestGenerateCsv(unittest.TestCase):
-    """Tests for CSV output generation."""
-
-    def setUp(self):
-        self.tmpdir = Path(tempfile.mkdtemp())
-
-    def tearDown(self):
-        import shutil
-        shutil.rmtree(self.tmpdir)
-
-    def test_csv_output_format(self):
-        result = LintResult()
-        result.ids_found = {
-            'REQ-CORE-0001': [('SPEC.md', 3)],
-            'REQ-CLAIM-0001': [('DOMAIN/SPEC-Claim.md', 5)],
-            'DB-CORE-0001': [('DATABASE/SPEC-MariaDB.md', 7)],
-        }
-        result.files_scanned = 3
-
-        csv_path = self.tmpdir / 'output.csv'
-        generate_csv(result, csv_path, self.tmpdir)
-
-        with open(csv_path, 'r', newline='', encoding='utf-8') as f:
-            reader = csv.reader(f)
-            rows = list(reader)
-
-        self.assertEqual(len(rows), 4)  # header + 3 data rows
-        self.assertEqual(rows[0], ['id', 'source_file', 'type', 'status'])
-        # Check all IDs are present
-        row_ids = [r[0] for r in rows[1:]]
-        self.assertIn('REQ-CORE-0001', row_ids)
-        self.assertIn('REQ-CLAIM-0001', row_ids)
-        self.assertIn('DB-CORE-0001', row_ids)
-
-    def test_csv_with_duplicates(self):
-        result = LintResult()
-        result.ids_found = {'REQ-CORE-0002': [('SPEC.md', 5)]}
-        result.duplicates = [
-            ('REQ-CORE-0001', [('SPEC.md', 3), ('SPEC-Other.md', 7)], 1, 'definition'),
-        ]
-
-        csv_path = self.tmpdir / 'output.csv'
-        generate_csv(result, csv_path, self.tmpdir)
-
-        with open(csv_path, 'r', newline='', encoding='utf-8') as f:
-            reader = csv.reader(f)
-            rows = list(reader)
-
-        # Header + 1 unique + 1 duplicate
-        self.assertEqual(len(rows), 3)
-        row_ids = [r[0] for r in rows[1:]]
-        self.assertIn('REQ-CORE-0001', row_ids)
-        self.assertIn('REQ-CORE-0002', row_ids)
-
-    def test_csv_type_inference(self):
-        result = LintResult()
-        result.ids_found = {
-            'REQ-CORE-0001': [('SPEC.md', 1)],
-            'API-REST-0001': [('API/SPEC-REST.md', 1)],
-            'TEST-VAL-0001': [('TESTING/SPEC-Validation.md', 1)],
-            'TASK-CORE-0001': [('TASKS/task.md', 1)],
-        }
-
-        csv_path = self.tmpdir / 'output.csv'
-        generate_csv(result, csv_path, self.tmpdir)
-
-        with open(csv_path, 'r', newline='', encoding='utf-8') as f:
-            reader = csv.DictReader(f)
-            types = {row['id']: row['type'] for row in reader}
-
-        self.assertEqual(types['REQ-CORE-0001'], 'functional')
-        self.assertEqual(types['API-REST-0001'], 'api')
-        self.assertEqual(types['TEST-VAL-0001'], 'test')
-        self.assertEqual(types['TASK-CORE-0001'], 'task')
-
-
-class TestGenerateReport(unittest.TestCase):
-    """Tests for Markdown report generation."""
-
-    def test_report_no_issues(self):
-        result = LintResult()
-        result.files_scanned = 5
-        result.ids_found = {'REQ-CORE-0001': [('SPEC.md', 1)]}
-        report = generate_report(result, Path('/repo'))
-        self.assertIn('No issues found', report)
-        self.assertIn('REQ', report)
-        self.assertIn('1', report)
-        self.assertIn('5', report)
-
-    def test_report_with_duplicates(self):
-        result = LintResult()
-        result.files_scanned = 2
-        result.ids_found = {}
-        result.duplicates = [
-            ('REQ-CORE-0001', [('SPEC.md', 3), ('SPEC-Other.md', 7)], 1, 'definition'),
-        ]
-        report = generate_report(result, Path('/repo'))
-        self.assertIn('Duplicate Definitions', report)
-        self.assertIn('REQ-CORE-0001', report)
-
-    def test_report_with_invalid_format(self):
-        result = LintResult()
-        result.files_scanned = 1
-        result.ids_found = {}
-        result.invalid_format = [
-            ('req-core-0001', 'SPEC.md', 3),
-        ]
-        report = generate_report(result, Path('/repo'))
-        self.assertIn('Invalid Format IDs', report)
-        self.assertIn('req-core-0001', report)
+class TestIsDefinitionFile(unittest.TestCase):
+    def test_spec_md(self):
+        self.assertTrue(is_definition_file('SPEC.md'))
+    def test_spec_domain(self):
+        self.assertTrue(is_definition_file('DOMAIN/SPEC-Claim.md'))
+    def test_spec_meta(self):
+        self.assertTrue(is_definition_file('META/REQ-META.md'))
+    def test_task_md(self):
+        self.assertFalse(is_definition_file('TASK.md'))
+    def test_readme_md(self):
+        self.assertFalse(is_definition_file('README.md'))
+    def test_glossary_md(self):
+        self.assertFalse(is_definition_file('GLOSSARY.md'))
+    def test_idscheme_not_definition(self):
+        self.assertFalse(is_definition_file('META/SPEC-IDScheme.md'))
+    def test_task_file_is_definition(self):
+        self.assertTrue(is_definition_file('IMPLEMENTATION/Epic/TASK-CORE-0001.md'))
 
 
 class TestFindMarkdownFiles(unittest.TestCase):
-    """Tests for Markdown file discovery."""
-
     def setUp(self):
         self.tmpdir = Path(tempfile.mkdtemp())
-
     def tearDown(self):
         import shutil
         shutil.rmtree(self.tmpdir)
@@ -314,60 +113,176 @@ class TestFindMarkdownFiles(unittest.TestCase):
         files = find_markdown_files(self.tmpdir)
         self.assertEqual(len(files), 1)
 
-
-class TestIsDefinitionFile(unittest.TestCase):
-    """Tests for is_definition_file."""
-
-    def test_spec_md(self):
-        self.assertTrue(is_definition_file('SPEC.md'))
-
-    def test_spec_domain(self):
-        self.assertTrue(is_definition_file('DOMAIN/SPEC-Claim.md'))
-
-    def test_spec_meta(self):
-        self.assertTrue(is_definition_file('META/REQ-META.md'))
-
-    def test_task_md(self):
-        self.assertFalse(is_definition_file('TASK.md'))
-
-    def test_readme_md(self):
-        self.assertFalse(is_definition_file('README.md'))
-
-    def test_glossary_md(self):
-        self.assertFalse(is_definition_file('GLOSSARY.md'))
-
-    def test_task_file(self):
-        self.assertTrue(is_definition_file('IMPLEMENTATION/Epic-001/TASK-FOUNDATION-0001.md'))
-
-    def test_spec_idscheme_is_not_definition(self):
-        self.assertFalse(is_definition_file('META/SPEC-IDScheme.md'))
-
-    def test_glossary_md(self):
-        self.assertFalse(is_definition_file('GLOSSARY.md'))
-
-    def test_task_file_is_definition(self):
-        self.assertTrue(is_definition_file('IMPLEMENTATION/Epic-001-Foundation/Feature-001-Specification-Compiler/TASK-FOUNDATION-0002.md'))
+    def test_excludes_generated_files(self):
+        (self.tmpdir / 'TRACEABILITY').mkdir()
+        (self.tmpdir / 'TRACEABILITY' / 'lint_report.md').touch()
+        (self.tmpdir / 'TRACEABILITY' / 'backlog.md').touch()
+        (self.tmpdir / 'SPEC.md').touch()
+        files = find_markdown_files(self.tmpdir)
+        self.assertEqual(len(files), 1)
+        self.assertIn(self.tmpdir / 'SPEC.md', files)
 
 
-class TestIdPattern(unittest.TestCase):
-    """Tests for the ID regex pattern."""
+class TestLintRepository(unittest.TestCase):
+    def setUp(self):
+        self.tmpdir = Path(tempfile.mkdtemp())
+    def tearDown(self):
+        import shutil
+        shutil.rmtree(self.tmpdir)
+    def _write(self, path, content):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding='utf-8')
 
-    def test_pattern_matches_valid_ids(self):
-        text = 'REQ-CORE-0001 and DB-CORE-0001 and API-REST-0001'
-        matches = ID_PATTERN.findall(text)
-        self.assertEqual(matches, ['REQ-CORE-0001', 'DB-CORE-0001', 'API-REST-0001'])
+    def test_clean_repository_no_issues(self):
+        self._write(self.tmpdir / 'SPEC.md', '### REQ-CORE-0001\n')
+        self._write(self.tmpdir / 'DOMAIN' / 'SPEC-Claim.md', '### REQ-CLAIM-0001\n')
+        result = lint_repository(self.tmpdir)
+        self.assertEqual(len(result.definitions), 2)
+        self.assertEqual(len(result.duplicates), 0)
+        self.assertEqual(len(result.invalid_format), 0)
+        self.assertEqual(len(result.undefined_refs), 0)
+        self.assertFalse(result.has_issues)
 
-    def test_pattern_does_not_match_invalid(self):
-        text = 'REQ--0001 REQ-CORE-001'
-        matches = ID_PATTERN.findall(text)
-        self.assertEqual(matches, [])
+    def test_duplicate_ids_detected(self):
+        self._write(self.tmpdir / 'SPEC.md', '### REQ-CORE-0001\n')
+        self._write(self.tmpdir / 'SPEC-Other.md', '### REQ-CORE-0001\n')
+        result = lint_repository(self.tmpdir)
+        self.assertEqual(len(result.duplicates), 1)
+        self.assertEqual(result.duplicates[0][0], 'REQ-CORE-0001')
 
-    def test_pattern_requires_word_boundary(self):
-        text = 'XREQ-CORE-0001 REQ-CORE-0001X'
-        matches = ID_PATTERN.findall(text)
-        # XREQ-CORE-0001 matches because \b is at string start before X;
-        # REQ-CORE-0001X does NOT match because there's no \b between 1 and X
-        self.assertEqual(matches, ['XREQ-CORE-0001'])
+    def test_invalid_format_detected(self):
+        self._write(self.tmpdir / 'SPEC.md', '### REQ-core-0001\n')
+        result = lint_repository(self.tmpdir)
+        self.assertEqual(len(result.invalid_format), 1)
+
+    def test_undefined_references_detected(self):
+        # Reference in prose, not a heading
+        self._write(self.tmpdir / 'SPEC.md', '### REQ-CORE-0001\n')
+        self._write(self.tmpdir / 'SPEC-Claim.md', 'See also REQ-CORE-9999\n')
+        result = lint_repository(self.tmpdir)
+        self.assertEqual(len(result.undefined_refs), 1)
+
+    def test_tasks_not_reported_as_undefined(self):
+        self._write(self.tmpdir / 'SPEC.md', '### REQ-CORE-0001\n')
+        # Reference to TASK-PROD-0001 should be skipped
+        self._write(self.tmpdir / 'SPEC-Claim.md', 'See TASK-PROD-0001\n')
+        result = lint_repository(self.tmpdir)
+        self.assertEqual(len(result.undefined_refs), 0)
+
+    def test_exclude_dirs_ignored(self):
+        self._write(self.tmpdir / '.git' / 'c.md', '### REQ-CORE-0001\n')
+        self._write(self.tmpdir / 'SPEC.md', '### REQ-CORE-0002\n')
+        result = lint_repository(self.tmpdir)
+        self.assertIn('REQ-CORE-0002', result.definitions)
+        self.assertNotIn('REQ-CORE-0001', result.definitions)
+
+    def test_empty_repository(self):
+        result = lint_repository(self.tmpdir)
+        self.assertEqual(len(result.definitions), 0)
+        self.assertEqual(result.files_scanned, 0)
+
+    def test_root_spec_included(self):
+        self._write(self.tmpdir / 'SPEC.md', '### REQ-CORE-0001\n### REQ-CORE-0002\n')
+        result = lint_repository(self.tmpdir)
+        self.assertIn('REQ-CORE-0001', result.definitions)
+        self.assertIn('REQ-CORE-0002', result.definitions)
+
+    def test_idscheme_not_scanned_as_definitions(self):
+        self._write(self.tmpdir / 'SPEC.md', '### REQ-CORE-0001\n')
+        self._write(self.tmpdir / 'META' / 'SPEC-IDScheme.md', '### REQ-CORE-0001\n')
+        result = lint_repository(self.tmpdir)
+        # Only one definition of REQ-CORE-0001, no duplicate
+        self.assertEqual(len(result.duplicates), 0)
+
+
+class TestGenerateCsv(unittest.TestCase):
+    def setUp(self):
+        self.tmpdir = Path(tempfile.mkdtemp())
+    def tearDown(self):
+        import shutil
+        shutil.rmtree(self.tmpdir)
+
+    def test_csv_output_format(self):
+        result = LintResult()
+        result.definitions = {
+            'REQ-CORE-0001': [('SPEC.md', 3)],
+            'REQ-CLAIM-0001': [('DOMAIN/SPEC-Claim.md', 5)],
+        }
+        result.files_scanned = 2
+        csv_path = self.tmpdir / 'out.csv'
+        generate_csv(result, csv_path, self.tmpdir)
+        with open(csv_path, newline='', encoding='utf-8') as f:
+            rows = list(csv.reader(f))
+        self.assertEqual(len(rows), 3)
+        self.assertEqual(rows[0], ['id', 'source_file', 'type', 'status'])
+
+    def test_csv_undefined_refs_included(self):
+        result = LintResult()
+        result.definitions = {'REQ-CORE-0001': [('SPEC.md', 3)]}
+        result.undefined_refs = [('REQ-CORE-9999', 'SPEC-Claim.md', 10)]
+        result.files_scanned = 2
+        csv_path = self.tmpdir / 'out.csv'
+        generate_csv(result, csv_path, self.tmpdir)
+        with open(csv_path, newline='', encoding='utf-8') as f:
+            rows = list(csv.reader(f))
+        row_ids = [r[0] for r in rows[1:]]
+        self.assertIn('REQ-CORE-9999', row_ids)
+
+    def test_csv_with_duplicates(self):
+        result = LintResult()
+        result.definitions = {'REQ-CORE-0002': [('SPEC.md', 5)]}
+        result.duplicates = [('REQ-CORE-0001', [('SPEC.md', 3), ('SPEC-O.md', 7)], 1, 'definition')]
+        csv_path = self.tmpdir / 'out.csv'
+        generate_csv(result, csv_path, self.tmpdir)
+        with open(csv_path, newline='', encoding='utf-8') as f:
+            rows = list(csv.reader(f))
+        self.assertEqual(len(rows), 3)
+
+    def test_csv_type_inference(self):
+        result = LintResult()
+        result.definitions = {
+            'REQ-CORE-0001': [('SPEC.md', 1)],
+            'API-REST-0001': [('API/SPEC-REST.md', 1)],
+            'TEST-VAL-0001': [('TESTING/SPEC-Validation.md', 1)],
+        }
+        csv_path = self.tmpdir / 'out.csv'
+        generate_csv(result, csv_path, self.tmpdir)
+        with open(csv_path, newline='', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            types = {r['id']: r['type'] for r in reader}
+        self.assertEqual(types['REQ-CORE-0001'], 'functional')
+        self.assertEqual(types['API-REST-0001'], 'api')
+        self.assertEqual(types['TEST-VAL-0001'], 'test')
+
+
+class TestGenerateReport(unittest.TestCase):
+    def test_report_no_issues(self):
+        result = LintResult()
+        result.files_scanned = 5
+        result.definitions = {'REQ-CORE-0001': [('SPEC.md', 1)]}
+        report = generate_report(result, Path('/repo'))
+        self.assertIn('No issues found', report)
+
+    def test_report_with_duplicates(self):
+        result = LintResult()
+        result.files_scanned = 2
+        result.duplicates = [('REQ-CORE-0001', [('SPEC.md', 3), ('SPEC-O.md', 7)], 1, 'definition')]
+        report = generate_report(result, Path('/repo'))
+        self.assertIn('Duplicate Definitions', report)
+
+    def test_report_with_undefined(self):
+        result = LintResult()
+        result.files_scanned = 1
+        result.undefined_refs = [('REQ-CORE-9999', 'SPEC.md', 5)]
+        report = generate_report(result, Path('/repo'))
+        self.assertIn('Referenced But Never Defined', report)
+
+    def test_report_with_invalid_format(self):
+        result = LintResult()
+        result.files_scanned = 1
+        result.invalid_format = [('req-core-0001', 'SPEC.md', 3)]
+        report = generate_report(result, Path('/repo'))
+        self.assertIn('Invalid Format IDs', report)
 
 
 if __name__ == '__main__':

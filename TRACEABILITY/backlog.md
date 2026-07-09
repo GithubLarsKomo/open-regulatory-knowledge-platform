@@ -1,10 +1,10 @@
 # ORKP Task Backlog
 
-Generated on 2026-07-07
+Generated on 2026-07-09
 
-- **Existing tasks:** 3
-- **Generated tasks:** 12
-- **Total requirement IDs covered:** 76
+- **Foundation tasks:** 3
+- **Generated tasks:** 15
+- **Total requirement IDs covered:** 94
 
 ## Epic 001 — Specification Foundation
 
@@ -14,6 +14,8 @@ Generated on 2026-07-07
 - REQ-CORE-0001
 - REQ-ARCH-0001
 
+**Scope:** Repository skeleton, folder structure, initial SPEC files.
+
 **Phase:** 0
 
 ### TASK-FOUNDATION-0002 — Implement Specification ID Linter
@@ -22,6 +24,8 @@ Generated on 2026-07-07
 - META-ID-0001
 - META-TASK-0001
 
+**Scope:** Markdown scanner, ID validation, traceability CSV.
+
 **Phase:** 0
 
 ### TASK-FOUNDATION-0003 — Generate Initial Task Backlog from SPEC Files
@@ -29,9 +33,25 @@ Generated on 2026-07-07
 **Source requirements:**
 - META-TASK-0001
 
+**Scope:** Backlog generator, TASK.md generation, CSV output.
+
 **Phase:** 0
 
 ## Epic 002 — Core Object Store
+
+### TASK-CORE-0001 — Core Platform
+
+**Source requirements:**
+- REQ-CORE-0002
+- REQ-CORE-0003
+- REQ-CORE-0004
+- REQ-CORE-0005
+- REQ-CORE-0006
+- REQ-CORE-0007
+
+**Scope:** Core object model, versioning, event store, audit trail, baseline.
+
+**Phase:** 1
 
 ### TASK-ARCH-0001 — Architecture
 
@@ -45,11 +65,14 @@ Generated on 2026-07-07
 
 **Phase:** 1
 
-### TASK-DB-0002 — Database Schema
+### TASK-DB-0001 — Database Schema
 
 **Source requirements:**
+- DB-CORE-0001
+- DB-CORE-0002
 - DB-CORE-0003
 - DB-CORE-0004
+- DB-CORE-0005
 
 **Scope:** MariaDB schema, migrations, indexing.
 
@@ -57,7 +80,7 @@ Generated on 2026-07-07
 
 ## Epic 004 — Product & Claim Domain
 
-### TASK-PROD-0003 — Product Domain
+### TASK-PROD-0001 — Product Domain
 
 **Source requirements:**
 - REQ-PROD-0001
@@ -72,7 +95,7 @@ Generated on 2026-07-07
 
 **Phase:** 2
 
-### TASK-CLAIM-0004 — Claim Domain
+### TASK-CLAIM-0001 — Claim Domain
 
 **Source requirements:**
 - REQ-CLAIM-0001
@@ -86,7 +109,7 @@ Generated on 2026-07-07
 
 **Phase:** 2
 
-### TASK-EVID-0005 — Evidence Domain
+### TASK-EVID-0001 — Evidence Domain
 
 **Source requirements:**
 - REQ-EVID-0001
@@ -104,7 +127,7 @@ Generated on 2026-07-07
 
 ## Epic 005 — Risk Domain
 
-### TASK-RISK-0006 — Risk Domain
+### TASK-RISK-0001 — Risk Domain
 
 **Source requirements:**
 - REQ-RISK-0001
@@ -121,7 +144,7 @@ Generated on 2026-07-07
 
 ## Epic 006 — Performance Domain
 
-### TASK-PERF-0007 — Performance Domain
+### TASK-PERF-0001 — Performance Domain
 
 **Source requirements:**
 - REQ-PERF-0001
@@ -137,7 +160,7 @@ Generated on 2026-07-07
 
 ## Epic 007 — Report Generation MVP
 
-### TASK-REPORT-0008 — Report Generation
+### TASK-REPORT-0001 — Report Generation
 
 **Source requirements:**
 - REP-PER-0001
@@ -150,9 +173,23 @@ Generated on 2026-07-07
 
 **Phase:** 3
 
+## Epic 008 — Knowledge Graph
+
+### TASK-GRAPH-0001 — Knowledge Graph
+
+**Source requirements:**
+- GRAPH-CORE-0001
+- GRAPH-CORE-0002
+- GRAPH-CORE-0003
+- GRAPH-CORE-0004
+
+**Scope:** Neo4j schema, synchronization, impact analysis.
+
+**Phase:** 4
+
 ## Epic 009 — AI/RAG Services
 
-### TASK-AI-0009 — AI/RAG Services
+### TASK-AI-0001 — AI/RAG Services
 
 **Source requirements:**
 - AI-CORE-0001
@@ -167,7 +204,7 @@ Generated on 2026-07-07
 
 ## Epic 010 — Workflow & Security
 
-### TASK-WF-0010 — Workflow & Approval
+### TASK-WF-0001 — Workflow & Approval
 
 **Source requirements:**
 - WF-APP-0001
@@ -181,7 +218,7 @@ Generated on 2026-07-07
 
 **Phase:** 2
 
-### TASK-SEC-0011 — Security & RBAC
+### TASK-SEC-0001 — Security & RBAC
 
 **Source requirements:**
 - SEC-RBAC-0001
@@ -196,7 +233,7 @@ Generated on 2026-07-07
 
 ## Epic 011 — UI
 
-### TASK-UI-0012 — User Interface
+### TASK-UI-0001 — User Interface
 
 **Source requirements:**
 - REQ-UI-0001
@@ -213,3 +250,18 @@ Generated on 2026-07-07
 **Scope:** Dashboard, search, editing, workflow UI, AI drafting interface.
 
 **Phase:** 3
+
+## Epic 012 — Validation & Deployment
+
+### TASK-VAL-0001 — Validation & Testing
+
+**Source requirements:**
+- TEST-VAL-0001
+- TEST-VAL-0002
+- TEST-VAL-0003
+- TEST-VAL-0004
+- TEST-VAL-0005
+
+**Scope:** Validation plan, requirement-to-test traceability, audit testing.
+
+**Phase:** 6

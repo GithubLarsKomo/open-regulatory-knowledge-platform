@@ -2,259 +2,278 @@
 """Unit tests for backlog_generator.py."""
 
 import csv
-import os
+import json
 import sys
 import tempfile
 import unittest
+from datetime import date
 from pathlib import Path
-from collections import defaultdict
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from tools.backlog_generator import (
-    extract_requirements,
+    extract_requirement_ids,
     find_markdown_files,
     generate_backlog,
     generate_csv_backlog,
     generate_markdown_backlog,
-    group_requirements_by_domain,
-    DOMAIN_GROUPS,
-    EXISTING_TASKS,
-    EXISTING_TASK_REQUIREMENTS,
+    generate_task_md,
+    collect_definitions,
+    is_definition_file,
+    is_heading_line,
+    load_config,
 )
 
 
-class TestExtractRequirements(unittest.TestCase):
-    """Tests for extracting requirements from files."""
+class TestIsHeadingLine(unittest.TestCase):
+    def test_heading_level_1(self):
+        self.assertTrue(is_heading_line('# Purpose'))
+    def test_heading_level_2(self):
+        self.assertTrue(is_heading_line('## Purpose'))
+    def test_heading_level_3(self):
+        self.assertTrue(is_heading_line('### REQ-CORE-0001'))
+    def test_heading_level_4(self):
+        self.assertTrue(is_heading_line('#### Subsection'))
+    def test_not_heading(self):
+        self.assertFalse(is_heading_line('Some prose text'))
+        self.assertFalse(is_heading_line('- list item'))
+        self.assertFalse(is_heading_line('| table | cell |'))
 
+
+class TestExtractRequirementIds(unittest.TestCase):
     def setUp(self):
         self.tmpdir = Path(tempfile.mkdtemp())
-
     def tearDown(self):
         import shutil
         shutil.rmtree(self.tmpdir)
+    def _write(self, name, content):
+        p = self.tmpdir / name
+        p.write_text(content, encoding='utf-8')
+        return p
 
-    def _write_file(self, name: str, content: str) -> Path:
-        path = self.tmpdir / name
-        path.write_text(content, encoding='utf-8')
-        return path
-
-    def test_extracts_ids(self):
-        f = self._write_file('SPEC-Claim.md', '### REQ-CLAIM-0001\n### REQ-CLAIM-0002\n')
-        ids = extract_requirements(f)
+    def test_extracts_ids_from_headings(self):
+        f = self._write('SPEC-Claim.md', '### REQ-CLAIM-0001\n### REQ-CLAIM-0002\n')
+        ids = extract_requirement_ids(f)
         self.assertEqual(len(ids), 2)
-        self.assertEqual(ids[0][0], 'REQ-CLAIM-0001')
+        self.assertEqual(ids[0], 'REQ-CLAIM-0001')
+
+    def test_skips_ids_in_prose(self):
+        f = self._write('SPEC.md', '# Overview\nREQ-CORE-0001 is a req.\n### REQ-CORE-0002\n')
+        ids = extract_requirement_ids(f)
+        self.assertEqual(len(ids), 1)
+        self.assertEqual(ids[0], 'REQ-CORE-0002')
 
     def test_skips_inline_code(self):
-        f = self._write_file('SPEC.md', 'Example: `REQ-CORE-0001`\n### REQ-CORE-0002\n')
-        ids = extract_requirements(f)
+        f = self._write('SPEC.md', '`REQ-CORE-0001`\n### REQ-CORE-0002\n')
+        ids = extract_requirement_ids(f)
         self.assertEqual(len(ids), 1)
-        self.assertEqual(ids[0][0], 'REQ-CORE-0002')
 
     def test_empty_file(self):
-        f = self._write_file('SPEC.md', '# No requirements\n')
-        ids = extract_requirements(f)
+        f = self._write('SPEC.md', '# No IDs\n')
+        ids = extract_requirement_ids(f)
         self.assertEqual(len(ids), 0)
+
+    def test_unique_ids(self):
+        f = self._write('SPEC.md', '### REQ-CORE-0001\n### REQ-CORE-0001\n')
+        ids = extract_requirement_ids(f)
+        self.assertEqual(len(ids), 1)
 
 
 class TestFindMarkdownFiles(unittest.TestCase):
-    """Tests for finding SPEC Markdown files."""
-
     def setUp(self):
         self.tmpdir = Path(tempfile.mkdtemp())
-
     def tearDown(self):
         import shutil
         shutil.rmtree(self.tmpdir)
 
-    def test_finds_spec_files(self):
+    def test_finds_spec_files_including_root(self):
         (self.tmpdir / 'SPEC.md').touch()
         (self.tmpdir / 'DOMAIN').mkdir()
         (self.tmpdir / 'DOMAIN' / 'SPEC-Claim.md').touch()
         (self.tmpdir / 'TASK.md').touch()
         (self.tmpdir / 'README.md').touch()
-
         files = find_markdown_files(self.tmpdir)
-        # SPEC.md is in EXCLUDE_FILES, so only SPEC-Claim.md should be found
-        self.assertEqual(len(files), 1)
+        self.assertIn(self.tmpdir / 'SPEC.md', files)
         self.assertIn(self.tmpdir / 'DOMAIN' / 'SPEC-Claim.md', files)
 
     def test_excludes_dot_git(self):
         (self.tmpdir / '.git').mkdir()
-        (self.tmpdir / '.git' / 'SPEC-Claim.md').touch()
-        (self.tmpdir / 'SPEC-Claim.md').touch()
+        (self.tmpdir / '.git' / 's.md').touch()
+        (self.tmpdir / 'SPEC.md').touch()
         files = find_markdown_files(self.tmpdir)
         self.assertEqual(len(files), 1)
 
-
-class TestGroupRequirements(unittest.TestCase):
-    """Tests for grouping requirements by domain."""
-
-    def test_groups_by_prefix(self):
-        reqs = {
-            'REQ-CLAIM-0001': ['SPEC-Claim.md'],
-            'REQ-CLAIM-0002': ['SPEC-Claim.md'],
-            'REQ-RISK-0001': ['SPEC-Risk.md'],
-        }
-        groups = group_requirements_by_domain(reqs)
-        self.assertIn('CLAIM', groups)
-        self.assertIn('RISK', groups)
-        self.assertEqual(len(groups['CLAIM']), 2)
-        self.assertEqual(len(groups['RISK']), 1)
-
-    def test_empty_requirements(self):
-        groups = group_requirements_by_domain({})
-        self.assertEqual(len(groups), 0)
+    def test_excludes_generated_files(self):
+        (self.tmpdir / 'TASK.md').touch()
+        (self.tmpdir / 'SPEC.md').touch()
+        files = find_markdown_files(self.tmpdir)
+        self.assertIn(self.tmpdir / 'SPEC.md', files)
+        # TASK.md is in GENERATED_FILES
+        self.assertNotIn(self.tmpdir / 'TASK.md', files)
 
 
-class TestGenerateBacklog(unittest.TestCase):
-    """Tests for backlog generation."""
+class TestIsDefinitionFile(unittest.TestCase):
+    def test_spec_md(self):
+        self.assertTrue(is_definition_file('SPEC.md'))
+    def test_spec_clain(self):
+        self.assertTrue(is_definition_file('DOMAIN/SPEC-Claim.md'))
+    def test_req_meta(self):
+        self.assertTrue(is_definition_file('META/REQ-META.md'))
+    def test_task_md(self):
+        self.assertFalse(is_definition_file('TASK.md'))
+    def test_readme_md(self):
+        self.assertFalse(is_definition_file('README.md'))
+    def test_glossary_md(self):
+        self.assertFalse(is_definition_file('GLOSSARY.md'))
+    def test_idscheme_not_definition(self):
+        self.assertFalse(is_definition_file('META/SPEC-IDScheme.md'))
 
+
+class TestCollectDefinitions(unittest.TestCase):
     def setUp(self):
         self.tmpdir = Path(tempfile.mkdtemp())
+    def tearDown(self):
+        import shutil
+        shutil.rmtree(self.tmpdir)
+    def _write(self, path, content):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding='utf-8')
 
+    def test_root_spec_is_scanned(self):
+        self._write(self.tmpdir / 'SPEC.md', '### REQ-CORE-0001\n')
+        defs = collect_definitions(self.tmpdir)
+        self.assertIn('REQ-CORE-0001', defs)
+
+    def test_generated_files_ignored(self):
+        self._write(self.tmpdir / 'SPEC.md', '### REQ-CORE-0001\n')
+        self._write(self.tmpdir / 'TASK.md', '### TASK-PROD-0001\n')
+        defs = collect_definitions(self.tmpdir)
+        self.assertIn('REQ-CORE-0001', defs)
+        self.assertNotIn('TASK-PROD-0001', defs.keys())
+
+
+class TestLoadConfig(unittest.TestCase):
+    def setUp(self):
+        self.tmpdir = Path(tempfile.mkdtemp())
+        (self.tmpdir / 'META').mkdir(parents=True, exist_ok=True)
     def tearDown(self):
         import shutil
         shutil.rmtree(self.tmpdir)
 
-    def _write_file(self, path: Path, content: str):
+    def test_loads_valid_config(self):
+        cfg = {
+            "foundation_tasks": [{"task_id": "TASK-X-0001", "title": "X", "requirements": ["REQ-X-0001"], "epic": "E", "phase": "0"}],
+            "domain_groups": [{"prefix": "REQ-X", "task_suffix": "X", "title": "X", "epic": "E", "phase": "1", "scope": "S."}]
+        }
+        (self.tmpdir / 'META' / 'task_groups.json').write_text(json.dumps(cfg), encoding='utf-8')
+        loaded = load_config(self.tmpdir)
+        self.assertEqual(len(loaded['foundation_tasks']), 1)
+        self.assertEqual(len(loaded['domain_groups']), 1)
+
+    def test_raises_on_missing(self):
+        with self.assertRaises(FileNotFoundError):
+            load_config(self.tmpdir)
+
+
+class TestGenerateBacklog(unittest.TestCase):
+    def setUp(self):
+        self.tmpdir = Path(tempfile.mkdtemp())
+        (self.tmpdir / 'META').mkdir(parents=True, exist_ok=True)
+        cfg = {
+            "foundation_tasks": [{"task_id": "TASK-FOUNDATION-0001", "title": "Foundation", "requirements": ["REQ-CORE-0001"], "epic": "Epic 001", "phase": "0", "scope": ""}],
+            "domain_groups": [
+                {"prefix": "REQ-CLAIM", "task_suffix": "CLAIM", "title": "Claim Domain", "epic": "Epic 004", "phase": "2", "scope": "C."},
+                {"prefix": "REQ-RISK", "task_suffix": "RISK", "title": "Risk Domain", "epic": "Epic 005", "phase": "2", "scope": "R."},
+            ]
+        }
+        (self.tmpdir / 'META' / 'task_groups.json').write_text(json.dumps(cfg), encoding='utf-8')
+    def tearDown(self):
+        import shutil
+        shutil.rmtree(self.tmpdir)
+    def _write(self, path, content):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content, encoding='utf-8')
 
     def test_generates_tasks_from_requirements(self):
-        self._write_file(self.tmpdir / 'SPEC-Claim.md', '### REQ-CLAIM-0001\n### REQ-CLAIM-0002\n')
-        self._write_file(self.tmpdir / 'SPEC-Risk.md', '### REQ-RISK-0001\n')
+        self._write(self.tmpdir / 'SPEC.md', '### REQ-CORE-0001\n')
+        self._write(self.tmpdir / 'SPEC-Claim.md', '### REQ-CLAIM-0001\n### REQ-CLAIM-0002\n')
+        self._write(self.tmpdir / 'SPEC-Risk.md', '### REQ-RISK-0001\n')
+        f, g = generate_backlog(self.tmpdir)
+        self.assertEqual(len(f), 1)
+        self.assertEqual(len(g), 2)
+        ids = [t['task_id'] for t in g]
+        self.assertIn('TASK-CLAIM-0001', ids)
+        self.assertIn('TASK-RISK-0001', ids)
 
-        existing, generated = generate_backlog(self.tmpdir)
-        # 3 existing tasks from EXISTING_TASKS
-        self.assertEqual(len(existing), 3)
-        # Should have generated tasks for CLAIM and RISK
-        gen_task_ids = [t['task_id'] for t in generated]
-        self.assertIn('TASK-CLAIM-0001', gen_task_ids)
-        # RISK is generated after CORE, DB, ARCH which have no matching files,
-        # so the counter makes it 0002
-        self.assertIn('TASK-RISK-0002', gen_task_ids)
-
-    def test_excludes_existing_task_requirements(self):
-        self._write_file(self.tmpdir / 'SPEC.md', '### REQ-CORE-0001\n')
-        existing, generated = generate_backlog(self.tmpdir)
-        # REQ-CORE-0001 is in EXISTING_TASK_REQUIREMENTS, should not generate new task
-        gen_req_ids = [r for t in generated for r in t['requirements']]
-        self.assertNotIn('REQ-CORE-0001', gen_req_ids)
+    def test_excludes_foundation_reqs(self):
+        self._write(self.tmpdir / 'SPEC.md', '### REQ-CORE-0001\n')
+        self._write(self.tmpdir / 'SPEC-Claim.md', '### REQ-CLAIM-0001\n')
+        f, g = generate_backlog(self.tmpdir)
+        gen_reqs = [r for t in g for r in t['requirements']]
+        self.assertNotIn('REQ-CORE-0001', gen_reqs)
+        self.assertIn('REQ-CLAIM-0001', gen_reqs)
 
     def test_empty_repository(self):
-        existing, generated = generate_backlog(self.tmpdir)
-        self.assertEqual(len(existing), 3)  # Still has 3 existing tasks
-        # No SPEC files to scan, so generated should be empty
-        # (but may be empty list)
-        self.assertIsInstance(generated, list)
+        f, g = generate_backlog(self.tmpdir)
+        self.assertEqual(len(f), 1)
+        self.assertEqual(len(g), 0)
+
+    def test_deterministic_task_ids(self):
+        self._write(self.tmpdir / 'SPEC.md', '### REQ-CORE-0001\n')
+        self._write(self.tmpdir / 'SPEC-Claim.md', '### REQ-CLAIM-0001\n')
+        _, g1 = generate_backlog(self.tmpdir)
+        _, g2 = generate_backlog(self.tmpdir)
+        self.assertEqual([t['task_id'] for t in g1], [t['task_id'] for t in g2])
+
+    def test_stable_output_repeated_runs(self):
+        self._write(self.tmpdir / 'SPEC.md', '### REQ-CORE-0001\n')
+        self._write(self.tmpdir / 'SPEC-Claim.md', '### REQ-CLAIM-0001\n### REQ-CLAIM-0002\n')
+        f1, g1 = generate_backlog(self.tmpdir)
+        f2, g2 = generate_backlog(self.tmpdir)
+        self.assertEqual(g1, g2)
+        self.assertEqual(f1, f2)
 
 
 class TestOutputFormat(unittest.TestCase):
-    """Tests for output format correctness."""
-
     def setUp(self):
         self.tmpdir = Path(tempfile.mkdtemp())
-
     def tearDown(self):
         import shutil
         shutil.rmtree(self.tmpdir)
 
-    def test_csv_output_columns(self):
-        existing = [{
-            'task_id': 'TASK-FOUNDATION-0001',
-            'title': 'Test Task',
-            'requirements': ['REQ-CORE-0001'],
-            'epic': 'Epic 001',
-            'phase': '0',
-        }]
-        generated = []
-
-        csv_path = self.tmpdir / 'backlog.csv'
-        generate_csv_backlog(existing, generated, csv_path)
-
-        with open(csv_path, 'r', newline='', encoding='utf-8') as f:
-            reader = csv.reader(f)
-            rows = list(reader)
-
-        self.assertEqual(len(rows), 2)  # header + 1 data row
+    def test_csv_columns(self):
+        f = [{'task_id': 'TASK-X-0001', 'title': 'X', 'requirements': ['REQ-X-0001'], 'epic': 'E', 'phase': '0'}]
+        p = self.tmpdir / 'b.csv'
+        generate_csv_backlog(f, [], p)
+        with open(p, newline='', encoding='utf-8') as fh:
+            rows = list(csv.reader(fh))
         self.assertEqual(rows[0], ['task_id', 'title', 'requirement_ids', 'epic', 'phase'])
+        self.assertEqual(len(rows), 2)
 
     def test_markdown_output(self):
-        existing = [{
-            'task_id': 'TASK-FOUNDATION-0001',
-            'title': 'Test Task',
-            'requirements': ['REQ-CORE-0001'],
-            'epic': 'Epic 001',
-            'phase': '0',
-            'scope': 'Test scope',
-        }]
-        generated = []
+        f = [{'task_id': 'TASK-X-0001', 'title': 'X Task', 'requirements': ['REQ-X-0001'], 'epic': 'EpiX', 'phase': '0', 'scope': 'S.'}]
+        p = self.tmpdir / 'b.md'
+        generate_markdown_backlog(f, [], p)
+        c = p.read_text(encoding='utf-8')
+        self.assertIn('TASK-X-0001', c)
+        self.assertIn('X Task', c)
 
-        md_path = self.tmpdir / 'backlog.md'
-        generate_markdown_backlog(existing, generated, md_path)
+    def test_task_md_output(self):
+        f = [{'task_id': 'TASK-F-0001', 'title': 'Foundation', 'requirements': ['REQ-CORE-0001'], 'epic': 'E1', 'phase': '0', 'scope': 'S.'}]
+        g = [{'task_id': 'TASK-C-0001', 'title': 'Claim', 'requirements': ['REQ-CLAIM-0001'], 'epic': 'E2', 'phase': '2', 'scope': 'C.'}]
+        p = self.tmpdir / 'TASK.md'
+        generate_task_md(f, g, p)
+        c = p.read_text(encoding='utf-8')
+        self.assertIn('TASK-F-0001', c)
+        self.assertIn('TASK-C-0001', c)
+        self.assertIn('Foundation.', c)
 
-        content = md_path.read_text(encoding='utf-8')
-        self.assertIn('TASK-FOUNDATION-0001', content)
-        self.assertIn('Test Task', content)
-        self.assertIn('REQ-CORE-0001', content)
-        self.assertIn('Epic 001', content)
-
-    def test_csv_contains_all_columns(self):
-        existing = [{
-            'task_id': 'TASK-FOUNDATION-0001',
-            'title': 'Create Repository Skeleton',
-            'requirements': ['REQ-CORE-0001', 'REQ-ARCH-0001'],
-            'epic': 'Epic 001 — Specification Foundation',
-            'phase': '0',
-        }]
-        generated = []
-
-        csv_path = self.tmpdir / 'backlog.csv'
-        generate_csv_backlog(existing, generated, csv_path)
-
-        with open(csv_path, 'r', newline='', encoding='utf-8') as f:
-            reader = csv.DictReader(f)
-            rows = list(reader)
-
-        self.assertEqual(len(rows), 1)
-        self.assertEqual(rows[0]['task_id'], 'TASK-FOUNDATION-0001')
-        self.assertEqual(rows[0]['requirement_ids'], 'REQ-CORE-0001; REQ-ARCH-0001')
-
-
-class TestExistingTasks(unittest.TestCase):
-    """Tests for existing task definitions."""
-
-    def test_existing_tasks_have_required_fields(self):
-        for task_id, info in EXISTING_TASKS.items():
-            self.assertIn('title', info, f"{task_id} missing title")
-            self.assertIn('requirements', info, f"{task_id} missing requirements")
-            self.assertIn('epic', info, f"{task_id} missing epic")
-            self.assertIn('phase', info, f"{task_id} missing phase")
-            self.assertGreater(len(info['requirements']), 0, f"{task_id} has no requirements")
-
-    def test_existing_task_requirements_exist_in_set(self):
-        for task_id, info in EXISTING_TASKS.items():
-            for req in info['requirements']:
-                self.assertIn(req, EXISTING_TASK_REQUIREMENTS,
-                              f"{req} referenced by {task_id} but not in EXISTING_TASK_REQUIREMENTS")
-
-
-class TestDomainGroups(unittest.TestCase):
-    """Tests for domain group definitions."""
-
-    def test_all_groups_have_required_fields(self):
-        for group in DOMAIN_GROUPS:
-            self.assertIn('prefix', group)
-            self.assertIn('task_suffix', group)
-            self.assertIn('title', group)
-            self.assertIn('epic', group)
-            self.assertIn('phase', group)
-            self.assertIn('scope', group)
-
-    def test_unique_prefixes(self):
-        prefixes = [g['prefix'] for g in DOMAIN_GROUPS]
-        self.assertEqual(len(prefixes), len(set(prefixes)), "Duplicate domain prefixes found")
+    def test_dynamic_date(self):
+        f = [{'task_id': 'TASK-X-0001', 'title': 'X', 'requirements': ['REQ-X-0001'], 'epic': 'E', 'phase': '0'}]
+        p = self.tmpdir / 'b.md'
+        generate_markdown_backlog(f, [], p)
+        c = p.read_text(encoding='utf-8')
+        self.assertIn(date.today().isoformat(), c)
 
 
 if __name__ == '__main__':

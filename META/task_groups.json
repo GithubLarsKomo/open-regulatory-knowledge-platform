@@ -1,0 +1,150 @@
+{
+  "foundation_tasks": [
+    {
+      "task_id": "TASK-FOUNDATION-0001",
+      "title": "Create Repository Skeleton",
+      "requirements": ["REQ-CORE-0001", "REQ-ARCH-0001"],
+      "epic": "Epic 001 — Specification Foundation",
+      "phase": "0",
+      "scope": "Repository skeleton, folder structure, initial SPEC files."
+    },
+    {
+      "task_id": "TASK-FOUNDATION-0002",
+      "title": "Implement Specification ID Linter",
+      "requirements": ["META-ID-0001", "META-TASK-0001"],
+      "epic": "Epic 001 — Specification Foundation",
+      "phase": "0",
+      "scope": "Markdown scanner, ID validation, traceability CSV."
+    },
+    {
+      "task_id": "TASK-FOUNDATION-0003",
+      "title": "Generate Initial Task Backlog from SPEC Files",
+      "requirements": ["META-TASK-0001"],
+      "epic": "Epic 001 — Specification Foundation",
+      "phase": "0",
+      "scope": "Backlog generator, TASK.md generation, CSV output."
+    }
+  ],
+  "domain_groups": [
+    {
+      "prefix": "REQ-CORE",
+      "task_suffix": "CORE",
+      "title": "Core Platform",
+      "epic": "Epic 002 — Core Object Store",
+      "phase": "1",
+      "scope": "Core object model, versioning, event store, audit trail, baseline."
+    },
+    {
+      "prefix": "REQ-ARCH",
+      "task_suffix": "ARCH",
+      "title": "Architecture",
+      "epic": "Epic 002 — Core Object Store",
+      "phase": "1",
+      "scope": "Architecture enforcement, multi-representation support."
+    },
+    {
+      "prefix": "DB-CORE",
+      "task_suffix": "DB",
+      "title": "Database Schema",
+      "epic": "Epic 002 — Core Object Store",
+      "phase": "1",
+      "scope": "MariaDB schema, migrations, indexing."
+    },
+    {
+      "prefix": "REQ-PROD",
+      "task_suffix": "PROD",
+      "title": "Product Domain",
+      "epic": "Epic 004 — Product & Claim Domain",
+      "phase": "2",
+      "scope": "Product master data, device hierarchy, regulatory identifiers."
+    },
+    {
+      "prefix": "REQ-CLAIM",
+      "task_suffix": "CLAIM",
+      "title": "Claim Domain",
+      "epic": "Epic 004 — Product & Claim Domain",
+      "phase": "2",
+      "scope": "Claim management, evidence linking, consistency checking."
+    },
+    {
+      "prefix": "REQ-EVID",
+      "task_suffix": "EVID",
+      "title": "Evidence Domain",
+      "epic": "Epic 004 — Product & Claim Domain",
+      "phase": "2",
+      "scope": "Evidence management, quality assessment, coverage analysis."
+    },
+    {
+      "prefix": "REQ-RISK",
+      "task_suffix": "RISK",
+      "title": "Risk Domain",
+      "epic": "Epic 005 — Risk Domain",
+      "phase": "2",
+      "scope": "Risk management per ISO 14971, control measures, residual risk."
+    },
+    {
+      "prefix": "REQ-PERF",
+      "task_suffix": "PERF",
+      "title": "Performance Domain",
+      "epic": "Epic 006 — Performance Domain",
+      "phase": "2",
+      "scope": "Performance studies, analytical/clinical performance, PER."
+    },
+    {
+      "prefix": "REP-PER",
+      "task_suffix": "REPORT",
+      "title": "Report Generation",
+      "epic": "Epic 007 — Report Generation MVP",
+      "phase": "3",
+      "scope": "DOCX/PDF generation, PER generation, traceability appendix."
+    },
+    {
+      "prefix": "GRAPH-CORE",
+      "task_suffix": "GRAPH",
+      "title": "Knowledge Graph",
+      "epic": "Epic 008 — Knowledge Graph",
+      "phase": "4",
+      "scope": "Neo4j schema, synchronization, impact analysis."
+    },
+    {
+      "prefix": "AI-CORE",
+      "task_suffix": "AI",
+      "title": "AI/RAG Services",
+      "epic": "Epic 009 — AI/RAG Services",
+      "phase": "5",
+      "scope": "Hybrid search, grounded drafting, audit trail."
+    },
+    {
+      "prefix": "WF-APP",
+      "task_suffix": "WF",
+      "title": "Workflow & Approval",
+      "epic": "Epic 010 — Workflow & Security",
+      "phase": "2",
+      "scope": "Lifecycle state machine, approval workflow, electronic signatures."
+    },
+    {
+      "prefix": "SEC-RBAC",
+      "task_suffix": "SEC",
+      "title": "Security & RBAC",
+      "epic": "Epic 010 — Workflow & Security",
+      "phase": "2",
+      "scope": "Role-based access control, product permissions, audit access."
+    },
+    {
+      "prefix": "REQ-UI",
+      "task_suffix": "UI",
+      "title": "User Interface",
+      "epic": "Epic 011 — UI",
+      "phase": "3",
+      "scope": "Dashboard, search, editing, workflow UI, AI drafting interface."
+    },
+    {
+      "prefix": "TEST-VAL",
+      "task_suffix": "VAL",
+      "title": "Validation & Testing",
+      "epic": "Epic 012 — Validation & Deployment",
+      "phase": "6",
+      "scope": "Validation plan, requirement-to-test traceability, audit testing."
+    }
+  ]
+}

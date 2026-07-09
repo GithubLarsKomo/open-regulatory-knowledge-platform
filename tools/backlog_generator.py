@@ -2,8 +2,9 @@
 """
 backlog_generator.py — Task Backlog Generator for ORKP.
 
-Reads requirement IDs from Markdown SPEC files, groups them by domain,
-and generates a structured task backlog in Markdown and CSV formats.
+Reads requirement IDs from Markdown SPEC files (heading definitions only),
+groups them by domain (from META/task_groups.json), and generates a
+structured task backlog in Markdown and CSV formats with deterministic task IDs.
 
 Usage:
     python tools/backlog_generator.py [--path REPO_ROOT] [--output-dir OUTPUT_DIR]
@@ -14,12 +15,13 @@ Source requirements:
 
 import argparse
 import csv
-import os
+import json
 import re
 import sys
 from collections import defaultdict
+from datetime import date
 from pathlib import Path
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 
 # ---------------------------------------------------------------------------
@@ -28,256 +30,173 @@ from typing import Dict, List, Optional, Set, Tuple
 
 ID_PATTERN = re.compile(r'(?<!`)\b([A-Z]+-[A-Z]+-\d{4})\b(?!`)', re.IGNORECASE)
 EXCLUDE_DIRS = {'.git', 'node_modules', '__pycache__', '.venv', 'venv'}
-EXCLUDE_FILES = {'lint_report.md', 'test_spec_linter.py', 'test_backlog_generator.py', 'README.md', 'GLOSSARY.md', 'ROADMAP.md', 'VISION.md', 'SPEC.md', 'TASK.md'}
-
-# Requirements that already have task files (skip these)
-EXISTING_TASK_REQUIREMENTS = {
-    'META-ID-0001',
-    'META-TASK-0001',
-    'REQ-CORE-0001',
-    'REQ-ARCH-0001',
-    'DB-CORE-0001',
-    'DB-CORE-0002',
-    'DB-CORE-0005',
-    'API-REST-0001',
-    'API-REST-0004',
+EXCLUDE_FILES = {
+    'lint_report.md', 'backlog.md', 'backlog.csv', 'Requirements.csv',
+    'test_spec_linter.py', 'test_backlog_generator.py',
+    'README.md', 'GLOSSARY.md', 'ROADMAP.md', 'VISION.md',
 }
+GENERATED_FILES = {'TASK.md', 'TRACEABILITY/backlog.md', 'TRACEABILITY/backlog.csv', 'TRACEABILITY/Requirements.csv', 'TRACEABILITY/lint_report.md'}
 
-# Domain grouping rules: map requirement prefixes to domains/tasks
-DOMAIN_GROUPS = [
-    {
-        'prefix': 'REQ-CORE',
-        'task_suffix': 'CORE',
-        'title': 'Core Platform',
-        'epic': 'Epic 002 — Core Object Store',
-        'phase': '1',
-        'scope': 'Core object model, versioning, event store, audit trail, baseline.',
-    },
-    {
-        'prefix': 'REQ-ARCH',
-        'task_suffix': 'ARCH',
-        'title': 'Architecture',
-        'epic': 'Epic 002 — Core Object Store',
-        'phase': '1',
-        'scope': 'Architecture enforcement, multi-representation support.',
-    },
-    {
-        'prefix': 'DB-CORE',
-        'task_suffix': 'DB',
-        'title': 'Database Schema',
-        'epic': 'Epic 002 — Core Object Store',
-        'phase': '1',
-        'scope': 'MariaDB schema, migrations, indexing.',
-    },
-    {
-        'prefix': 'REQ-PROD',
-        'task_suffix': 'PROD',
-        'title': 'Product Domain',
-        'epic': 'Epic 004 — Product & Claim Domain',
-        'phase': '2',
-        'scope': 'Product master data, device hierarchy, regulatory identifiers.',
-    },
-    {
-        'prefix': 'REQ-CLAIM',
-        'task_suffix': 'CLAIM',
-        'title': 'Claim Domain',
-        'epic': 'Epic 004 — Product & Claim Domain',
-        'phase': '2',
-        'scope': 'Claim management, evidence linking, consistency checking.',
-    },
-    {
-        'prefix': 'REQ-EVID',
-        'task_suffix': 'EVID',
-        'title': 'Evidence Domain',
-        'epic': 'Epic 004 — Product & Claim Domain',
-        'phase': '2',
-        'scope': 'Evidence management, quality assessment, coverage analysis.',
-    },
-    {
-        'prefix': 'REQ-RISK',
-        'task_suffix': 'RISK',
-        'title': 'Risk Domain',
-        'epic': 'Epic 005 — Risk Domain',
-        'phase': '2',
-        'scope': 'Risk management per ISO 14971, control measures, residual risk.',
-    },
-    {
-        'prefix': 'REQ-PERF',
-        'task_suffix': 'PERF',
-        'title': 'Performance Domain',
-        'epic': 'Epic 006 — Performance Domain',
-        'phase': '2',
-        'scope': 'Performance studies, analytical/clinical performance, PER.',
-    },
-    {
-        'prefix': 'REP-PER',
-        'task_suffix': 'REPORT',
-        'title': 'Report Generation',
-        'epic': 'Epic 007 — Report Generation MVP',
-        'phase': '3',
-        'scope': 'DOCX/PDF generation, PER generation, traceability appendix.',
-    },
-    {
-        'prefix': 'GRAPH-CORE',
-        'task_suffix': 'GRAPH',
-        'title': 'Knowledge Graph',
-        'epic': 'Epic 008 — Knowledge Graph',
-        'phase': '4',
-        'scope': 'Neo4j schema, synchronization, impact analysis.',
-    },
-    {
-        'prefix': 'AI-CORE',
-        'task_suffix': 'AI',
-        'title': 'AI/RAG Services',
-        'epic': 'Epic 009 — AI/RAG Services',
-        'phase': '5',
-        'scope': 'Hybrid search, grounded drafting, audit trail.',
-    },
-    {
-        'prefix': 'WF-APP',
-        'task_suffix': 'WF',
-        'title': 'Workflow & Approval',
-        'epic': 'Epic 010 — Workflow & Security',
-        'phase': '2',
-        'scope': 'Lifecycle state machine, approval workflow, electronic signatures.',
-    },
-    {
-        'prefix': 'SEC-RBAC',
-        'task_suffix': 'SEC',
-        'title': 'Security & RBAC',
-        'epic': 'Epic 010 — Workflow & Security',
-        'phase': '2',
-        'scope': 'Role-based access control, product permissions, audit access.',
-    },
-    {
-        'prefix': 'REQ-UI',
-        'task_suffix': 'UI',
-        'title': 'User Interface',
-        'epic': 'Epic 011 — UI',
-        'phase': '3',
-        'scope': 'Dashboard, search, editing, workflow UI, AI drafting interface.',
-    },
-    {
-        'prefix': 'TEST-VAL',
-        'task_suffix': 'VAL',
-        'title': 'Validation & Testing',
-        'epic': 'Epic 012 — Validation & Deployment',
-        'phase': '6',
-        'scope': 'Validation plan, requirement-to-test traceability, audit testing.',
-    },
-]
-
-# Specific requirements mapped to multi-requirement tasks
-EXISTING_TASKS = {
-    'TASK-FOUNDATION-0001': {
-        'title': 'Create Repository Skeleton',
-        'requirements': ['REQ-CORE-0001', 'REQ-ARCH-0001'],
-        'epic': 'Epic 001 — Specification Foundation',
-        'phase': '0',
-    },
-    'TASK-FOUNDATION-0002': {
-        'title': 'Implement Specification ID Linter',
-        'requirements': ['META-ID-0001', 'META-TASK-0001'],
-        'epic': 'Epic 001 — Specification Foundation',
-        'phase': '0',
-    },
-    'TASK-FOUNDATION-0003': {
-        'title': 'Generate Initial Task Backlog from SPEC Files',
-        'requirements': ['META-TASK-0001'],
-        'epic': 'Epic 001 — Specification Foundation',
-        'phase': '0',
-    },
-}
+CONFIG_PATH = 'META/task_groups.json'
 
 
 # ---------------------------------------------------------------------------
-# Core logic
+# Config loading
+# ---------------------------------------------------------------------------
+
+def load_config(root: Path) -> Dict[str, Any]:
+    """Load task group configuration from META/task_groups.json."""
+    config_path = root / CONFIG_PATH
+    if not config_path.is_file():
+        raise FileNotFoundError(f"Config file not found: {config_path}")
+    with open(config_path, 'r', encoding='utf-8') as f:
+        return json.load(f)
+
+
+# ---------------------------------------------------------------------------
+# File discovery
 # ---------------------------------------------------------------------------
 
 def find_markdown_files(root: Path) -> List[Path]:
-    """Find all .md SPEC files, excluding unwanted dirs and files."""
+    """Find all .md SPEC files, excluding unwanted dirs and generated files."""
     md_files = []
     for entry in root.rglob('*.md'):
         if any(part in EXCLUDE_DIRS for part in entry.relative_to(root).parts):
             continue
         if entry.name in EXCLUDE_FILES:
             continue
-        # Only include SPEC files and DOMAIN files
+        if entry.name in GENERATED_FILES or str(entry.relative_to(root)) in GENERATED_FILES:
+            continue
+        # Only include SPEC.md, REQ-*.md, and SPEC-*.md
         if entry.name == 'SPEC.md' or entry.name.startswith('SPEC-') or entry.name.startswith('REQ-'):
             md_files.append(entry)
     return sorted(md_files)
 
 
-def extract_requirements(filepath: Path) -> List[Tuple[str, int]]:
-    """Extract requirement IDs from a file, returning (id, line_no)."""
-    results = []
+def is_heading_line(line: str) -> bool:
+    """Check if a line is a Markdown heading (any level)."""
+    stripped = line.strip()
+    return stripped.startswith('#')
+
+
+def extract_requirement_ids(filepath: Path) -> List[str]:
+    """
+    Extract requirement IDs from heading lines ONLY.
+    Returns a sorted unique list of IDs defined in the file.
+    """
+    seen: set[str] = set()
+    results: list[str] = []
     try:
         with open(filepath, 'r', encoding='utf-8') as f:
-            for line_no, line in enumerate(f, 1):
-                for match in ID_PATTERN.finditer(line):
-                    raw_id = match.group(1).upper()
-                    results.append((raw_id, line_no))
+            for line in f:
+                if is_heading_line(line):
+                    for match in ID_PATTERN.finditer(line):
+                        raw_id = match.group(1).upper()
+                        if raw_id not in seen:
+                            seen.add(raw_id)
+                            results.append(raw_id)
     except (IOError, OSError) as e:
         print(f"  ⚠  Error reading {filepath}: {e}", file=sys.stderr)
     return results
 
 
-def group_requirements_by_domain(requirements: Dict[str, List[str]]) -> Dict[str, List[str]]:
-    """Group requirements by domain prefix."""
-    groups = defaultdict(list)
-    for req_id, sources in requirements.items():
-        # Find the matching domain group
-        matched = False
-        for group in DOMAIN_GROUPS:
-            if req_id.startswith(group['prefix']):
-                groups[group['task_suffix']].append(req_id)
-                matched = True
-                break
-        if not matched:
-            # Try prefix-based grouping (first 2 parts)
-            parts = req_id.split('-')
-            if len(parts) >= 2:
-                groups[parts[0]].append(req_id)
-            else:
-                groups['OTHER'].append(req_id)
-    return groups
+def is_definition_file(name: str) -> bool:
+    """Check if a filename is a definition source (SPEC file, not generated)."""
+    basename = Path(name).name
+    if basename == 'SPEC-IDScheme.md':
+        return False
+    if basename == 'TASK.md':
+        return False
+    if basename == 'SPEC.md':
+        return True
+    if basename.startswith('SPEC-') and basename.endswith('.md'):
+        return True
+    if basename.startswith('REQ-') and basename.endswith('.md'):
+        return True
+    return False
 
+
+def collect_definitions(root: Path) -> Dict[str, List[str]]:
+    """
+    Collect all requirement IDs from heading lines of SPEC files.
+    Returns {ID: [source_file_rel_path, ...]}.
+    """
+    definitions: Dict[str, List[str]] = defaultdict(list)
+    md_files = find_markdown_files(root)
+    for filepath in md_files:
+        rel_path = str(filepath.relative_to(root))
+        if not is_definition_file(rel_path):
+            continue
+        ids = extract_requirement_ids(filepath)
+        for rid in ids:
+            definitions[rid].append(rel_path)
+    return definitions
+
+
+# ---------------------------------------------------------------------------
+# Backlog generation
+# ---------------------------------------------------------------------------
 
 def generate_backlog(root: Path) -> Tuple[List[Dict], List[Dict]]:
     """Generate task backlog from SPEC files.
 
     Returns:
-        (existing_tasks, generated_tasks) where each is a list of task dicts.
+        (foundation_tasks, generated_tasks) where each is a list of task dicts.
     """
-    # Collect all requirements from SPEC files
-    all_requirements: Dict[str, List[str]] = defaultdict(list)
-    md_files = find_markdown_files(root)
-    for filepath in md_files:
-        rel_path = str(filepath.relative_to(root))
-        for req_id, line_no in extract_requirements(filepath):
-            if req_id not in EXISTING_TASK_REQUIREMENTS:
-                all_requirements[req_id].append(rel_path)
+    config = load_config(root)
+    domain_groups = config.get('domain_groups', [])
+    foundation_tasks_cfg = config.get('foundation_tasks', [])
 
-    # Group by domain
-    groups = group_requirements_by_domain(all_requirements)
+    # Collect all requirement definitions from SPEC files
+    all_definitions = collect_definitions(root)
 
-    # Generate tasks from groups
+    # Build a set of all defined requirement IDs
+    all_defined_ids: set[str] = set()
+    for rid in all_definitions:
+        all_defined_ids.add(rid)
+
+    # Foundation tasks are always included
+    foundation_tasks = []
+    for ft in foundation_tasks_cfg:
+        foundation_tasks.append({
+            'task_id': ft['task_id'],
+            'title': ft['title'],
+            'requirements': list(ft['requirements']),
+            'epic': ft['epic'],
+            'phase': ft['phase'],
+            'scope': ft.get('scope', ''),
+        })
+
+    # Collect requirements already covered by foundation tasks
+    covered_reqs: set[str] = set()
+    for ft in foundation_tasks:
+        for r in ft['requirements']:
+            covered_reqs.add(r)
+
+    # Group remaining requirement IDs by domain prefix
+    remaining_ids = all_defined_ids - covered_reqs
+    groups: Dict[str, List[str]] = defaultdict(list)
+    for rid in remaining_ids:
+        matched = False
+        for group in domain_groups:
+            if rid.startswith(group['prefix']):
+                groups[group['task_suffix']].append(rid)
+                matched = True
+                break
+        if not matched:
+            parts = rid.split('-')
+            if len(parts) >= 2:
+                groups[parts[0]].append(rid)
+
+    # Generate tasks — deterministic IDs (always -0001 per group)
     generated_tasks = []
-    task_counter = 1
-
-    for group in DOMAIN_GROUPS:
+    for group in domain_groups:
         suffix = group['task_suffix']
         if suffix not in groups:
             continue
-
         req_ids = sorted(groups[suffix])
-        # Filter out requirements already covered by existing tasks
-        req_ids = [r for r in req_ids if r not in EXISTING_TASK_REQUIREMENTS]
-        if not req_ids:
-            continue
-
         task = {
-            'task_id': f'TASK-{suffix}-{task_counter:04d}',
+            'task_id': f'TASK-{suffix}-0001',
             'title': group['title'],
             'requirements': req_ids,
             'epic': group['epic'],
@@ -285,42 +204,35 @@ def generate_backlog(root: Path) -> Tuple[List[Dict], List[Dict]]:
             'scope': group['scope'],
         }
         generated_tasks.append(task)
-        task_counter += 1
 
-    # Build existing tasks list
-    existing_tasks = []
-    for task_id, info in EXISTING_TASKS.items():
-        existing_tasks.append({
-            'task_id': task_id,
-            'title': info['title'],
-            'requirements': info['requirements'],
-            'epic': info['epic'],
-            'phase': info['phase'],
-            'scope': '',
-        })
-
-    return existing_tasks, generated_tasks
+    return foundation_tasks, generated_tasks
 
 
 # ---------------------------------------------------------------------------
 # Output generators
 # ---------------------------------------------------------------------------
 
-def generate_markdown_backlog(existing_tasks: List[Dict], generated_tasks: List[Dict], output_path: Path) -> None:
+def today_str() -> str:
+    """Return today's date as ISO string (YYYY-MM-DD)."""
+    return date.today().isoformat()
+
+
+def generate_markdown_backlog(foundation_tasks: List[Dict], generated_tasks: List[Dict], output_path: Path) -> None:
     """Generate a Markdown backlog file."""
     lines = []
     lines.append("# ORKP Task Backlog")
     lines.append("")
-    lines.append(f"Generated on 2026-07-07")
+    lines.append(f"Generated on {today_str()}")
     lines.append("")
-    lines.append(f"- **Existing tasks:** {len(existing_tasks)}")
+    all_tasks = foundation_tasks + generated_tasks
+    lines.append(f"- **Foundation tasks:** {len(foundation_tasks)}")
     lines.append(f"- **Generated tasks:** {len(generated_tasks)}")
-    lines.append(f"- **Total requirement IDs covered:** {sum(len(t['requirements']) for t in generated_tasks) + sum(len(t['requirements']) for t in existing_tasks)}")
+    total_reqs = sum(len(t['requirements']) for t in all_tasks)
+    lines.append(f"- **Total requirement IDs covered:** {total_reqs}")
     lines.append("")
 
-    # Group by epic
     epics = defaultdict(list)
-    for task in existing_tasks + generated_tasks:
+    for task in all_tasks:
         epics[task['epic']].append(task)
 
     for epic_name in sorted(epics.keys()):
@@ -329,11 +241,11 @@ def generate_markdown_backlog(existing_tasks: List[Dict], generated_tasks: List[
         for task in epics[epic_name]:
             lines.append(f"### {task['task_id']} — {task['title']}")
             lines.append("")
-            lines.append(f"**Source requirements:**")
+            lines.append("**Source requirements:**")
             for req_id in task['requirements']:
                 lines.append(f"- {req_id}")
             lines.append("")
-            if task['scope']:
+            if task.get('scope'):
                 lines.append(f"**Scope:** {task['scope']}")
                 lines.append("")
             lines.append(f"**Phase:** {task['phase']}")
@@ -342,12 +254,13 @@ def generate_markdown_backlog(existing_tasks: List[Dict], generated_tasks: List[
     output_path.write_text('\n'.join(lines), encoding='utf-8')
 
 
-def generate_csv_backlog(existing_tasks: List[Dict], generated_tasks: List[Dict], output_path: Path) -> None:
+def generate_csv_backlog(foundation_tasks: List[Dict], generated_tasks: List[Dict], output_path: Path) -> None:
     """Generate a CSV backlog file."""
+    all_tasks = foundation_tasks + generated_tasks
     with open(output_path, 'w', newline='', encoding='utf-8') as f:
         writer = csv.writer(f)
         writer.writerow(['task_id', 'title', 'requirement_ids', 'epic', 'phase'])
-        for task in existing_tasks + generated_tasks:
+        for task in all_tasks:
             writer.writerow([
                 task['task_id'],
                 task['title'],
@@ -357,7 +270,7 @@ def generate_csv_backlog(existing_tasks: List[Dict], generated_tasks: List[Dict]
             ])
 
 
-def generate_task_md(existing_tasks: List[Dict], generated_tasks: List[Dict], output_path: Path) -> None:
+def generate_task_md(foundation_tasks: List[Dict], generated_tasks: List[Dict], output_path: Path) -> None:
     """Generate TASK.md from backlog data with detailed task structure."""
     lines = []
     lines.append("# SWE Batch Plan (Auto-Generated)")
@@ -366,9 +279,9 @@ def generate_task_md(existing_tasks: List[Dict], generated_tasks: List[Dict], ou
     lines.append("> Do not edit manually — regenerate with `python tools/backlog_generator.py --task-md`.")
     lines.append("")
 
-    # Group by epic
+    all_tasks = foundation_tasks + generated_tasks
     epics = defaultdict(list)
-    for task in existing_tasks + generated_tasks:
+    for task in all_tasks:
         epics[task['epic']].append(task)
 
     for epic_name in sorted(epics.keys()):
@@ -384,7 +297,7 @@ def generate_task_md(existing_tasks: List[Dict], generated_tasks: List[Dict], ou
                 lines.append(f"- {req_id}")
             lines.append("")
             if task.get('scope'):
-                lines.append(f"Scope:")
+                lines.append("Scope:")
                 lines.append("")
                 for item in task['scope'].split(', '):
                     lines.append(f"- {item}")
@@ -398,6 +311,72 @@ def generate_task_md(existing_tasks: List[Dict], generated_tasks: List[Dict], ou
 
     output_path.write_text('\n'.join(lines), encoding='utf-8')
     print(f"   TASK.md:  {output_path}")
+
+
+# ---------------------------------------------------------------------------
+# CLI
+# ---------------------------------------------------------------------------
+
+def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="ORKP Task Backlog Generator — generate task stubs from SPEC requirements."
+    )
+    parser.add_argument(
+        '--path', '-p',
+        type=Path,
+        default=Path.cwd(),
+        help="Root path of the repository (default: current directory)."
+    )
+    parser.add_argument(
+        '--output-dir', '-o',
+        type=Path,
+        default=None,
+        help="Output directory for backlog files (default: TRACEABILITY/)."
+    )
+    parser.add_argument(
+        '--task-md', '-t',
+        action='store_true',
+        help="Also generate TASK.md in the repository root."
+    )
+    return parser.parse_args(argv)
+
+
+def main(argv: Optional[List[str]] = None) -> int:
+    args = parse_args(argv)
+    repo_root = args.path.resolve()
+
+    if not repo_root.is_dir():
+        print(f"Error: {repo_root} is not a valid directory.", file=sys.stderr)
+        return 1
+
+    output_dir = args.output_dir or (repo_root / 'TRACEABILITY')
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    print(f"📋 Generating backlog from {repo_root} ...")
+    foundation_tasks, generated_tasks = generate_backlog(repo_root)
+
+    print(f"   Foundation tasks: {len(foundation_tasks)}")
+    print(f"   Generated tasks:  {len(generated_tasks)}")
+
+    md_path = output_dir / 'backlog.md'
+    csv_path = output_dir / 'backlog.csv'
+
+    generate_markdown_backlog(foundation_tasks, generated_tasks, md_path)
+    print(f"   Markdown: {md_path}")
+
+    generate_csv_backlog(foundation_tasks, generated_tasks, csv_path)
+    print(f"   CSV:      {csv_path}")
+
+    if args.task_md:
+        task_md_path = repo_root / 'TASK.md'
+        generate_task_md(foundation_tasks, generated_tasks, task_md_path)
+
+    print(f"\n✅ Backlog generated.")
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())
 
 
 # ---------------------------------------------------------------------------
