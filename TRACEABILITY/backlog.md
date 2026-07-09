@@ -2,9 +2,9 @@
 
 Generated on 2026-07-09
 
-- **Foundation tasks:** 3
+- **Foundation tasks:** 4
 - **Generated tasks:** 15
-- **Total requirement IDs covered:** 94
+- **Total requirement IDs covered:** 104
 
 ## Epic 001 — Specification Foundation
 
@@ -38,6 +38,24 @@ Generated on 2026-07-09
 **Phase:** 0
 
 ## Epic 002 — Core Object Store
+
+### TASK-CORE-OBJECT-STORE-0001 — Implement Core Object Store
+
+**Source requirements:**
+- DB-OBJ-0001
+- DB-OBJ-0002
+- DB-OBJ-0003
+- DB-OBJ-0004
+- DB-OBJ-0005
+- DB-OBJ-0006
+- DB-OBJ-0007
+- DB-OBJ-0008
+- DB-OBJ-0009
+- DB-OBJ-0010
+
+**Scope:** SQLAlchemy models, Pydantic schemas, migrations, repository, lifecycle state machine, event log, baselines, unit tests.
+
+**Phase:** 1
 
 ### TASK-CORE-0001 — Core Platform
 

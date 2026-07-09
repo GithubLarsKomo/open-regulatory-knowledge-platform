@@ -234,6 +234,33 @@ class TestGenerateBacklog(unittest.TestCase):
         self.assertEqual(f1, f2)
 
 
+class TestUndefinedRequirements(unittest.TestCase):
+    def setUp(self):
+        self.tmpdir = Path(tempfile.mkdtemp())
+        (self.tmpdir / 'META').mkdir(parents=True, exist_ok=True)
+    def tearDown(self):
+        import shutil
+        shutil.rmtree(self.tmpdir)
+
+    def test_undefined_foundation_task_req_reported(self):
+        """Foundation task referencing undefined requirement should generate warning."""
+        cfg = {
+            "foundation_tasks": [{
+                "task_id": "TASK-BAD-0001",
+                "title": "Bad Task",
+                "requirements": ["REQ-NONEXISTENT-0001"],
+                "epic": "Epic X",
+                "phase": "0",
+                "scope": ""
+            }],
+            "domain_groups": []
+        }
+        (self.tmpdir / 'META' / 'task_groups.json').write_text(json.dumps(cfg), encoding='utf-8')
+        # Should not raise, just print warning
+        f, g = generate_backlog(self.tmpdir)
+        self.assertEqual(len(f), 1)
+
+
 class TestOutputFormat(unittest.TestCase):
     def setUp(self):
         self.tmpdir = Path(tempfile.mkdtemp())

@@ -158,6 +158,11 @@ def generate_backlog(root: Path) -> Tuple[List[Dict], List[Dict]]:
     # Foundation tasks are always included
     foundation_tasks = []
     for ft in foundation_tasks_cfg:
+        # Validate that all referenced requirements are defined
+        for req in ft.get('requirements', []):
+            if req not in all_defined_ids:
+                print(f"  ⚠  Foundation task {ft['task_id']} references undefined requirement {req}",
+                      file=sys.stderr)
         foundation_tasks.append({
             'task_id': ft['task_id'],
             'title': ft['title'],
@@ -296,17 +301,29 @@ def generate_task_md(foundation_tasks: List[Dict], generated_tasks: List[Dict], 
             for req_id in task['requirements']:
                 lines.append(f"- {req_id}")
             lines.append("")
-            if task.get('scope'):
+            scope_text = task.get('scope', '')
+            if scope_text:
                 lines.append("Scope:")
                 lines.append("")
-                for item in task['scope'].split(', '):
+                for item in scope_text.split(', '):
                     lines.append(f"- {item}")
                 lines.append("")
+            lines.append("Goal:")
+            lines.append("")
+            lines.append(f"Implement the {task['title'].lower()} according to the referenced requirements.")
+            lines.append("")
             lines.append("Acceptance criteria:")
             lines.append("")
-            lines.append(f"- {task['title']} implemented and tested.")
-            for req_id in task['requirements']:
-                lines.append(f"- {req_id} satisfied.")
+            lines.append(f"- Each referenced requirement is satisfied through implementation.")
+            lines.append(f"- Unit tests cover the implemented functionality.")
+            lines.append(f"- The implementation follows the existing patterns in the repository.")
+            lines.append("")
+            lines.append("Definition of Done:")
+            lines.append("")
+            lines.append(f"- Code is implemented and committed.")
+            lines.append(f"- All unit tests pass.")
+            lines.append(f"- `python tools/spec_linter.py --strict` passes.")
+            lines.append(f"- Generated artifacts are up to date.")
             lines.append("")
 
     output_path.write_text('\n'.join(lines), encoding='utf-8')
@@ -375,72 +392,3 @@ def main(argv: Optional[List[str]] = None) -> int:
     return 0
 
 
-if __name__ == '__main__':
-    sys.exit(main())
-
-
-# ---------------------------------------------------------------------------
-# CLI
-# ---------------------------------------------------------------------------
-
-def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description="ORKP Task Backlog Generator — generate task stubs from SPEC requirements."
-    )
-    parser.add_argument(
-        '--path', '-p',
-        type=Path,
-        default=Path.cwd(),
-        help="Root path of the repository (default: current directory)."
-    )
-    parser.add_argument(
-        '--output-dir', '-o',
-        type=Path,
-        default=None,
-        help="Output directory for backlog files (default: TRACEABILITY/)."
-    )
-    parser.add_argument(
-        '--task-md', '-t',
-        action='store_true',
-        help="Also generate TASK.md in the repository root."
-    )
-    return parser.parse_args(argv)
-
-
-def main(argv: Optional[List[str]] = None) -> int:
-    args = parse_args(argv)
-    repo_root = args.path.resolve()
-
-    if not repo_root.is_dir():
-        print(f"Error: {repo_root} is not a valid directory.", file=sys.stderr)
-        return 1
-
-    output_dir = args.output_dir or (repo_root / 'TRACEABILITY')
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    print(f"📋 Generating backlog from {repo_root} ...")
-    existing_tasks, generated_tasks = generate_backlog(repo_root)
-
-    print(f"   Existing tasks: {len(existing_tasks)}")
-    print(f"   Generated tasks: {len(generated_tasks)}")
-
-    # Write outputs
-    md_path = output_dir / 'backlog.md'
-    csv_path = output_dir / 'backlog.csv'
-
-    generate_markdown_backlog(existing_tasks, generated_tasks, md_path)
-    print(f"   Markdown: {md_path}")
-
-    generate_csv_backlog(existing_tasks, generated_tasks, csv_path)
-    print(f"   CSV:      {csv_path}")
-
-    if args.task_md:
-        task_md_path = repo_root / 'TASK.md'
-        generate_task_md(existing_tasks, generated_tasks, task_md_path)
-
-    print(f"\n✅ Backlog generated.")
-    return 0
-
-
-if __name__ == '__main__':
-    sys.exit(main())

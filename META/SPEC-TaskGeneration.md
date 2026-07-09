@@ -35,3 +35,5 @@ A SWE task should be completable by one developer or agent in 0.5 to 2 working d
 - Documentation task
 - Migration task
 - Validation task
+
+Task generation is governed by requirement META-TASK-0001 (see `META/REQ-META.md`).

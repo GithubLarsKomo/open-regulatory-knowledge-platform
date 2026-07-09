@@ -19,11 +19,22 @@ Scope:
 - folder structure
 - initial SPEC files.
 
+Goal:
+
+Implement the create repository skeleton according to the referenced requirements.
+
 Acceptance criteria:
 
-- Create Repository Skeleton implemented and tested.
-- REQ-CORE-0001 satisfied.
-- REQ-ARCH-0001 satisfied.
+- Each referenced requirement is satisfied through implementation.
+- Unit tests cover the implemented functionality.
+- The implementation follows the existing patterns in the repository.
+
+Definition of Done:
+
+- Code is implemented and committed.
+- All unit tests pass.
+- `python tools/spec_linter.py --strict` passes.
+- Generated artifacts are up to date.
 
 ### TASK-FOUNDATION-0002
 Implement Specification ID Linter.
@@ -39,11 +50,22 @@ Scope:
 - ID validation
 - traceability CSV.
 
+Goal:
+
+Implement the implement specification id linter according to the referenced requirements.
+
 Acceptance criteria:
 
-- Implement Specification ID Linter implemented and tested.
-- META-ID-0001 satisfied.
-- META-TASK-0001 satisfied.
+- Each referenced requirement is satisfied through implementation.
+- Unit tests cover the implemented functionality.
+- The implementation follows the existing patterns in the repository.
+
+Definition of Done:
+
+- Code is implemented and committed.
+- All unit tests pass.
+- `python tools/spec_linter.py --strict` passes.
+- Generated artifacts are up to date.
 
 ### TASK-FOUNDATION-0003
 Generate Initial Task Backlog from SPEC Files.
@@ -58,12 +80,68 @@ Scope:
 - TASK.md generation
 - CSV output.
 
+Goal:
+
+Implement the generate initial task backlog from spec files according to the referenced requirements.
+
 Acceptance criteria:
 
-- Generate Initial Task Backlog from SPEC Files implemented and tested.
-- META-TASK-0001 satisfied.
+- Each referenced requirement is satisfied through implementation.
+- Unit tests cover the implemented functionality.
+- The implementation follows the existing patterns in the repository.
+
+Definition of Done:
+
+- Code is implemented and committed.
+- All unit tests pass.
+- `python tools/spec_linter.py --strict` passes.
+- Generated artifacts are up to date.
 
 ## Epic 002 — Core Object Store
+
+### TASK-CORE-OBJECT-STORE-0001
+Implement Core Object Store.
+
+Source requirements:
+
+- DB-OBJ-0001
+- DB-OBJ-0002
+- DB-OBJ-0003
+- DB-OBJ-0004
+- DB-OBJ-0005
+- DB-OBJ-0006
+- DB-OBJ-0007
+- DB-OBJ-0008
+- DB-OBJ-0009
+- DB-OBJ-0010
+
+Scope:
+
+- SQLAlchemy models
+- Pydantic schemas
+- migrations
+- repository
+- lifecycle state machine
+- event log
+- baselines
+- unit tests.
+
+Goal:
+
+Implement the implement core object store according to the referenced requirements.
+
+Acceptance criteria:
+
+- Each referenced requirement is satisfied through implementation.
+- Unit tests cover the implemented functionality.
+- The implementation follows the existing patterns in the repository.
+
+Definition of Done:
+
+- Code is implemented and committed.
+- All unit tests pass.
+- `python tools/spec_linter.py --strict` passes.
+- Generated artifacts are up to date.
 
 ### TASK-CORE-0001
 Core Platform.
@@ -85,15 +163,22 @@ Scope:
 - audit trail
 - baseline.
 
+Goal:
+
+Implement the core platform according to the referenced requirements.
+
 Acceptance criteria:
 
-- Core Platform implemented and tested.
-- REQ-CORE-0002 satisfied.
-- REQ-CORE-0003 satisfied.
-- REQ-CORE-0004 satisfied.
-- REQ-CORE-0005 satisfied.
-- REQ-CORE-0006 satisfied.
-- REQ-CORE-0007 satisfied.
+- Each referenced requirement is satisfied through implementation.
+- Unit tests cover the implemented functionality.
+- The implementation follows the existing patterns in the repository.
+
+Definition of Done:
+
+- Code is implemented and committed.
+- All unit tests pass.
+- `python tools/spec_linter.py --strict` passes.
+- Generated artifacts are up to date.
 
 ### TASK-ARCH-0001
 Architecture.
@@ -110,13 +195,22 @@ Scope:
 - Architecture enforcement
 - multi-representation support.
 
+Goal:
+
+Implement the architecture according to the referenced requirements.
+
 Acceptance criteria:
 
-- Architecture implemented and tested.
-- REQ-ARCH-0002 satisfied.
-- REQ-ARCH-0003 satisfied.
-- REQ-ARCH-0004 satisfied.
-- REQ-ARCH-0005 satisfied.
+- Each referenced requirement is satisfied through implementation.
+- Unit tests cover the implemented functionality.
+- The implementation follows the existing patterns in the repository.
+
+Definition of Done:
+
+- Code is implemented and committed.
+- All unit tests pass.
+- `python tools/spec_linter.py --strict` passes.
+- Generated artifacts are up to date.
 
 ### TASK-DB-0001
 Database Schema.
@@ -135,14 +229,22 @@ Scope:
 - migrations
 - indexing.
 
+Goal:
+
+Implement the database schema according to the referenced requirements.
+
 Acceptance criteria:
 
-- Database Schema implemented and tested.
-- DB-CORE-0001 satisfied.
-- DB-CORE-0002 satisfied.
-- DB-CORE-0003 satisfied.
-- DB-CORE-0004 satisfied.
-- DB-CORE-0005 satisfied.
+- Each referenced requirement is satisfied through implementation.
+- Unit tests cover the implemented functionality.
+- The implementation follows the existing patterns in the repository.
+
+Definition of Done:
+
+- Code is implemented and committed.
+- All unit tests pass.
+- `python tools/spec_linter.py --strict` passes.
+- Generated artifacts are up to date.
 
 ## Epic 004 — Product & Claim Domain
 
@@ -165,16 +267,22 @@ Scope:
 - device hierarchy
 - regulatory identifiers.
 
+Goal:
+
+Implement the product domain according to the referenced requirements.
+
 Acceptance criteria:
 
-- Product Domain implemented and tested.
-- REQ-PROD-0001 satisfied.
-- REQ-PROD-0002 satisfied.
-- REQ-PROD-0003 satisfied.
-- REQ-PROD-0004 satisfied.
-- REQ-PROD-0005 satisfied.
-- REQ-PROD-0006 satisfied.
-- REQ-PROD-0007 satisfied.
+- Each referenced requirement is satisfied through implementation.
+- Unit tests cover the implemented functionality.
+- The implementation follows the existing patterns in the repository.
+
+Definition of Done:
+
+- Code is implemented and committed.
+- All unit tests pass.
+- `python tools/spec_linter.py --strict` passes.
+- Generated artifacts are up to date.
 
 ### TASK-CLAIM-0001
 Claim Domain.
@@ -194,15 +302,22 @@ Scope:
 - evidence linking
 - consistency checking.
 
+Goal:
+
+Implement the claim domain according to the referenced requirements.
+
 Acceptance criteria:
 
-- Claim Domain implemented and tested.
-- REQ-CLAIM-0001 satisfied.
-- REQ-CLAIM-0002 satisfied.
-- REQ-CLAIM-0003 satisfied.
-- REQ-CLAIM-0004 satisfied.
-- REQ-CLAIM-0005 satisfied.
-- REQ-CLAIM-0006 satisfied.
+- Each referenced requirement is satisfied through implementation.
+- Unit tests cover the implemented functionality.
+- The implementation follows the existing patterns in the repository.
+
+Definition of Done:
+
+- Code is implemented and committed.
+- All unit tests pass.
+- `python tools/spec_linter.py --strict` passes.
+- Generated artifacts are up to date.
 
 ### TASK-EVID-0001
 Evidence Domain.
@@ -224,17 +339,22 @@ Scope:
 - quality assessment
 - coverage analysis.
 
+Goal:
+
+Implement the evidence domain according to the referenced requirements.
+
 Acceptance criteria:
 
-- Evidence Domain implemented and tested.
-- REQ-EVID-0001 satisfied.
-- REQ-EVID-0002 satisfied.
-- REQ-EVID-0003 satisfied.
-- REQ-EVID-0004 satisfied.
-- REQ-EVID-0005 satisfied.
-- REQ-EVID-0006 satisfied.
-- REQ-EVID-0007 satisfied.
-- REQ-EVID-0008 satisfied.
+- Each referenced requirement is satisfied through implementation.
+- Unit tests cover the implemented functionality.
+- The implementation follows the existing patterns in the repository.
+
+Definition of Done:
+
+- Code is implemented and committed.
+- All unit tests pass.
+- `python tools/spec_linter.py --strict` passes.
+- Generated artifacts are up to date.
 
 ## Epic 005 — Risk Domain
 
@@ -257,16 +377,22 @@ Scope:
 - control measures
 - residual risk.
 
+Goal:
+
+Implement the risk domain according to the referenced requirements.
+
 Acceptance criteria:
 
-- Risk Domain implemented and tested.
-- REQ-RISK-0001 satisfied.
-- REQ-RISK-0002 satisfied.
-- REQ-RISK-0003 satisfied.
-- REQ-RISK-0004 satisfied.
-- REQ-RISK-0005 satisfied.
-- REQ-RISK-0006 satisfied.
-- REQ-RISK-0007 satisfied.
+- Each referenced requirement is satisfied through implementation.
+- Unit tests cover the implemented functionality.
+- The implementation follows the existing patterns in the repository.
+
+Definition of Done:
+
+- Code is implemented and committed.
+- All unit tests pass.
+- `python tools/spec_linter.py --strict` passes.
+- Generated artifacts are up to date.
 
 ## Epic 006 — Performance Domain
 
@@ -288,15 +414,22 @@ Scope:
 - analytical/clinical performance
 - PER.
 
+Goal:
+
+Implement the performance domain according to the referenced requirements.
+
 Acceptance criteria:
 
-- Performance Domain implemented and tested.
-- REQ-PERF-0001 satisfied.
-- REQ-PERF-0002 satisfied.
-- REQ-PERF-0003 satisfied.
-- REQ-PERF-0004 satisfied.
-- REQ-PERF-0005 satisfied.
-- REQ-PERF-0006 satisfied.
+- Each referenced requirement is satisfied through implementation.
+- Unit tests cover the implemented functionality.
+- The implementation follows the existing patterns in the repository.
+
+Definition of Done:
+
+- Code is implemented and committed.
+- All unit tests pass.
+- `python tools/spec_linter.py --strict` passes.
+- Generated artifacts are up to date.
 
 ## Epic 007 — Report Generation MVP
 
@@ -317,14 +450,22 @@ Scope:
 - PER generation
 - traceability appendix.
 
+Goal:
+
+Implement the report generation according to the referenced requirements.
+
 Acceptance criteria:
 
-- Report Generation implemented and tested.
-- REP-PER-0001 satisfied.
-- REP-PER-0002 satisfied.
-- REP-PER-0003 satisfied.
-- REP-PER-0004 satisfied.
-- REP-PER-0005 satisfied.
+- Each referenced requirement is satisfied through implementation.
+- Unit tests cover the implemented functionality.
+- The implementation follows the existing patterns in the repository.
+
+Definition of Done:
+
+- Code is implemented and committed.
+- All unit tests pass.
+- `python tools/spec_linter.py --strict` passes.
+- Generated artifacts are up to date.
 
 ## Epic 008 — Knowledge Graph
 
@@ -344,13 +485,22 @@ Scope:
 - synchronization
 - impact analysis.
 
+Goal:
+
+Implement the knowledge graph according to the referenced requirements.
+
 Acceptance criteria:
 
-- Knowledge Graph implemented and tested.
-- GRAPH-CORE-0001 satisfied.
-- GRAPH-CORE-0002 satisfied.
-- GRAPH-CORE-0003 satisfied.
-- GRAPH-CORE-0004 satisfied.
+- Each referenced requirement is satisfied through implementation.
+- Unit tests cover the implemented functionality.
+- The implementation follows the existing patterns in the repository.
+
+Definition of Done:
+
+- Code is implemented and committed.
+- All unit tests pass.
+- `python tools/spec_linter.py --strict` passes.
+- Generated artifacts are up to date.
 
 ## Epic 009 — AI/RAG Services
 
@@ -371,14 +521,22 @@ Scope:
 - grounded drafting
 - audit trail.
 
+Goal:
+
+Implement the ai/rag services according to the referenced requirements.
+
 Acceptance criteria:
 
-- AI/RAG Services implemented and tested.
-- AI-CORE-0001 satisfied.
-- AI-CORE-0002 satisfied.
-- AI-CORE-0003 satisfied.
-- AI-CORE-0004 satisfied.
-- AI-CORE-0005 satisfied.
+- Each referenced requirement is satisfied through implementation.
+- Unit tests cover the implemented functionality.
+- The implementation follows the existing patterns in the repository.
+
+Definition of Done:
+
+- Code is implemented and committed.
+- All unit tests pass.
+- `python tools/spec_linter.py --strict` passes.
+- Generated artifacts are up to date.
 
 ## Epic 010 — Workflow & Security
 
@@ -400,15 +558,22 @@ Scope:
 - approval workflow
 - electronic signatures.
 
+Goal:
+
+Implement the workflow & approval according to the referenced requirements.
+
 Acceptance criteria:
 
-- Workflow & Approval implemented and tested.
-- WF-APP-0001 satisfied.
-- WF-APP-0002 satisfied.
-- WF-APP-0003 satisfied.
-- WF-APP-0004 satisfied.
-- WF-APP-0005 satisfied.
-- WF-APP-0006 satisfied.
+- Each referenced requirement is satisfied through implementation.
+- Unit tests cover the implemented functionality.
+- The implementation follows the existing patterns in the repository.
+
+Definition of Done:
+
+- Code is implemented and committed.
+- All unit tests pass.
+- `python tools/spec_linter.py --strict` passes.
+- Generated artifacts are up to date.
 
 ### TASK-SEC-0001
 Security & RBAC.
@@ -427,14 +592,22 @@ Scope:
 - product permissions
 - audit access.
 
+Goal:
+
+Implement the security & rbac according to the referenced requirements.
+
 Acceptance criteria:
 
-- Security & RBAC implemented and tested.
-- SEC-RBAC-0001 satisfied.
-- SEC-RBAC-0002 satisfied.
-- SEC-RBAC-0003 satisfied.
-- SEC-RBAC-0004 satisfied.
-- SEC-RBAC-0005 satisfied.
+- Each referenced requirement is satisfied through implementation.
+- Unit tests cover the implemented functionality.
+- The implementation follows the existing patterns in the repository.
+
+Definition of Done:
+
+- Code is implemented and committed.
+- All unit tests pass.
+- `python tools/spec_linter.py --strict` passes.
+- Generated artifacts are up to date.
 
 ## Epic 011 — UI
 
@@ -462,19 +635,22 @@ Scope:
 - workflow UI
 - AI drafting interface.
 
+Goal:
+
+Implement the user interface according to the referenced requirements.
+
 Acceptance criteria:
 
-- User Interface implemented and tested.
-- REQ-UI-0001 satisfied.
-- REQ-UI-0002 satisfied.
-- REQ-UI-0003 satisfied.
-- REQ-UI-0004 satisfied.
-- REQ-UI-0005 satisfied.
-- REQ-UI-0006 satisfied.
-- REQ-UI-0007 satisfied.
-- REQ-UI-0008 satisfied.
-- REQ-UI-0009 satisfied.
-- REQ-UI-0010 satisfied.
+- Each referenced requirement is satisfied through implementation.
+- Unit tests cover the implemented functionality.
+- The implementation follows the existing patterns in the repository.
+
+Definition of Done:
+
+- Code is implemented and committed.
+- All unit tests pass.
+- `python tools/spec_linter.py --strict` passes.
+- Generated artifacts are up to date.
 
 ## Epic 012 — Validation & Deployment
 
@@ -495,11 +671,19 @@ Scope:
 - requirement-to-test traceability
 - audit testing.
 
+Goal:
+
+Implement the validation & testing according to the referenced requirements.
+
 Acceptance criteria:
 
-- Validation & Testing implemented and tested.
-- TEST-VAL-0001 satisfied.
-- TEST-VAL-0002 satisfied.
-- TEST-VAL-0003 satisfied.
-- TEST-VAL-0004 satisfied.
-- TEST-VAL-0005 satisfied.
+- Each referenced requirement is satisfied through implementation.
+- Unit tests cover the implemented functionality.
+- The implementation follows the existing patterns in the repository.
+
+Definition of Done:
+
+- Code is implemented and committed.
+- All unit tests pass.
+- `python tools/spec_linter.py --strict` passes.
+- Generated artifacts are up to date.

@@ -23,6 +23,14 @@
       "epic": "Epic 001 — Specification Foundation",
       "phase": "0",
       "scope": "Backlog generator, TASK.md generation, CSV output."
+    },
+    {
+      "task_id": "TASK-CORE-OBJECT-STORE-0001",
+      "title": "Implement Core Object Store",
+      "requirements": ["DB-OBJ-0001", "DB-OBJ-0002", "DB-OBJ-0003", "DB-OBJ-0004", "DB-OBJ-0005", "DB-OBJ-0006", "DB-OBJ-0007", "DB-OBJ-0008", "DB-OBJ-0009", "DB-OBJ-0010"],
+      "epic": "Epic 002 — Core Object Store",
+      "phase": "1",
+      "scope": "SQLAlchemy models, Pydantic schemas, migrations, repository, lifecycle state machine, event log, baselines, unit tests."
     }
   ],
   "domain_groups": [
@@ -49,6 +57,14 @@
       "epic": "Epic 002 — Core Object Store",
       "phase": "1",
       "scope": "MariaDB schema, migrations, indexing."
+    },
+    {
+      "prefix": "DB-OBJ",
+      "task_suffix": "OBJ",
+      "title": "Core Object Store",
+      "epic": "Epic 002 — Core Object Store",
+      "phase": "1",
+      "scope": "regulatory_object, object_version, object_relation, event_log, baseline, lifecycle, optimistic locking."
     },
     {
       "prefix": "REQ-PROD",

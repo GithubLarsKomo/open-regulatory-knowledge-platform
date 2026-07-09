@@ -2,6 +2,7 @@ task_id,title,requirement_ids,epic,phase
 TASK-FOUNDATION-0001,Create Repository Skeleton,REQ-CORE-0001; REQ-ARCH-0001,Epic 001 — Specification Foundation,0
 TASK-FOUNDATION-0002,Implement Specification ID Linter,META-ID-0001; META-TASK-0001,Epic 001 — Specification Foundation,0
 TASK-FOUNDATION-0003,Generate Initial Task Backlog from SPEC Files,META-TASK-0001,Epic 001 — Specification Foundation,0
+TASK-CORE-OBJECT-STORE-0001,Implement Core Object Store,DB-OBJ-0001; DB-OBJ-0002; DB-OBJ-0003; DB-OBJ-0004; DB-OBJ-0005; DB-OBJ-0006; DB-OBJ-0007; DB-OBJ-0008; DB-OBJ-0009; DB-OBJ-0010,Epic 002 — Core Object Store,1
 TASK-CORE-0001,Core Platform,REQ-CORE-0002; REQ-CORE-0003; REQ-CORE-0004; REQ-CORE-0005; REQ-CORE-0006; REQ-CORE-0007,Epic 002 — Core Object Store,1
 TASK-ARCH-0001,Architecture,REQ-ARCH-0002; REQ-ARCH-0003; REQ-ARCH-0004; REQ-ARCH-0005,Epic 002 — Core Object Store,1
 TASK-DB-0001,Database Schema,DB-CORE-0001; DB-CORE-0002; DB-CORE-0003; DB-CORE-0004; DB-CORE-0005,Epic 002 — Core Object Store,1

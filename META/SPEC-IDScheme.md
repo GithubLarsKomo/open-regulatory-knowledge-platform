@@ -39,3 +39,5 @@ Examples:
 3. Each task references at least one requirement ID.
 4. Each test references at least one requirement ID.
 5. Each code commit should reference one or more task IDs.
+
+The ID scheme is enforced by requirement META-ID-0001 (see `META/REQ-META.md`).
