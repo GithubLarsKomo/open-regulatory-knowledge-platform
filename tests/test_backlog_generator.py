@@ -214,9 +214,9 @@ class TestGenerateBacklog(unittest.TestCase):
         self.assertIn('REQ-CLAIM-0001', gen_reqs)
 
     def test_empty_repository(self):
-        f, g = generate_backlog(self.tmpdir)
-        self.assertEqual(len(f), 1)
-        self.assertEqual(len(g), 0)
+        # Empty repo with a foundation task referencing an undefined req -> ValueError
+        with self.assertRaises(ValueError):
+            generate_backlog(self.tmpdir)
 
     def test_deterministic_task_ids(self):
         self._write(self.tmpdir / 'SPEC.md', '### REQ-CORE-0001\n')
@@ -243,7 +243,7 @@ class TestUndefinedRequirements(unittest.TestCase):
         shutil.rmtree(self.tmpdir)
 
     def test_undefined_foundation_task_req_reported(self):
-        """Foundation task referencing undefined requirement should generate warning."""
+        """Foundation task referencing undefined requirement should raise ValueError."""
         cfg = {
             "foundation_tasks": [{
                 "task_id": "TASK-BAD-0001",
@@ -256,9 +256,8 @@ class TestUndefinedRequirements(unittest.TestCase):
             "domain_groups": []
         }
         (self.tmpdir / 'META' / 'task_groups.json').write_text(json.dumps(cfg), encoding='utf-8')
-        # Should not raise, just print warning
-        f, g = generate_backlog(self.tmpdir)
-        self.assertEqual(len(f), 1)
+        with self.assertRaises(ValueError):
+            generate_backlog(self.tmpdir)
 
 
 class TestOutputFormat(unittest.TestCase):

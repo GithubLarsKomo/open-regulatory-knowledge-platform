@@ -1,24 +1,35 @@
 """Repository (data access) layer for regulatory objects."""
 
-import json
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
-from sqlalchemy import select, update, delete, and_
+from sqlalchemy import select, update, and_
 from sqlalchemy.orm import Session
 
 from orkp.db.models import (
     RegulatoryObject,
     ObjectVersion,
+    ObjectRelation,
     EventLog,
     ApprovalRecord,
     Baseline,
     BaselineItem,
-    LIFECYCLE_STATES,
     _new_uuid,
     _bin_to_str,
 )
+
+
+# Valid lifecycle transitions per SPEC-CoreObjectStore
+_VALID_TRANSITIONS: Dict[str, List[str]] = {
+    'draft': ['in_review'],
+    'in_review': ['approved', 'rejected'],
+    'rejected': ['draft'],
+    'approved': ['effective'],
+    'effective': ['obsolete'],
+    'obsolete': ['deleted'],
+    'deleted': [],
+}
 
 
 class RegulatoryObjectRepository:
@@ -38,8 +49,7 @@ class RegulatoryObjectRepository:
         owner_user_id: str,
         created_by: str,
     ) -> Tuple[RegulatoryObject, ObjectVersion]:
-        """
-        Create a new regulatory object with its initial version.
+        """Create a new regulatory object with its initial version.
 
         Returns (regulatory_object, object_version).
         """
@@ -49,7 +59,7 @@ class RegulatoryObjectRepository:
             owner_user_id=owner_user_id,
         )
         self.session.add(obj)
-        self.session.flush()  # get the generated UUID
+        self.session.flush()
 
         version = ObjectVersion(
             object_uuid=obj.object_uuid,
@@ -60,7 +70,6 @@ class RegulatoryObjectRepository:
         )
         self.session.add(version)
 
-        # Log the creation event
         event = EventLog(
             object_uuid=obj.object_uuid,
             object_type=object_type,
@@ -81,7 +90,7 @@ class RegulatoryObjectRepository:
         stmt = select(RegulatoryObject).where(
             and_(
                 RegulatoryObject.object_uuid == object_uuid,
-                RegulatoryObject.deleted_at.is_(None),
+                RegulatoryObject.lifecycle_state != 'deleted',
             )
         )
         return self.session.execute(stmt).scalar_one_or_none()
@@ -93,6 +102,15 @@ class RegulatoryObjectRepository:
         except (ValueError, AttributeError):
             return None
         return self.get_by_uuid(raw_uuid)
+
+    def get_by_uuid_including_deleted(
+        self, object_uuid: bytes
+    ) -> Optional[RegulatoryObject]:
+        """Get a regulatory object by UUID including soft-deleted."""
+        stmt = select(RegulatoryObject).where(
+            RegulatoryObject.object_uuid == object_uuid,
+        )
+        return self.session.execute(stmt).scalar_one_or_none()
 
     def get_version(
         self, object_uuid: bytes, version_no: int
@@ -122,8 +140,8 @@ class RegulatoryObjectRepository:
         limit: int = 100,
         offset: int = 0,
     ) -> List[RegulatoryObject]:
-        """List regulatory objects with optional filters."""
-        conditions = [RegulatoryObject.deleted_at.is_(None)]
+        """List regulatory objects with optional filters. Excludes deleted."""
+        conditions = [RegulatoryObject.lifecycle_state != 'deleted']
         if object_type:
             conditions.append(RegulatoryObject.object_type == object_type)
         if lifecycle_state:
@@ -138,46 +156,59 @@ class RegulatoryObjectRepository:
         )
         return list(self.session.execute(stmt).scalars().all())
 
-    def search_objects(
-        self, query: str, limit: int = 100
-    ) -> List[RegulatoryObject]:
+    # ------------------------------------------------------------------
+    # Update (with optimistic locking)
+    # ------------------------------------------------------------------
+
+    def _increment_lock(
+        self, obj: RegulatoryObject, expected_version: Optional[int] = None
+    ) -> bool:
+        """Increment lock_version using optimistic locking.
+
+        Returns True if the lock was acquired, False on stale version.
         """
-        Basic search across object types and payload content.
-        Uses a simple LIKE filter on object_type (extend with full-text search later).
-        """
+        old = expected_version if expected_version is not None else obj.lock_version
         stmt = (
-            select(RegulatoryObject)
+            update(RegulatoryObject)
             .where(
                 and_(
-                    RegulatoryObject.object_type.ilike(f'%{query}%'),
-                    RegulatoryObject.deleted_at.is_(None),
+                    RegulatoryObject.object_uuid == obj.object_uuid,
+                    RegulatoryObject.lock_version == old,
                 )
             )
-            .order_by(RegulatoryObject.updated_at.desc())
-            .limit(limit)
+            .values(
+                lock_version=old + 1,
+                updated_at=datetime.now(timezone.utc),
+            )
         )
-        return list(self.session.execute(stmt).scalars().all())
-
-    # ------------------------------------------------------------------
-    # Update
-    # ------------------------------------------------------------------
+        result = self.session.execute(stmt)
+        if result.rowcount == 0:
+            return False  # Stale lock
+        obj.lock_version = old + 1
+        return True
 
     def create_version(
         self,
         object_uuid: bytes,
         payload: Dict[str, Any],
         created_by: str,
+        expected_lock_version: Optional[int] = None,
     ) -> Optional[ObjectVersion]:
-        """
-        Create a new version of an existing draft/in_review object.
+        """Create a new version.
 
-        Returns None if the object is not in a mutable state or not found.
+        Returns None if not found or in immutable state.
+        Raises ValueError on stale lock version.
         """
         obj = self.get_by_uuid(object_uuid)
         if obj is None:
             return None
         if obj.lifecycle_state not in ('draft', 'in_review'):
-            return None  # Immutable after approval
+            return None
+
+        if not self._increment_lock(obj, expected_lock_version):
+            raise ValueError(
+                "Stale lock version -- object was modified by another transaction"
+            )
 
         new_version_no = obj.current_version + 1
         version = ObjectVersion(
@@ -190,7 +221,6 @@ class RegulatoryObjectRepository:
         self.session.add(version)
 
         obj.current_version = new_version_no
-        obj.updated_at = datetime.now(timezone.utc)
 
         event = EventLog(
             object_uuid=object_uuid,
@@ -209,32 +239,28 @@ class RegulatoryObjectRepository:
         new_state: str,
         actor_user_id: str,
         comments: Optional[str] = None,
+        expected_lock_version: Optional[int] = None,
     ) -> bool:
-        """
-        Transition an object to a new lifecycle state.
+        """Transition an object to a new lifecycle state.
 
         Returns True if the transition succeeded, False otherwise.
+        Raises ValueError on stale lock version.
         """
         obj = self.get_by_uuid(object_uuid)
         if obj is None:
             return False
 
-        valid_transitions = {
-            'draft': ['in_review'],
-            'in_review': ['approved', 'rejected', 'returned_to_draft'],
-            'approved': ['effective', 'obsolete'],
-            'effective': ['obsolete'],
-            'obsolete': [],
-        }
-
         current = obj.lifecycle_state
-        allowed = valid_transitions.get(current, [])
-
+        allowed = _VALID_TRANSITIONS.get(current, [])
         if new_state not in allowed:
             return False
 
+        if not self._increment_lock(obj, expected_lock_version):
+            raise ValueError(
+                "Stale lock version -- object was modified by another transaction"
+            )
+
         obj.lifecycle_state = new_state
-        obj.updated_at = datetime.now(timezone.utc)
 
         # If approved, mark the current version as immutable
         if new_state == 'approved':
@@ -242,13 +268,10 @@ class RegulatoryObjectRepository:
             if version:
                 version.status = 'approved'
 
-        # Log the event
-        if new_state in ('approved', 'rejected', 'returned_to_draft'):
-            event_type = new_state  # approved, rejected, returned_to_draft
-        elif new_state == 'in_review':
+        # Determine event type
+        event_type = new_state
+        if new_state == 'in_review':
             event_type = 'submitted_for_review'
-        else:
-            event_type = new_state
 
         event = EventLog(
             object_uuid=object_uuid,
@@ -264,7 +287,7 @@ class RegulatoryObjectRepository:
         self.session.add(event)
 
         # Record approval decision
-        if new_state in ('approved', 'rejected', 'returned_to_draft'):
+        if new_state in ('approved', 'rejected'):
             approval = ApprovalRecord(
                 object_uuid=object_uuid,
                 version_no=obj.current_version,
@@ -277,22 +300,32 @@ class RegulatoryObjectRepository:
         return True
 
     # ------------------------------------------------------------------
-    # Delete (soft)
+    # Soft delete
     # ------------------------------------------------------------------
 
-    def soft_delete(self, object_uuid: bytes, actor_user_id: str) -> bool:
-        """Soft-delete a regulatory object."""
+    def soft_delete(
+        self,
+        object_uuid: bytes,
+        actor_user_id: str,
+        expected_lock_version: Optional[int] = None,
+    ) -> bool:
+        """Soft-delete by setting lifecycle_state to 'deleted'."""
         obj = self.get_by_uuid(object_uuid)
         if obj is None:
             return False
 
+        if not self._increment_lock(obj, expected_lock_version):
+            raise ValueError(
+                "Stale lock version -- object was modified by another transaction"
+            )
+
+        obj.lifecycle_state = 'deleted'
         obj.deleted_at = datetime.now(timezone.utc)
-        obj.updated_at = datetime.now(timezone.utc)
 
         event = EventLog(
             object_uuid=object_uuid,
             object_type=obj.object_type,
-            event_type='obsoleted',
+            event_type='deleted',
             actor_user_id=actor_user_id,
         )
         self.session.add(event)
@@ -313,5 +346,128 @@ class RegulatoryObjectRepository:
             .where(EventLog.object_uuid == object_uuid)
             .order_by(EventLog.event_id.desc())
             .limit(limit)
+        )
+        return list(self.session.execute(stmt).scalars().all())
+
+    # ------------------------------------------------------------------
+    # Object Relations (DB-OBJ-0005)
+    # ------------------------------------------------------------------
+
+    def create_relation(
+        self,
+        source_uuid: bytes,
+        source_version: int,
+        target_uuid: bytes,
+        target_version: int,
+        relation_type: str,
+        created_by: str,
+        properties: Optional[Dict[str, Any]] = None,
+    ) -> Optional[ObjectRelation]:
+        """Create a versioned relationship between two objects.
+
+        Validates that both source and target versions exist.
+        Returns None if either version does not exist.
+        """
+        sv = self.get_version(source_uuid, source_version)
+        tv = self.get_version(target_uuid, target_version)
+        if sv is None or tv is None:
+            return None
+
+        relation = ObjectRelation(
+            source_uuid=source_uuid,
+            source_version=source_version,
+            target_uuid=target_uuid,
+            target_version=target_version,
+            relation_type=relation_type,
+            properties=properties,
+            created_by=created_by,
+        )
+        self.session.add(relation)
+        return relation
+
+    def list_relations_for_source(
+        self, source_uuid: bytes
+    ) -> List[ObjectRelation]:
+        """List all relations where the given object is the source."""
+        stmt = (
+            select(ObjectRelation)
+            .where(ObjectRelation.source_uuid == source_uuid)
+            .order_by(ObjectRelation.created_at.desc())
+        )
+        return list(self.session.execute(stmt).scalars().all())
+
+    def list_relations_for_target(
+        self, target_uuid: bytes
+    ) -> List[ObjectRelation]:
+        """List all relations where the given object is the target."""
+        stmt = (
+            select(ObjectRelation)
+            .where(ObjectRelation.target_uuid == target_uuid)
+            .order_by(ObjectRelation.created_at.desc())
+        )
+        return list(self.session.execute(stmt).scalars().all())
+
+    # ------------------------------------------------------------------
+    # Baselines (DB-OBJ-0009)
+    # ------------------------------------------------------------------
+
+    def create_baseline(
+        self,
+        name: str,
+        description: Optional[str],
+        object_versions: List[Tuple[bytes, int]],
+        created_by: str,
+    ) -> Baseline:
+        """Create a baseline with object-version pairs.
+
+        object_versions is a list of (object_uuid, version_no) tuples.
+        Each pair is validated to exist.
+        """
+        baseline = Baseline(
+            name=name,
+            description=description,
+            created_by=created_by,
+        )
+        self.session.add(baseline)
+        self.session.flush()
+
+        for obj_uuid, ver_no in object_versions:
+            version = self.get_version(obj_uuid, ver_no)
+            if version is None:
+                raise ValueError(
+                    f"Version {ver_no} of object {_bin_to_str(obj_uuid)} does not exist"
+                )
+            obj = self.get_by_uuid_including_deleted(obj_uuid)
+            item = BaselineItem(
+                baseline_uuid=baseline.baseline_uuid,
+                object_uuid=obj_uuid,
+                object_type=obj.object_type if obj else 'unknown',
+                version_no=ver_no,
+                snapshot_json=version.payload_json,
+            )
+            self.session.add(item)
+
+        event = EventLog(
+            object_uuid=baseline.baseline_uuid,
+            object_type='baseline',
+            event_type='baseline_frozen',
+            event_data={'name': name, 'item_count': len(object_versions)},
+            actor_user_id=created_by,
+        )
+        self.session.add(event)
+
+        return baseline
+
+    def get_baseline(self, baseline_uuid: bytes) -> Optional[Baseline]:
+        """Get a baseline by UUID."""
+        stmt = select(Baseline).where(Baseline.baseline_uuid == baseline_uuid)
+        return self.session.execute(stmt).scalar_one_or_none()
+
+    def list_baseline_items(self, baseline_uuid: bytes) -> List[BaselineItem]:
+        """List all items in a baseline."""
+        stmt = (
+            select(BaselineItem)
+            .where(BaselineItem.baseline_uuid == baseline_uuid)
+            .order_by(BaselineItem.item_uuid)
         )
         return list(self.session.execute(stmt).scalars().all())

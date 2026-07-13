@@ -52,7 +52,7 @@ def _bin_to_str(b: bytes) -> str:
 # Enums
 # ---------------------------------------------------------------------------
 
-LIFECYCLE_STATES = ('draft', 'in_review', 'approved', 'effective', 'obsolete')
+LIFECYCLE_STATES = ('draft', 'in_review', 'approved', 'effective', 'rejected', 'obsolete', 'deleted')
 RELATION_TYPES = (
     'supports_claim',
     'mitigates',
@@ -64,15 +64,14 @@ RELATION_TYPES = (
     'impacts',
     'supersedes',
 )
-APPROVAL_DECISIONS = ('approved', 'rejected', 'returned_to_draft')
+APPROVAL_DECISIONS = ('approved', 'rejected')
 EVENT_TYPES = (
     'created',
     'updated',
     'submitted_for_review',
     'approved',
     'rejected',
-    'returned_to_draft',
-    'obsoleted',
+    'deleted',
     'baseline_frozen',
     'artifact_generated',
 )
@@ -97,6 +96,7 @@ class RegulatoryObject(Base):
     )
     object_type: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     current_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    lock_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     lifecycle_state: Mapped[str] = mapped_column(
         String(32), nullable=False, default='draft', index=True
     )
@@ -109,15 +109,10 @@ class RegulatoryObject(Base):
     )
     deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
-    # Relationships
+    # Relationship
     versions = relationship(
         'ObjectVersion', back_populates='object_ref',
         order_by='ObjectVersion.version_no.desc()',
-        cascade='all, delete-orphan',
-    )
-    event_log = relationship(
-        'EventLog', back_populates='object_ref',
-        order_by='EventLog.event_id',
         cascade='all, delete-orphan',
     )
 
@@ -225,7 +220,6 @@ class EventLog(Base):
     event_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     object_uuid: Mapped[bytes] = mapped_column(
         BINARY16,
-        ForeignKey('regulatory_object.object_uuid', ondelete='CASCADE'),
         nullable=False,
         index=True,
     )
@@ -236,9 +230,6 @@ class EventLog(Base):
         DateTime, nullable=False, server_default=func.now()
     )
     actor_user_id: Mapped[str] = mapped_column(String(128), nullable=False)
-
-    # Relationship
-    object_ref = relationship('RegulatoryObject', back_populates='event_log')
 
     def __repr__(self) -> str:
         return (

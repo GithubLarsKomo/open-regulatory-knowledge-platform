@@ -157,12 +157,12 @@ def generate_backlog(root: Path) -> Tuple[List[Dict], List[Dict]]:
 
     # Foundation tasks are always included
     foundation_tasks = []
+    undefined_foundation_reqs = []
     for ft in foundation_tasks_cfg:
         # Validate that all referenced requirements are defined
         for req in ft.get('requirements', []):
             if req not in all_defined_ids:
-                print(f"  ⚠  Foundation task {ft['task_id']} references undefined requirement {req}",
-                      file=sys.stderr)
+                undefined_foundation_reqs.append((ft['task_id'], req))
         foundation_tasks.append({
             'task_id': ft['task_id'],
             'title': ft['title'],
@@ -171,6 +171,13 @@ def generate_backlog(root: Path) -> Tuple[List[Dict], List[Dict]]:
             'phase': ft['phase'],
             'scope': ft.get('scope', ''),
         })
+
+    # Fail hard if foundation tasks reference undefined requirements
+    if undefined_foundation_reqs:
+        msg_parts = [f"{tid} -> {req}" for tid, req in undefined_foundation_reqs]
+        raise ValueError(
+            f"Foundation tasks reference undefined requirements:\n  " + "\n  ".join(msg_parts)
+        )
 
     # Collect requirements already covered by foundation tasks
     covered_reqs: set[str] = set()
@@ -390,5 +397,9 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     print(f"\n✅ Backlog generated.")
     return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())
 
 
