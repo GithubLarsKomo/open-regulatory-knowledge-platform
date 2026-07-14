@@ -54,11 +54,13 @@ def _bin_to_str(b: bytes) -> str:
 
 LIFECYCLE_STATES = ('draft', 'in_review', 'approved', 'effective', 'rejected', 'obsolete', 'deleted')
 RELATION_TYPES = (
-    'supports_claim',
+    'supported_by',
+    'contradicted_by',
     'mitigates',
     'verified_by',
     'validated_by',
     'references',
+    'derived_from',
     'generated_from',
     'included_in',
     'impacts',
@@ -69,6 +71,8 @@ RELATION_TYPES = (
     'has_evidence',
     'governed_by',
     'manufactured_by',
+    'approved_by',
+    'marketed_in',
 )
 APPROVAL_DECISIONS = ('approved', 'rejected')
 EVENT_TYPES = (

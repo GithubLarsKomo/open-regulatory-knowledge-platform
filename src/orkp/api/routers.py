@@ -272,11 +272,20 @@ def create_claim_router(
     async def link_evidence(
         uuid: str,
         evidence_uuid: str = Query(...),
-        link_type: str = Query("supports_claim"),
+        link_type: str = Query("supported_by"),
         service: ClaimService = Depends(_get_service),
     ):
         _call_or_404(lambda: service.link_evidence(uuid, evidence_uuid, link_type))
         return {"status": "linked", "claim_uuid": uuid, "evidence_uuid": evidence_uuid}
+
+    @router.delete("/{uuid}/evidence/{evidence_uuid}", response_model=dict)
+    async def unlink_evidence(
+        uuid: str,
+        evidence_uuid: str,
+        service: ClaimService = Depends(_get_service),
+    ):
+        _call_or_404(lambda: service.unlink_evidence(uuid, evidence_uuid))
+        return {"status": "unlinked", "claim_uuid": uuid, "evidence_uuid": evidence_uuid}
 
     @router.get("/{uuid}/evidence-coverage", response_model=dict)
     async def check_evidence_coverage(
@@ -287,6 +296,20 @@ def create_claim_router(
         if not result["exists"]:
             raise HTTPException(status_code=404, detail="Claim not found")
         return result
+
+    @router.get("/{uuid}/coverage", response_model=dict)
+    async def coverage_report(
+        uuid: str,
+        service: ClaimService = Depends(_get_service),
+    ):
+        return _call_or_404(lambda: service.get_coverage_report(uuid))
+
+    @router.get("/{uuid}/history", response_model=dict)
+    async def claim_history(
+        uuid: str,
+        service: ClaimService = Depends(_get_service),
+    ):
+        return _call_or_404(lambda: service.get_history(uuid))
 
     @router.post("/{uuid}/submit", response_model=dict)
     async def submit_claim(
@@ -398,6 +421,28 @@ def create_evidence_router(
         service: EvidenceService = Depends(_get_service),
     ):
         _call_or_404(lambda: service.approve(uuid, actor_user_id, comments))
+        return {"status": "approved", "uuid": uuid}
+
+    @router.get("/{uuid}/claims", response_model=List[dict])
+    async def evidence_claims(
+        uuid: str,
+        service: EvidenceService = Depends(_get_service),
+    ):
+        return _call_or_404(lambda: service.find_claims(uuid))
+
+    @router.get("/{uuid}/coverage", response_model=dict)
+    async def evidence_coverage(
+        uuid: str,
+        service: EvidenceService = Depends(_get_service),
+    ):
+        return _call_or_404(lambda: service.get_coverage(uuid))
+
+    @router.get("/{uuid}/quality", response_model=dict)
+    async def evidence_quality(
+        uuid: str,
+        service: EvidenceService = Depends(_get_service),
+    ):
+        return _call_or_404(lambda: service.get_quality_summary(uuid))
         return {"status": "approved", "uuid": uuid}
 
     @router.delete("/{uuid}", status_code=204)

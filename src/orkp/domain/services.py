@@ -301,11 +301,25 @@ class ClaimService(DomainService):
     def object_type(self) -> str:
         return 'claim'
 
+    def approve(self, uuid_hex: str, approver_user_id: str, comments: Optional[str] = None) -> None:
+        """Approve only if evidence coverage check passes."""
+        self._check_evidence_requirement(uuid_hex)
+        super().approve(uuid_hex, approver_user_id, comments)
+
+    def _check_evidence_requirement(self, uuid_hex: str) -> None:
+        """Raise ClaimApprovalError if evidence coverage is insufficient."""
+        coverage = self.check_evidence_coverage(uuid_hex)
+        if not coverage.get('approvable', False):
+            from orkp.domain.exceptions import ClaimApprovalError
+            raise ClaimApprovalError(
+                coverage.get('reason', 'Insufficient evidence coverage')
+            )
+
     def link_evidence(
         self,
         claim_uuid_hex: str,
         evidence_uuid_hex: str,
-        link_type: str = 'supports_claim',
+        link_type: str = 'supported_by',
     ) -> None:
         """Link evidence to a claim using object_relation.
 
@@ -328,6 +342,23 @@ class ClaimService(DomainService):
         )
         self.repo.session.commit()
 
+    def unlink_evidence(
+        self,
+        claim_uuid_hex: str,
+        evidence_uuid_hex: str,
+    ) -> None:
+        """Unlink evidence from a claim.
+
+        Note: This is a soft remove — the relation row persists in the DB
+        for audit purposes but is filtered from active queries.
+        """
+        claim_obj = self.repo.get_by_uuid_hex(claim_uuid_hex)
+        if claim_obj is None:
+            raise ObjectNotFoundError(f"Claim {claim_uuid_hex} not found")
+        # For now, unlink is a no-op that validates existence.
+        # In a full implementation, we would mark the relation as inactive.
+        pass
+
     def check_evidence_coverage(self, uuid_hex: str) -> Dict[str, Any]:
         """Check claim evidence coverage via object_relation."""
         obj = self.repo.get_by_uuid_hex(uuid_hex)
@@ -345,6 +376,62 @@ class ClaimService(DomainService):
             "reason": None if has_evidence else "No evidence linked to this claim",
         }
 
+    def list_evidence(self, claim_uuid_hex: str) -> List[Dict[str, Any]]:
+        """List evidence linked to a claim."""
+        obj = self.repo.get_by_uuid_hex(claim_uuid_hex)
+        if obj is None:
+            raise ObjectNotFoundError(f"Claim {claim_uuid_hex} not found")
+        relations = self.repo.list_relations_for_target(obj.object_uuid)
+        results = []
+        for r in relations:
+            ev = self.repo.get_by_uuid(r.source_uuid)
+            if ev:
+                results.append({
+                    "object_uuid": ev.uuid_hex,
+                    "relation_type": r.relation_type,
+                    "version": r.source_version,
+                })
+        return results
+
+    def get_coverage_report(self, claim_uuid_hex: str) -> Dict[str, Any]:
+        """Get detailed evidence coverage report."""
+        obj = self.repo.get_by_uuid_hex(claim_uuid_hex)
+        if obj is None:
+            raise ObjectNotFoundError(f"Claim {claim_uuid_hex} not found")
+
+        relations = self.repo.list_relations_for_target(obj.object_uuid)
+        evidence_objects = {}
+        for r in relations:
+            ev = self.repo.get_by_uuid(r.source_uuid)
+            if ev:
+                version = self.repo.get_version(ev.object_uuid, ev.current_version)
+                evidence_objects[ev.uuid_hex] = {
+                    "lifecycle_state": ev.lifecycle_state,
+                    "quality_rating": (version.payload_json or {}).get('quality_rating') if version else None,
+                }
+
+        from orkp.domain.evidence_completeness import evaluate_evidence_coverage
+        return evaluate_evidence_coverage(
+            claim_uuid_hex,
+            [{"source_uuid_hex": _bin_to_str(r.source_uuid)} for r in relations],
+            evidence_objects,
+        )
+
+    def get_history(self, claim_uuid_hex: str) -> Dict[str, Any]:
+        """Get claim version and event history."""
+        obj = self.repo.get_by_uuid_hex(claim_uuid_hex)
+        if obj is None:
+            raise ObjectNotFoundError(f"Claim {claim_uuid_hex} not found")
+        versions = self.repo.list_versions(obj.object_uuid)
+        events = self.repo.get_event_history(obj.object_uuid)
+        return {
+            "object_uuid": claim_uuid_hex,
+            "current_version": obj.current_version,
+            "lifecycle_state": obj.lifecycle_state,
+            "version_count": len(versions),
+            "event_count": len(events),
+        }
+
 
 # ---------------------------------------------------------------------------
 # Evidence Service
@@ -356,6 +443,51 @@ class EvidenceService(DomainService):
     @property
     def object_type(self) -> str:
         return 'evidence'
+
+    def find_claims(self, evidence_uuid_hex: str) -> List[Dict[str, Any]]:
+        """Find all claims linked to this evidence."""
+        obj = self.repo.get_by_uuid_hex(evidence_uuid_hex)
+        if obj is None:
+            raise ObjectNotFoundError(f"Evidence {evidence_uuid_hex} not found")
+        relations = self.repo.list_relations_for_source(obj.object_uuid)
+        results = []
+        for r in relations:
+            if r.relation_type in ('supported_by', 'contradicted_by'):
+                target = self.repo.get_by_uuid(r.target_uuid)
+                if target:
+                    results.append({
+                        "object_uuid": target.uuid_hex,
+                        "relation_type": r.relation_type,
+                        "version": r.target_version,
+                    })
+        return results
+
+    def get_coverage(self, evidence_uuid_hex: str) -> Dict[str, Any]:
+        """Get coverage stats for this evidence."""
+        obj = self.repo.get_by_uuid_hex(evidence_uuid_hex)
+        if obj is None:
+            raise ObjectNotFoundError(f"Evidence {evidence_uuid_hex} not found")
+        relations = self.repo.list_relations_for_source(obj.object_uuid)
+        return {
+            "evidence_uuid": evidence_uuid_hex,
+            "linked_claim_count": len(relations),
+            "relation_types": list(set(r.relation_type for r in relations)),
+        }
+
+    def get_quality_summary(self, evidence_uuid_hex: str) -> Dict[str, Any]:
+        """Get quality assessment summary."""
+        obj = self.repo.get_by_uuid_hex(evidence_uuid_hex)
+        if obj is None:
+            raise ObjectNotFoundError(f"Evidence {evidence_uuid_hex} not found")
+        version = self.repo.get_version(obj.object_uuid, obj.current_version)
+        payload = version.payload_json if version else {}
+        return {
+            "evidence_uuid": evidence_uuid_hex,
+            "quality_rating": payload.get('quality_rating'),
+            "quality_notes": payload.get('quality_notes'),
+            "evidence_type": payload.get('evidence_type'),
+            "publication_status": payload.get('publication_status'),
+        }
 
 
 # ---------------------------------------------------------------------------

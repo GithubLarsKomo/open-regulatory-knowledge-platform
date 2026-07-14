@@ -4,7 +4,7 @@ Generated on 2026-07-14
 
 - **Foundation tasks:** 5
 - **Generated tasks:** 14
-- **Total requirement IDs covered:** 117
+- **Total requirement IDs covered:** 141
 
 ## Epic 001 — Specification Foundation
 
@@ -107,6 +107,18 @@ Generated on 2026-07-14
 - REQ-CLAIM-0004
 - REQ-CLAIM-0005
 - REQ-CLAIM-0006
+- REQ-CLAIM-0007
+- REQ-CLAIM-0008
+- REQ-CLAIM-0009
+- REQ-CLAIM-0010
+- REQ-CLAIM-0011
+- REQ-CLAIM-0012
+- REQ-CLAIM-0013
+- REQ-CLAIM-0014
+- REQ-CLAIM-0015
+- REQ-CLAIM-0016
+- REQ-CLAIM-0017
+- REQ-CLAIM-0018
 
 **Scope:** Claim management, evidence linking, consistency checking.
 
@@ -123,6 +135,18 @@ Generated on 2026-07-14
 - REQ-EVID-0006
 - REQ-EVID-0007
 - REQ-EVID-0008
+- REQ-EVID-0009
+- REQ-EVID-0010
+- REQ-EVID-0011
+- REQ-EVID-0012
+- REQ-EVID-0013
+- REQ-EVID-0014
+- REQ-EVID-0015
+- REQ-EVID-0016
+- REQ-EVID-0017
+- REQ-EVID-0018
+- REQ-EVID-0019
+- REQ-EVID-0020
 
 **Scope:** Evidence management, quality assessment, coverage analysis.
 

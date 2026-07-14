@@ -30,15 +30,24 @@ REGULATORY_STATUSES = {
 }
 
 EVIDENCE_TYPES = {
-    'literature_reference', 'clinical_data', 'analytical_data',
-    'scientific_validity', 'historical_data', 'standards_reference',
-    'internal_report',
+    'literature', 'clinical_study', 'analytical_study',
+    'scientific_validity', 'internal_report', 'external_report',
+    'standard', 'guideline', 'regulation', 'internal_document',
 }
 
 CLAIM_TYPES = {
     'regulatory', 'clinical', 'analytical', 'performance',
-    'safety', 'marketing',
+    'safety', 'marketing', 'manufacturing', 'software',
 }
+
+CLAIM_CATEGORIES = {
+    'regulatory', 'clinical', 'analytical', 'scientific',
+    'marketing', 'safety', 'manufacturing', 'software',
+}
+
+CLAIM_CONFIDENCE = {'high', 'medium', 'low'}
+
+CLAIM_SEVERITY = {'high', 'medium', 'low'}
 
 
 # ---------------------------------------------------------------------------
@@ -124,16 +133,42 @@ class ClaimPayload(BaseModel):
     """
     model_config = ConfigDict(extra="forbid")
 
-    claim_type: str = Field(..., description="regulatory|clinical|analytical|performance|safety|marketing")
+    claim_type: str = Field(..., description="clinical|analytical|performance|regulatory|safety|marketing|manufacturing|software")
+    claim_category: str = Field(..., description="regulatory|clinical|analytical|scientific|marketing|safety|manufacturing|software")
+    confidence: str = Field(..., description="high|medium|low")
+    severity: str = Field(..., description="high|medium|low")
     jurisdiction: str = Field(...)
     language: str = Field(...)
     wording: str = Field(...)
+    regulatory_scope: List[str] = []
+    notes: Optional[str] = None
 
     @field_validator('claim_type')
     @classmethod
     def _validate_claim_type(cls, v: str) -> str:
         if v not in CLAIM_TYPES:
             raise ValueError(f"Invalid claim_type '{v}'. Must be one of: {', '.join(sorted(CLAIM_TYPES))}")
+        return v
+
+    @field_validator('claim_category')
+    @classmethod
+    def _validate_claim_category(cls, v: str) -> str:
+        if v not in CLAIM_CATEGORIES:
+            raise ValueError(f"Invalid claim_category '{v}'. Must be one of: {', '.join(sorted(CLAIM_CATEGORIES))}")
+        return v
+
+    @field_validator('confidence')
+    @classmethod
+    def _validate_confidence(cls, v: str) -> str:
+        if v not in CLAIM_CONFIDENCE:
+            raise ValueError("confidence must be 'high', 'medium' or 'low'")
+        return v
+
+    @field_validator('severity')
+    @classmethod
+    def _validate_severity(cls, v: str) -> str:
+        if v not in CLAIM_SEVERITY:
+            raise ValueError("severity must be 'high', 'medium' or 'low'")
         return v
 
 
@@ -146,17 +181,20 @@ class EvidencePayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     evidence_type: str = Field(
-        ..., description="literature_reference|clinical_data|analytical_data|"
-        "scientific_validity|historical_data|standards_reference|internal_report"
+        ..., description="literature|clinical_study|analytical_study|"
+        "scientific_validity|internal_report|external_report|standard|guideline|regulation"
     )
     title: str = Field(..., min_length=1)
     source_reference: Optional[str] = None
     author: Optional[str] = None
-    publication_date: Optional[date] = None
+    publication_date: Optional[str] = None
     journal: Optional[str] = None
     version: Optional[str] = None
     quality_rating: Optional[str] = None
     quality_notes: Optional[str] = None
+    evidence_category: Optional[str] = None
+    publication_status: Optional[str] = None
+    keywords: List[str] = []
     checksum: Optional[str] = None
 
     @field_validator('evidence_type')
@@ -171,4 +209,11 @@ class EvidencePayload(BaseModel):
     def _validate_quality(cls, v: Optional[str]) -> Optional[str]:
         if v is not None and v not in {'high', 'medium', 'low'}:
             raise ValueError("quality_rating must be 'high', 'medium' or 'low'")
+        return v
+
+    @field_validator('publication_status')
+    @classmethod
+    def _validate_pub_status(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None and v not in {'published', 'preprint', 'unpublished', 'confidential'}:
+            raise ValueError("publication_status must be 'published', 'preprint', 'unpublished' or 'confidential'")
         return v

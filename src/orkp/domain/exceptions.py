@@ -53,6 +53,24 @@ class ProductCompletenessError(ORKPError):
     message = "Product completeness check failed"
 
 
+class ClaimApprovalError(ORKPError):
+    """Raised when a claim cannot be approved due to insufficient evidence."""
+    status_code = 422
+    message = "Claim approval check failed"
+
+
+class EvidenceCoverageError(ORKPError):
+    """Raised when evidence coverage is insufficient."""
+    status_code = 422
+    message = "Evidence coverage insufficient"
+
+
+class ConsistencyError(ORKPError):
+    """Raised when consistent checking detects conflicts."""
+    status_code = 422
+    message = "Claim consistency check failed"
+
+
 class BaselineValidationError(ORKPError):
     """Raised when baseline creation fails validation."""
     status_code = 422

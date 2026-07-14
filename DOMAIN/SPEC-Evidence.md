@@ -8,41 +8,62 @@ Define the evidence management domain that supports linking scientific and techn
 
 The domain covers:
 
-- Evidence items and their metadata
-- Evidence types (literature, study data, clinical data, performance data, historical data)
+- Evidence items and their structured metadata
+- Evidence types: literature, clinical study, analytical study, scientific validity, internal report, external report, standard, guideline, regulation
 - Evidence lifecycle and quality assessment
 - Evidence-to-claim linking
 - Evidence-to-risk-control linking
 - Evidence coverage analysis
+- Evidence supersession and versioning
 
 ## Stakeholders
 
-- Regulatory Affairs
-- Clinical Evidence Reviewer
-- R&D
-- Quality Management
+- Regulatory Affairs — define evidence strategy
+- Clinical Evidence Reviewer — assess evidence quality
+- R&D — contribute study data
+- Quality Management — review evidence quality
+- Notified Body — review evidence during submission
 
-## Domain Model
+## Architecture
 
-An Evidence Item is a structured reference to a source of information that supports or contradicts a regulatory statement.
+Evidence items are stored as `RegulatoryObject` with `object_type='evidence'`.
+The payload schema is defined in `EvidencePayload` (Pydantic, `extra='forbid'`).
 
-Evidence Items may be associated with:
+Evidence is linked to claims via `ObjectRelation` with types `supported_by` or `contradicted_by`.
 
-- Claims (supporting evidence)
-- Risk Controls (verification evidence)
-- Performance Studies (source data)
-- Literature references
-- PMS/PMPF data
+```text
+Evidence --supported_by--> Claim
+Evidence --mitigates--> RiskControl
+```
 
-### Evidence Types
+## Lifecycle
 
-- Literature Reference — a published study, article or standard
-- Clinical Data — clinical study results
-- Analytical Data — analytical performance study results
+```text
+draft -> in_review -> approved -> superseded
+    ^         |
+    +-- rejected
+```
+
+## Workflow
+
+1. Author creates an evidence item with type, title and source reference.
+2. Clinical Evidence Reviewer performs quality assessment.
+3. Evidence is approved or rejected.
+4. Approved evidence can be linked to claims.
+5. Superseded evidence retains all links but is flagged as superseded.
+
+## Evidence Types
+
+- Literature — published article, study or review
+- Clinical Study — clinical performance study data
+- Analytical Study — analytical performance study data
 - Scientific Validity — scientific validity data
-- Historical Data — post-market or legacy data
-- Standards Reference — applicable standard or guideline
-- Internal Report — verified internal study
+- Internal Validation — internal verification report
+- External Validation — external validation report
+- Reference Standard — reference material or standard
+- Regulatory Guidance — regulatory guidance document
+- Standards — applicable standard or guideline
+- Internal Document — internal technical document
 
 ## Requirements
 
@@ -70,6 +91,42 @@ Evidence items shall be versionable and auditable.
 ### REQ-EVID-0008
 External attachments (PDF, data files) shall be stored with checksum and version reference.
 
+### REQ-EVID-0009
+Evidence shall support multiple types: literature, clinical_study, analytical_study, scientific_validity, internal_report, external_report, standard, guideline, regulation.
+
+### REQ-EVID-0010
+Each evidence item shall have an evidence category for grouping and reporting purposes.
+
+### REQ-EVID-0011
+Evidence shall support supersession where a newer version replaces an older one while retaining historical links.
+
+### REQ-EVID-0012
+Evidence quality shall include a structured assessment with criteria and reviewer comments.
+
+### REQ-EVID-0013
+The system shall track which claims reference each evidence item and report impact when evidence is superseded.
+
+### REQ-EVID-0014
+Evidence items shall support keyword and full-text search where applicable.
+
+### REQ-EVID-0015
+Evidence linked to approved claims shall not be deleted without impact assessment.
+
+### REQ-EVID-0016
+Evidence coverage shall be evaluated per product, per claim and per risk.
+
+### REQ-EVID-0017
+Evidence metadata shall include publication status (published, preprint, unpublished, confidential).
+
+### REQ-EVID-0018
+AI may propose evidence summaries and relevance scoring but shall not assign quality ratings.
+
+### REQ-EVID-0019
+Evidence items may reference external databases (PubMed, ClinicalTrials.gov, regulatory databases) via persistent identifiers.
+
+### REQ-EVID-0020
+Evidence-to-claim links shall reference explicit evidence and claim versions for traceability.
+
 ## Interfaces
 
 - Claim Service — evidence retrieval for claim substantiation
@@ -80,51 +137,35 @@ External attachments (PDF, data files) shall be stored with checksum and version
 
 ## Data Model
 
-### evidence_item
+### EvidencePayload (Pydantic, extra='forbid')
 
-| Field | Type | Description |
-|---|---|---|
-| evidence_uuid | UUID | Stable identifier |
-| evidence_type | VARCHAR | Evidence type code |
-| title | VARCHAR | Title of evidence |
-| source_reference | VARCHAR | PMID, DOI, URL or internal ref |
-| author | VARCHAR | Author or organization |
-| publication_date | DATE | Publication or issue date |
-| journal | VARCHAR | Journal or source name |
-| version | VARCHAR | Version identifier |
-| quality_rating | VARCHAR | high/medium/low |
-| quality_notes | TEXT | Assessment notes |
-| checksum | VARCHAR | SHA-256 of attached file |
-| lifecycle_state | VARCHAR | Lifecycle state |
-| owner_user_id | VARCHAR | Responsible person |
-| created_at | DATETIME | Creation timestamp |
-| updated_at | DATETIME | Last update timestamp |
-
-## Workflow
-
-- Evidence lifecycle: draft → in_review → approved → superseded
-- Quality assessment performed by Clinical Evidence Reviewer role
-- Superseded evidence retains links but is flagged
-
-## Security
-
-- Evidence items visible per product-level permissions
-- Quality assessment requires Clinical Evidence Reviewer role
-
-## AI Support
-
-- AI may propose evidence summaries (draft only)
-- AI may suggest relevant literature from external databases
-- AI shall not assign quality ratings without human review
+| Field | Type | Required | Description |
+|---|---|---|---|
+| evidence_type | str | Yes | literature, clinical_study, analytical_study, scientific_validity, internal_report, external_report, standard, guideline, regulation |
+| title | str | Yes | Title of evidence |
+| source_reference | str | No | PMID, DOI, URL or internal ref |
+| author | str | No | Author or organization |
+| publication_date | str | No | Publication or issue date |
+| journal | str | No | Journal or source name |
+| version | str | No | Version identifier |
+| quality_rating | str | No | high, medium, low |
+| quality_notes | str | No | Assessment notes |
+| evidence_category | str | No | Grouping category |
+| publication_status | str | No | published, preprint, unpublished, confidential |
+| keywords | List[str] | No | Search keywords |
+| checksum | str | No | SHA-256 of attached file |
 
 ## Acceptance Criteria
 
 - An evidence item can be created with type and source reference.
-- A claim can be linked to one or more evidence items.
+- A claim can be linked to one or more evidence items via ObjectRelation.
 - Coverage gaps (claims without evidence) can be detected.
+- Evidence items can be superseded while retaining historical links.
 - Evidence items appear in report citation sections.
+- Unknown payload fields are rejected.
 
 ## Open Questions
 
 - Should evidence quality assessment follow a formal scoring rubric?
 - How to handle confidential evidence (trade secrets, unpublished data)?
+- Should the system integrate with external reference databases?

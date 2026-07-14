@@ -434,36 +434,36 @@ class TestObjectRelation:
     def test_create_relation(self, repo):
         s, _ = repo.create_object('claim', {}, 'u1', 'u1')
         t, _ = repo.create_object('evidence', {}, 'u2', 'u2')
-        r = repo.create_relation(s.object_uuid, 1, t.object_uuid, 1, 'supports_claim', 'u1')
-        assert r.relation_type == 'supports_claim'
+        r = repo.create_relation(s.object_uuid, 1, t.object_uuid, 1, 'supported_by', 'u1')
+        assert r.relation_type == 'supported_by'
 
     def test_list_by_source(self, repo):
         s, _ = repo.create_object('claim', {}, 'u1', 'u1')
         t1, _ = repo.create_object('evidence', {}, 'u2', 'u2')
         t2, _ = repo.create_object('evidence', {}, 'u3', 'u3')
-        repo.create_relation(s.object_uuid, 1, t1.object_uuid, 1, 'supports_claim', 'u1')
-        repo.create_relation(s.object_uuid, 1, t2.object_uuid, 1, 'supports_claim', 'u1')
+        repo.create_relation(s.object_uuid, 1, t1.object_uuid, 1, 'supported_by', 'u1')
+        repo.create_relation(s.object_uuid, 1, t2.object_uuid, 1, 'supported_by', 'u1')
         assert len(repo.list_relations_for_source(s.object_uuid)) == 2
 
     def test_list_by_target(self, repo):
         s1, _ = repo.create_object('claim', {}, 'u1', 'u1')
         s2, _ = repo.create_object('claim', {}, 'u2', 'u2')
         t, _ = repo.create_object('evidence', {}, 'u3', 'u3')
-        repo.create_relation(s1.object_uuid, 1, t.object_uuid, 1, 'supports_claim', 'u1')
-        repo.create_relation(s2.object_uuid, 1, t.object_uuid, 1, 'supports_claim', 'u1')
+        repo.create_relation(s1.object_uuid, 1, t.object_uuid, 1, 'supported_by', 'u1')
+        repo.create_relation(s2.object_uuid, 1, t.object_uuid, 1, 'supported_by', 'u1')
         assert len(repo.list_relations_for_target(t.object_uuid)) == 2
 
     def test_invalid_source_version_raises(self, repo):
         s, _ = repo.create_object('claim', {}, 'u1', 'u1')
         t, _ = repo.create_object('evidence', {}, 'u2', 'u2')
         with pytest.raises(InvalidRelationError):
-            repo.create_relation(s.object_uuid, 999, t.object_uuid, 1, 'supports_claim', 'u1')
+            repo.create_relation(s.object_uuid, 999, t.object_uuid, 1, 'supported_by', 'u1')
 
     def test_invalid_target_version_raises(self, repo):
         s, _ = repo.create_object('claim', {}, 'u1', 'u1')
         t, _ = repo.create_object('evidence', {}, 'u2', 'u2')
         with pytest.raises(InvalidRelationError):
-            repo.create_relation(s.object_uuid, 1, t.object_uuid, 999, 'supports_claim', 'u1')
+            repo.create_relation(s.object_uuid, 1, t.object_uuid, 999, 'supported_by', 'u1')
 
     def test_invalid_relation_type_raises(self, repo):
         s, _ = repo.create_object('claim', {}, 'u1', 'u1')
@@ -475,10 +475,10 @@ class TestObjectRelation:
         """Transaction rolls back if one relation has invalid version."""
         s, _ = repo.create_object('claim', {}, 'u1', 'u1')
         t1, _ = repo.create_object('evidence', {}, 'u2', 'u2')
-        repo.create_relation(s.object_uuid, 1, t1.object_uuid, 1, 'supports_claim', 'u1')
+        repo.create_relation(s.object_uuid, 1, t1.object_uuid, 1, 'supported_by', 'u1')
         # This should raise, but the previous relation should also roll back
         with pytest.raises(InvalidRelationError):
-            repo.create_relation(s.object_uuid, 1, _new_uuid(), 1, 'supports_claim', 'u1')
+            repo.create_relation(s.object_uuid, 1, _new_uuid(), 1, 'supported_by', 'u1')
         # The first relation should still exist
         assert len(repo.list_relations_for_source(s.object_uuid)) == 1
 
