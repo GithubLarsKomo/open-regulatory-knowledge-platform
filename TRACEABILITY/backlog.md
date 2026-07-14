@@ -2,9 +2,9 @@
 
 Generated on 2026-07-14
 
-- **Foundation tasks:** 4
-- **Generated tasks:** 15
-- **Total requirement IDs covered:** 104
+- **Foundation tasks:** 5
+- **Generated tasks:** 14
+- **Total requirement IDs covered:** 117
 
 ## Epic 001 — Specification Foundation
 
@@ -98,21 +98,6 @@ Generated on 2026-07-14
 
 ## Epic 004 — Product & Claim Domain
 
-### TASK-PROD-0001 — Product Domain
-
-**Source requirements:**
-- REQ-PROD-0001
-- REQ-PROD-0002
-- REQ-PROD-0003
-- REQ-PROD-0004
-- REQ-PROD-0005
-- REQ-PROD-0006
-- REQ-PROD-0007
-
-**Scope:** Product master data, device hierarchy, regulatory identifiers.
-
-**Phase:** 2
-
 ### TASK-CLAIM-0001 — Claim Domain
 
 **Source requirements:**
@@ -140,6 +125,36 @@ Generated on 2026-07-14
 - REQ-EVID-0008
 
 **Scope:** Evidence management, quality assessment, coverage analysis.
+
+**Phase:** 2
+
+## Epic 004 — Product Domain
+
+### TASK-PRODUCT-DOMAIN-0001 — Implement Product Domain MVP
+
+**Source requirements:**
+- REQ-PROD-0001
+- REQ-PROD-0002
+- REQ-PROD-0003
+- REQ-PROD-0004
+- REQ-PROD-0005
+- REQ-PROD-0006
+- REQ-PROD-0007
+- REQ-PROD-0008
+- REQ-PROD-0009
+- REQ-PROD-0010
+- REQ-PROD-0011
+- REQ-PROD-0012
+- REQ-PROD-0013
+- REQ-PROD-0014
+- REQ-PROD-0015
+- REQ-PROD-0016
+- REQ-PROD-0017
+- REQ-PROD-0018
+- REQ-PROD-0019
+- REQ-PROD-0020
+
+**Scope:** Product master data, device variants, strict validation, completeness evaluation, versioned relationships, API endpoints.
 
 **Phase:** 2
 

@@ -508,7 +508,8 @@ class TestSubprocessCLI:
             repo_root = Path(__file__).resolve().parent.parent
             shutil.copytree(repo_root / 'META', tmpdir / 'META')
             for spec_file in ['SPEC.md', 'ARCHITECTURE/SPEC-Architecture.md',
-                              'META/REQ-META.md', 'DATABASE/SPEC-CoreObjectStore.md']:
+                              'META/REQ-META.md', 'DATABASE/SPEC-CoreObjectStore.md',
+                              'DOMAIN/SPEC-Product.md']:
                 src = repo_root / spec_file
                 if src.exists():
                     dest = tmpdir / spec_file

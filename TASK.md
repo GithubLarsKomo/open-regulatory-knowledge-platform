@@ -248,42 +248,6 @@ Definition of Done:
 
 ## Epic 004 — Product & Claim Domain
 
-### TASK-PROD-0001
-Product Domain.
-
-Source requirements:
-
-- REQ-PROD-0001
-- REQ-PROD-0002
-- REQ-PROD-0003
-- REQ-PROD-0004
-- REQ-PROD-0005
-- REQ-PROD-0006
-- REQ-PROD-0007
-
-Scope:
-
-- Product master data
-- device hierarchy
-- regulatory identifiers.
-
-Goal:
-
-Implement the product domain according to the referenced requirements.
-
-Acceptance criteria:
-
-- Each referenced requirement is satisfied through implementation.
-- Unit tests cover the implemented functionality.
-- The implementation follows the existing patterns in the repository.
-
-Definition of Done:
-
-- Code is implemented and committed.
-- All unit tests pass.
-- `python tools/spec_linter.py --strict` passes.
-- Generated artifacts are up to date.
-
 ### TASK-CLAIM-0001
 Claim Domain.
 
@@ -342,6 +306,60 @@ Scope:
 Goal:
 
 Implement the evidence domain according to the referenced requirements.
+
+Acceptance criteria:
+
+- Each referenced requirement is satisfied through implementation.
+- Unit tests cover the implemented functionality.
+- The implementation follows the existing patterns in the repository.
+
+Definition of Done:
+
+- Code is implemented and committed.
+- All unit tests pass.
+- `python tools/spec_linter.py --strict` passes.
+- Generated artifacts are up to date.
+
+## Epic 004 — Product Domain
+
+### TASK-PRODUCT-DOMAIN-0001
+Implement Product Domain MVP.
+
+Source requirements:
+
+- REQ-PROD-0001
+- REQ-PROD-0002
+- REQ-PROD-0003
+- REQ-PROD-0004
+- REQ-PROD-0005
+- REQ-PROD-0006
+- REQ-PROD-0007
+- REQ-PROD-0008
+- REQ-PROD-0009
+- REQ-PROD-0010
+- REQ-PROD-0011
+- REQ-PROD-0012
+- REQ-PROD-0013
+- REQ-PROD-0014
+- REQ-PROD-0015
+- REQ-PROD-0016
+- REQ-PROD-0017
+- REQ-PROD-0018
+- REQ-PROD-0019
+- REQ-PROD-0020
+
+Scope:
+
+- Product master data
+- device variants
+- strict validation
+- completeness evaluation
+- versioned relationships
+- API endpoints.
+
+Goal:
+
+Implement the implement product domain mvp according to the referenced requirements.
 
 Acceptance criteria:
 

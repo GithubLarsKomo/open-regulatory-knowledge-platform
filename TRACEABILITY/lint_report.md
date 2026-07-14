@@ -1,8 +1,8 @@
 # Specification Linter Report
 
 - **Repository:** D:\Python\ORKP
-- **Files scanned:** 28
-- **Unique IDs defined:** 112
+- **Files scanned:** 30
+- **Unique IDs defined:** 126
 - **Duplicates:** 0
 - **Invalid format:** 0
 - **Undefined references:** 0
@@ -19,8 +19,9 @@
 | GRAPH | 4 |
 | META | 2 |
 | OBJECT | 1 |
+| PRODUCT | 1 |
 | REP | 5 |
-| REQ | 56 |
+| REQ | 69 |
 | SEC | 5 |
 | TASK | 3 |
 | TEST | 5 |

@@ -31,6 +31,14 @@
       "epic": "Epic 002 — Core Object Store",
       "phase": "1",
       "scope": "SQLAlchemy models, Pydantic schemas, migrations, repository, lifecycle state machine, event log, baselines, unit tests."
+    },
+    {
+      "task_id": "TASK-PRODUCT-DOMAIN-0001",
+      "title": "Implement Product Domain MVP",
+      "requirements": ["REQ-PROD-0001", "REQ-PROD-0002", "REQ-PROD-0003", "REQ-PROD-0004", "REQ-PROD-0005", "REQ-PROD-0006", "REQ-PROD-0007", "REQ-PROD-0008", "REQ-PROD-0009", "REQ-PROD-0010", "REQ-PROD-0011", "REQ-PROD-0012", "REQ-PROD-0013", "REQ-PROD-0014", "REQ-PROD-0015", "REQ-PROD-0016", "REQ-PROD-0017", "REQ-PROD-0018", "REQ-PROD-0019", "REQ-PROD-0020"],
+      "epic": "Epic 004 — Product Domain",
+      "phase": "2",
+      "scope": "Product master data, device variants, strict validation, completeness evaluation, versioned relationships, API endpoints."
     }
   ],
   "domain_groups": [
