@@ -63,6 +63,12 @@ RELATION_TYPES = (
     'included_in',
     'impacts',
     'supersedes',
+    'variant_of',
+    'has_claim',
+    'has_risk',
+    'has_evidence',
+    'governed_by',
+    'manufactured_by',
 )
 APPROVAL_DECISIONS = ('approved', 'rejected')
 EVENT_TYPES = (

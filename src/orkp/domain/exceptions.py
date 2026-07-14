@@ -47,6 +47,12 @@ class InvalidRelationError(ORKPError):
     message = "Invalid object relation"
 
 
+class ProductCompletenessError(ORKPError):
+    """Raised when a product does not meet minimum completeness requirements."""
+    status_code = 422
+    message = "Product completeness check failed"
+
+
 class BaselineValidationError(ORKPError):
     """Raised when baseline creation fails validation."""
     status_code = 422

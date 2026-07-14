@@ -119,3 +119,63 @@ class ErrorResponse(BaseModel):
     """Standard error response."""
     detail: str
     error_code: Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
+# Product-specific schemas
+# ---------------------------------------------------------------------------
+
+class ProductCreateRequest(BaseModel):
+    """Request body for creating a product."""
+    product_id: str
+    name: str
+    product_kind: str
+    legal_manufacturer: str
+    intended_purpose: str
+    regulatory_status: str
+    description: Optional[str] = None
+    basic_udi_di: Optional[str] = None
+    emdn_code: Optional[str] = None
+    gmdn_code: Optional[str] = None
+    ivr_code: Optional[str] = None
+    manufacturer_srn: Optional[str] = None
+    notified_body_number: Optional[str] = None
+    risk_class: Optional[str] = None
+    target_population: Optional[str] = None
+    specimen_types: List[str] = []
+    clinical_indications: Optional[str] = None
+    contraindications: Optional[str] = None
+    applicable_regulations: List[str] = []
+
+
+class ProductDetailResponse(BaseModel):
+    """Response body for a product with its payload."""
+    object_uuid: str
+    object_type: str
+    current_version: int
+    lifecycle_state: str
+    owner_user_id: Optional[str] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    payload: Dict[str, Any]
+
+
+class DeviceCreateRequest(BaseModel):
+    """Request body for creating a device variant."""
+    device_id: str
+    name: str
+    device_kind: str
+    udi_di: Optional[str] = None
+    catalogue_number: Optional[str] = None
+    configuration: Optional[str] = None
+    software_version: Optional[str] = None
+    market_status: Optional[str] = None
+
+
+class ProductCompletenessResponse(BaseModel):
+    """Response for product completeness evaluation."""
+    complete: bool
+    score: int
+    missing_required_fields: List[str] = []
+    missing_relationships: List[str] = []
+    warnings: List[str] = []

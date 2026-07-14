@@ -1,4 +1,8 @@
-"""Domain services for regulatory objects."""
+"""Domain services for regulatory objects.
+
+State-changing methods raise typed exceptions (not return False).
+Query methods may return None when objects do not exist.
+"""
 
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -9,27 +13,23 @@ from orkp.domain.exceptions import (
     InvalidLifecycleTransitionError,
     ImmutableVersionError,
     OptimisticLockError,
+    InvalidRelationError,
+    ProductCompletenessError,
 )
+from orkp.domain.product_completeness import evaluate_product_completeness
 
 
 class DomainService:
-    """
-    Base class for domain-specific services.
-
-    Each domain service wraps a RegulatoryObjectRepository and provides
-    type-safe create/read/update operations for a specific object_type.
-    """
+    """Base class for domain-specific services."""
 
     def __init__(self, repo: RegulatoryObjectRepository):
         self.repo = repo
 
     @property
     def object_type(self) -> str:
-        """Override in subclasses to set the object type string."""
         raise NotImplementedError
 
     def create(self, payload: Dict[str, Any], owner_user_id: str) -> Tuple[RegulatoryObject, Any]:
-        """Create a new domain object. Returns (regulatory_object, version)."""
         return self.repo.create_object(
             object_type=self.object_type,
             payload=payload,
@@ -38,11 +38,9 @@ class DomainService:
         )
 
     def get(self, uuid_hex: str) -> Optional[RegulatoryObject]:
-        """Get a domain object by UUID hex."""
         return self.repo.get_by_uuid_hex(uuid_hex)
 
     def get_with_payload(self, uuid_hex: str) -> Optional[Dict[str, Any]]:
-        """Get a domain object with its current payload."""
         obj = self.repo.get_by_uuid_hex(uuid_hex)
         if obj is None:
             return None
@@ -61,72 +59,65 @@ class DomainService:
         }
 
     def list(self, limit: int = 100, offset: int = 0) -> List[RegulatoryObject]:
-        """List all domain objects."""
         return self.repo.list_objects(
-            object_type=self.object_type,
-            limit=limit,
-            offset=offset,
+            object_type=self.object_type, limit=limit, offset=offset,
         )
 
     def update_payload(self, uuid_hex: str, payload: Dict[str, Any], created_by: str) -> Optional[Dict[str, Any]]:
-        """Create a new version with updated payload."""
+        """Create a new version with updated payload.
+
+        Raises: ImmutableVersionError, OptimisticLockError
+        """
         obj = self.repo.get_by_uuid_hex(uuid_hex)
         if obj is None:
-            return None
-        try:
-            version = self.repo.create_version(obj.object_uuid, payload, created_by)
-        except (ImmutableVersionError, OptimisticLockError):
-            return None
+            raise ObjectNotFoundError(f"{self.object_type} {uuid_hex} not found")
+        version = self.repo.create_version(obj.object_uuid, payload, created_by)
         self.repo.session.commit()
         return self.get_with_payload(uuid_hex)
 
-    def submit_for_review(self, uuid_hex: str, actor_user_id: str) -> bool:
-        """Submit a draft object for review."""
-        try:
-            obj = self.repo.get_by_uuid_hex(uuid_hex)
-            if obj is None:
-                return False
-            self.repo.transition_state(obj.object_uuid, 'in_review', actor_user_id)
-            self.repo.session.commit()
-            return True
-        except (ObjectNotFoundError, InvalidLifecycleTransitionError, OptimisticLockError):
-            return False
+    def submit_for_review(self, uuid_hex: str, actor_user_id: str) -> None:
+        """Submit a draft object for review.
 
-    def approve(self, uuid_hex: str, approver_user_id: str, comments: Optional[str] = None) -> bool:
-        """Approve an in-review object."""
-        try:
-            obj = self.repo.get_by_uuid_hex(uuid_hex)
-            if obj is None:
-                return False
-            self.repo.transition_state(obj.object_uuid, 'approved', approver_user_id, comments)
-            self.repo.session.commit()
-            return True
-        except (ObjectNotFoundError, InvalidLifecycleTransitionError, OptimisticLockError):
-            return False
+        Raises: ObjectNotFoundError, InvalidLifecycleTransitionError, OptimisticLockError
+        """
+        obj = self.repo.get_by_uuid_hex(uuid_hex)
+        if obj is None:
+            raise ObjectNotFoundError(f"{self.object_type} {uuid_hex} not found")
+        self.repo.transition_state(obj.object_uuid, 'in_review', actor_user_id)
+        self.repo.session.commit()
 
-    def reject(self, uuid_hex: str, reviewer_user_id: str, comments: str) -> bool:
-        """Reject an in-review object with comments."""
-        try:
-            obj = self.repo.get_by_uuid_hex(uuid_hex)
-            if obj is None:
-                return False
-            self.repo.transition_state(obj.object_uuid, 'rejected', reviewer_user_id, comments)
-            self.repo.session.commit()
-            return True
-        except (ObjectNotFoundError, InvalidLifecycleTransitionError, OptimisticLockError):
-            return False
+    def approve(self, uuid_hex: str, approver_user_id: str, comments: Optional[str] = None) -> None:
+        """Approve an in-review object.
 
-    def soft_delete(self, uuid_hex: str, actor_user_id: str) -> bool:
-        """Soft-delete a domain object."""
-        try:
-            obj = self.repo.get_by_uuid_hex(uuid_hex)
-            if obj is None:
-                return False
-            self.repo.soft_delete(obj.object_uuid, actor_user_id)
-            self.repo.session.commit()
-            return True
-        except (ObjectNotFoundError, InvalidLifecycleTransitionError, OptimisticLockError):
-            return False
+        Raises: ObjectNotFoundError, InvalidLifecycleTransitionError, OptimisticLockError
+        """
+        obj = self.repo.get_by_uuid_hex(uuid_hex)
+        if obj is None:
+            raise ObjectNotFoundError(f"{self.object_type} {uuid_hex} not found")
+        self.repo.transition_state(obj.object_uuid, 'approved', approver_user_id, comments)
+        self.repo.session.commit()
+
+    def reject(self, uuid_hex: str, reviewer_user_id: str, comments: str) -> None:
+        """Reject an in-review object.
+
+        Raises: ObjectNotFoundError, InvalidLifecycleTransitionError, OptimisticLockError
+        """
+        obj = self.repo.get_by_uuid_hex(uuid_hex)
+        if obj is None:
+            raise ObjectNotFoundError(f"{self.object_type} {uuid_hex} not found")
+        self.repo.transition_state(obj.object_uuid, 'rejected', reviewer_user_id, comments)
+        self.repo.session.commit()
+
+    def soft_delete(self, uuid_hex: str, actor_user_id: str) -> None:
+        """Soft-delete a domain object.
+
+        Raises: ObjectNotFoundError, InvalidLifecycleTransitionError, OptimisticLockError
+        """
+        obj = self.repo.get_by_uuid_hex(uuid_hex)
+        if obj is None:
+            raise ObjectNotFoundError(f"{self.object_type} {uuid_hex} not found")
+        self.repo.soft_delete(obj.object_uuid, actor_user_id)
+        self.repo.session.commit()
 
 
 # ---------------------------------------------------------------------------
@@ -139,6 +130,164 @@ class ProductService(DomainService):
     @property
     def object_type(self) -> str:
         return 'product'
+
+    def approve(self, uuid_hex: str, approver_user_id: str, comments: Optional[str] = None) -> None:
+        """Approve only if completeness check passes."""
+        self._check_completeness(uuid_hex)
+        super().approve(uuid_hex, approver_user_id, comments)
+
+    def _check_completeness(self, uuid_hex: str) -> None:
+        """Raise ProductCompletenessError if product is not complete."""
+        data = self.get_with_payload(uuid_hex)
+        if data is None:
+            raise ObjectNotFoundError(f"Product {uuid_hex} not found")
+
+        from pydantic import ValidationError
+        try:
+            from orkp.domain.models import ProductPayload
+            payload = ProductPayload(**data['payload'])
+        except ValidationError:
+            raise ProductCompletenessError("Product payload is invalid")
+
+        # Collect relations
+        obj = self.repo.get_by_uuid_hex(uuid_hex)
+        relations: Dict[str, list] = {}
+        if obj:
+            for rel_type in ('has_claim', 'has_risk', 'has_evidence'):
+                relations[rel_type] = self.repo.list_relations_for_source(obj.object_uuid)
+
+        result = evaluate_product_completeness(uuid_hex, payload, relations)
+        if not result['complete']:
+            details = []
+            if result['missing_required_fields']:
+                details.append(f"Missing fields: {', '.join(result['missing_required_fields'])}")
+            if result['missing_relationships']:
+                details.append(f"Missing relationships: {', '.join(result['missing_relationships'])}")
+            raise ProductCompletenessError(
+                "Product does not meet minimum approval requirements. " + "; ".join(details)
+            )
+
+    def add_device_variant(
+        self,
+        product_uuid_hex: str,
+        device_payload: Dict[str, Any],
+        actor_user_id: str,
+    ) -> RegulatoryObject:
+        """Atomically create a Device and link via variant_of relation.
+
+        Raises: ObjectNotFoundError, InvalidRelationError
+        """
+        product = self.repo.get_by_uuid_hex(product_uuid_hex)
+        if product is None:
+            raise ObjectNotFoundError(f"Product {product_uuid_hex} not found")
+
+        device_obj, _ = self.repo.create_object(
+            object_type='device',
+            payload=device_payload,
+            owner_user_id=actor_user_id,
+            created_by=actor_user_id,
+        )
+
+        self.repo.create_relation(
+            source_uuid=device_obj.object_uuid,
+            source_version=device_obj.current_version,
+            target_uuid=product.object_uuid,
+            target_version=product.current_version,
+            relation_type='variant_of',
+            created_by=actor_user_id,
+        )
+
+        self.repo.session.commit()
+        return device_obj
+
+    def list_devices(self, product_uuid_hex: str) -> List[RegulatoryObject]:
+        """List all device variants of a product."""
+        obj = self.repo.get_by_uuid_hex(product_uuid_hex)
+        if obj is None:
+            raise ObjectNotFoundError(f"Product {product_uuid_hex} not found")
+        relations = self.repo.list_relations_for_target(obj.object_uuid)
+        device_uuids = [r.source_uuid for r in relations if r.relation_type == 'variant_of']
+        devices = []
+        for du in device_uuids:
+            dev = self.repo.get_by_uuid(du)
+            if dev:
+                devices.append(dev)
+        return devices
+
+    def link_claim(self, product_uuid_hex: str, claim_uuid_hex: str, actor_user_id: str) -> None:
+        """Create a has_claim relation."""
+        self._link_relation(product_uuid_hex, claim_uuid_hex, 'has_claim', actor_user_id)
+
+    def link_risk(self, product_uuid_hex: str, risk_uuid_hex: str, actor_user_id: str) -> None:
+        """Create a has_risk relation."""
+        self._link_relation(product_uuid_hex, risk_uuid_hex, 'has_risk', actor_user_id)
+
+    def link_evidence(self, product_uuid_hex: str, evidence_uuid_hex: str, actor_user_id: str) -> None:
+        """Create a has_evidence relation."""
+        self._link_relation(product_uuid_hex, evidence_uuid_hex, 'has_evidence', actor_user_id)
+
+    def _link_relation(self, source_hex: str, target_hex: str, rel_type: str, actor_user_id: str) -> None:
+        source = self.repo.get_by_uuid_hex(source_hex)
+        target = self.repo.get_by_uuid_hex(target_hex)
+        if source is None:
+            raise ObjectNotFoundError(f"Source {source_hex} not found")
+        if target is None:
+            raise ObjectNotFoundError(f"Target {target_hex} not found")
+        self.repo.create_relation(
+            source_uuid=source.object_uuid,
+            source_version=source.current_version,
+            target_uuid=target.object_uuid,
+            target_version=target.current_version,
+            relation_type=rel_type,
+            created_by=actor_user_id,
+        )
+        self.repo.session.commit()
+
+    def list_claims(self, product_uuid_hex: str) -> List[Dict[str, Any]]:
+        return self._list_related(product_uuid_hex, 'has_claim')
+
+    def list_risks(self, product_uuid_hex: str) -> List[Dict[str, Any]]:
+        return self._list_related(product_uuid_hex, 'has_risk')
+
+    def list_evidence(self, product_uuid_hex: str) -> List[Dict[str, Any]]:
+        return self._list_related(product_uuid_hex, 'has_evidence')
+
+    def _list_related(self, product_uuid_hex: str, rel_type: str) -> List[Dict[str, Any]]:
+        obj = self.repo.get_by_uuid_hex(product_uuid_hex)
+        if obj is None:
+            raise ObjectNotFoundError(f"Product {product_uuid_hex} not found")
+        relations = self.repo.list_relations_for_source(obj.object_uuid)
+        results = []
+        for r in relations:
+            if r.relation_type == rel_type:
+                target = self.repo.get_by_uuid(r.target_uuid)
+                if target:
+                    results.append({
+                        "object_uuid": target.uuid_hex,
+                        "object_type": target.object_type,
+                        "version": r.target_version,
+                    })
+        return results
+
+    def get_completeness(self, product_uuid_hex: str) -> Dict[str, Any]:
+        """Get completeness evaluation for a product."""
+        data = self.get_with_payload(product_uuid_hex)
+        if data is None:
+            raise ObjectNotFoundError(f"Product {product_uuid_hex} not found")
+        from pydantic import ValidationError
+        try:
+            from orkp.domain.models import ProductPayload
+            payload = ProductPayload(**data['payload'])
+        except ValidationError:
+            raise ProductCompletenessError("Product payload is invalid")
+
+        obj = self.repo.get_by_uuid_hex(product_uuid_hex)
+        relations: Dict[str, list] = {}
+        if obj:
+            for rel_type in ('has_claim', 'has_risk', 'has_evidence'):
+                relations[rel_type] = self.repo.list_relations_for_source(obj.object_uuid)
+
+        return evaluate_product_completeness(product_uuid_hex, payload, relations)
 
 
 # ---------------------------------------------------------------------------
@@ -157,39 +306,30 @@ class ClaimService(DomainService):
         claim_uuid_hex: str,
         evidence_uuid_hex: str,
         link_type: str = 'supports_claim',
-    ) -> bool:
-        """
-        Link evidence to a claim using object_relation.
+    ) -> None:
+        """Link evidence to a claim using object_relation.
 
-        REQ-CLAIM-0003: Each claim shall be linked to supporting evidence.
-        Relation references explicit claim and evidence versions (DB-OBJ-0005).
+        Raises: ObjectNotFoundError, InvalidRelationError
         """
         claim_obj = self.repo.get_by_uuid_hex(claim_uuid_hex)
         evidence_obj = self.repo.get_by_uuid_hex(evidence_uuid_hex)
-        if claim_obj is None or evidence_obj is None:
-            return False
+        if claim_obj is None:
+            raise ObjectNotFoundError(f"Claim {claim_uuid_hex} not found")
+        if evidence_obj is None:
+            raise ObjectNotFoundError(f"Evidence {evidence_uuid_hex} not found")
 
-        try:
-            self.repo.create_relation(
-                source_uuid=evidence_obj.object_uuid,
-                source_version=evidence_obj.current_version,
-                target_uuid=claim_obj.object_uuid,
-                target_version=claim_obj.current_version,
-                relation_type=link_type,
-                created_by='system',
-            )
-            self.repo.session.commit()
-            return True
-        except Exception:
-            return False
+        self.repo.create_relation(
+            source_uuid=evidence_obj.object_uuid,
+            source_version=evidence_obj.current_version,
+            target_uuid=claim_obj.object_uuid,
+            target_version=claim_obj.current_version,
+            relation_type=link_type,
+            created_by='system',
+        )
+        self.repo.session.commit()
 
     def check_evidence_coverage(self, uuid_hex: str) -> Dict[str, Any]:
-        """
-        Check if a claim has sufficient evidence for approval.
-
-        REQ-CLAIM-0006: A claim shall not be approved without at least one evidence link.
-        Uses object_relation table as source of truth.
-        """
+        """Check claim evidence coverage via object_relation."""
         obj = self.repo.get_by_uuid_hex(uuid_hex)
         if obj is None:
             return {"exists": False, "has_evidence": False}
@@ -216,3 +356,15 @@ class EvidenceService(DomainService):
     @property
     def object_type(self) -> str:
         return 'evidence'
+
+
+# ---------------------------------------------------------------------------
+# Device Service
+# ---------------------------------------------------------------------------
+
+class DeviceService(DomainService):
+    """Domain service for Device objects."""
+
+    @property
+    def object_type(self) -> str:
+        return 'device'

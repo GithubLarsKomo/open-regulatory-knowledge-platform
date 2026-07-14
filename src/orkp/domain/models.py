@@ -5,12 +5,40 @@ the generic RegulatoryObject / ObjectVersion system.
 
 Each domain model is a Pydantic BaseModel that gets serialized
 as the `payload_json` column in `object_version`.
+
+Unknown fields are rejected via ConfigDict(extra="forbid").
 """
 
-from datetime import date, datetime
+from datetime import date
 from typing import List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict, field_validator
+
+
+# ---------------------------------------------------------------------------
+# Enums / Valid sets
+# ---------------------------------------------------------------------------
+
+PRODUCT_KINDS = {
+    'assay', 'reagent', 'kit', 'instrument', 'software',
+    'accessory', 'specimen_receptacle', 'calibrator', 'control',
+}
+
+REGULATORY_STATUSES = {
+    'development', 'verification', 'validation', 'submitted',
+    'registered', 'marketed', 'discontinued',
+}
+
+EVIDENCE_TYPES = {
+    'literature_reference', 'clinical_data', 'analytical_data',
+    'scientific_validity', 'historical_data', 'standards_reference',
+    'internal_report',
+}
+
+CLAIM_TYPES = {
+    'regulatory', 'clinical', 'analytical', 'performance',
+    'safety', 'marketing',
+}
 
 
 # ---------------------------------------------------------------------------
@@ -18,29 +46,70 @@ from pydantic import BaseModel, Field
 # ---------------------------------------------------------------------------
 
 class ProductPayload(BaseModel):
-    """Payload for a Product regulatory object (REQ-PROD-0001..0007)."""
-    product_id: str = Field(..., description="Business key")
-    name: str = Field(..., description="Product name")
-    description: Optional[str] = Field(None, description="Product description")
-    intended_purpose: Optional[str] = Field(None, description="Intended purpose statement")
-    target_population: Optional[str] = Field(None, description="Target patient population")
-    basic_udi_di: Optional[str] = Field(None, description="Basic UDI-DI per EU IVDR/MDR")
-    gmdn_code: Optional[str] = Field(None, description="GMDN code")
-    ivr_code: Optional[str] = Field(None, description="IVR code (IVDR)")
-    manufacturer_name: Optional[str] = Field(None, description="Legal manufacturer")
-    manufacturer_srn: Optional[str] = Field(None, description="Manufacturer SRN number")
-    notified_body: Optional[str] = Field(None, description="Notified body reference")
-    clinical_indications: Optional[str] = Field(None, description="Clinical indications")
-    regulations: List[str] = Field(default_factory=list, description="Applicable regulations (e.g. EU 2017/746)")
+    """Payload for a Product regulatory object (REQ-PROD-0001..0017)."""
+    model_config = ConfigDict(extra="forbid")
+
+    product_id: str = Field(..., min_length=1)
+    name: str = Field(..., min_length=1)
+    product_kind: str = Field(..., description="assay|reagent|kit|instrument|software|accessory|specimen_receptacle|calibrator|control")
+    legal_manufacturer: str = Field(..., min_length=1)
+    intended_purpose: str = Field(..., min_length=1)
+    regulatory_status: str = Field(..., description="development|verification|validation|submitted|registered|marketed|discontinued")
+    description: Optional[str] = None
+    basic_udi_di: Optional[str] = None
+    emdn_code: Optional[str] = None
+    gmdn_code: Optional[str] = None
+    ivr_code: Optional[str] = None
+    manufacturer_srn: Optional[str] = None
+    notified_body_number: Optional[str] = None
+    risk_class: Optional[str] = None
+    target_population: Optional[str] = None
+    specimen_types: List[str] = []
+    clinical_indications: Optional[str] = None
+    contraindications: Optional[str] = None
+    applicable_regulations: List[str] = []
+
+    @field_validator('product_kind')
+    @classmethod
+    def _validate_kind(cls, v: str) -> str:
+        if v not in PRODUCT_KINDS:
+            raise ValueError(f"Invalid product_kind '{v}'. Must be one of: {', '.join(sorted(PRODUCT_KINDS))}")
+        return v
+
+    @field_validator('regulatory_status')
+    @classmethod
+    def _validate_status(cls, v: str) -> str:
+        if v not in REGULATORY_STATUSES:
+            raise ValueError(f"Invalid regulatory_status '{v}'. Must be one of: {', '.join(sorted(REGULATORY_STATUSES))}")
+        return v
+
+    @field_validator('applicable_regulations')
+    @classmethod
+    def _no_dup_regs(cls, v: List[str]) -> List[str]:
+        if len(v) != len(set(v)):
+            raise ValueError("applicable_regulations must not contain duplicates")
+        return v
+
+    @field_validator('specimen_types')
+    @classmethod
+    def _no_dup_specimens(cls, v: List[str]) -> List[str]:
+        if len(v) != len(set(v)):
+            raise ValueError("specimen_types must not contain duplicates")
+        return v
 
 
 class DevicePayload(BaseModel):
-    """Payload for a Device variant linked to a Product."""
-    device_id: str = Field(..., description="Business key")
-    product_uuid: str = Field(..., description="Parent product UUID hex")
-    name: str = Field(..., description="Device variant name")
-    udi_di: Optional[str] = Field(None, description="UDI-DI")
-    description: Optional[str] = Field(None, description="Device variant description")
+    """Payload for a Device variant regulatory object (REQ-PROD-0009)."""
+    model_config = ConfigDict(extra="forbid")
+
+    device_id: str = Field(..., min_length=1)
+    name: str = Field(..., min_length=1)
+    device_kind: str = Field(...)
+    udi_di: Optional[str] = None
+    catalogue_number: Optional[str] = None
+    configuration: Optional[str] = None
+    software_version: Optional[str] = None
+    market_status: Optional[str] = None
 
 
 # ---------------------------------------------------------------------------
@@ -48,21 +117,24 @@ class DevicePayload(BaseModel):
 # ---------------------------------------------------------------------------
 
 class ClaimPayload(BaseModel):
-    """Payload for a Claim regulatory object (REQ-CLAIM-0001..0006)."""
-    claim_type: str = Field(..., description="regulatory/clinical/analytical/performance/safety/marketing")
-    jurisdiction: str = Field(..., description="EU/US/UK/CH/etc.")
-    language: str = Field(..., description="ISO language code (e.g. en, de, fr)")
-    wording: str = Field(..., description="Claim text content")
-    product_uuid: Optional[str] = Field(None, description="Linked product UUID hex")
-    evidence_links: List[str] = Field(default_factory=list, description="Evidence UUIDs linked to this claim")
+    """Payload for a Claim regulatory object.
 
+    evidence_links removed — claim-evidence traceability is stored
+    exclusively through versioned object_relation rows.
+    """
+    model_config = ConfigDict(extra="forbid")
 
-class ClaimEvidenceLink(BaseModel):
-    """A link between a Claim and an Evidence item."""
-    claim_uuid: str = Field(..., description="Claim UUID hex")
-    evidence_uuid: str = Field(..., description="Evidence UUID hex")
-    link_type: str = Field(default="supports", description="supports/contradicts")
-    justification: Optional[str] = Field(None, description="Optional justification if no evidence")
+    claim_type: str = Field(..., description="regulatory|clinical|analytical|performance|safety|marketing")
+    jurisdiction: str = Field(...)
+    language: str = Field(...)
+    wording: str = Field(...)
+
+    @field_validator('claim_type')
+    @classmethod
+    def _validate_claim_type(cls, v: str) -> str:
+        if v not in CLAIM_TYPES:
+            raise ValueError(f"Invalid claim_type '{v}'. Must be one of: {', '.join(sorted(CLAIM_TYPES))}")
+        return v
 
 
 # ---------------------------------------------------------------------------
@@ -70,18 +142,33 @@ class ClaimEvidenceLink(BaseModel):
 # ---------------------------------------------------------------------------
 
 class EvidencePayload(BaseModel):
-    """Payload for an Evidence regulatory object (REQ-EVID-0001..0008)."""
+    """Payload for an Evidence regulatory object."""
+    model_config = ConfigDict(extra="forbid")
+
     evidence_type: str = Field(
-        ...,
-        description="literature_reference|clinical_data|analytical_data|scientific_validity|historical_data|standards_reference|internal_report",
+        ..., description="literature_reference|clinical_data|analytical_data|"
+        "scientific_validity|historical_data|standards_reference|internal_report"
     )
-    title: str = Field(..., description="Title of evidence")
-    source_reference: Optional[str] = Field(None, description="PMID, DOI, URL or internal ref")
-    author: Optional[str] = Field(None, description="Author or organization")
-    publication_date: Optional[date] = Field(None, description="Publication or issue date")
-    journal: Optional[str] = Field(None, description="Journal or source name")
-    version: Optional[str] = Field(None, description="Version identifier")
-    quality_rating: Optional[str] = Field(None, description="high/medium/low")
-    quality_notes: Optional[str] = Field(None, description="Assessment notes")
-    checksum: Optional[str] = Field(None, description="SHA-256 of attached file")
-    product_uuid: Optional[str] = Field(None, description="Linked product UUID hex")
+    title: str = Field(..., min_length=1)
+    source_reference: Optional[str] = None
+    author: Optional[str] = None
+    publication_date: Optional[date] = None
+    journal: Optional[str] = None
+    version: Optional[str] = None
+    quality_rating: Optional[str] = None
+    quality_notes: Optional[str] = None
+    checksum: Optional[str] = None
+
+    @field_validator('evidence_type')
+    @classmethod
+    def _validate_ev_type(cls, v: str) -> str:
+        if v not in EVIDENCE_TYPES:
+            raise ValueError(f"Invalid evidence_type '{v}'. Must be one of: {', '.join(sorted(EVIDENCE_TYPES))}")
+        return v
+
+    @field_validator('quality_rating')
+    @classmethod
+    def _validate_quality(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None and v not in {'high', 'medium', 'low'}:
+            raise ValueError("quality_rating must be 'high', 'medium' or 'low'")
+        return v

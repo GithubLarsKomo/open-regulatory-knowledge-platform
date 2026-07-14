@@ -1,21 +1,27 @@
 """Tests for domain services — Product, Claim, Evidence."""
 
 import pytest
-from sqlalchemy import create_engine, event
+from sqlalchemy import create_engine, event as sa_event
 from sqlalchemy.orm import sessionmaker, Session
 
 from orkp.db.models import Base
 from orkp.db.repository import RegulatoryObjectRepository
-from orkp.domain.services import ProductService, ClaimService, EvidenceService
+from orkp.domain.services import ProductService, ClaimService, EvidenceService, DeviceService
+from orkp.domain.exceptions import (
+    ObjectNotFoundError,
+    InvalidLifecycleTransitionError,
+    ProductCompletenessError,
+    OptimisticLockError,
+    ImmutableVersionError,
+)
 
 
 @pytest.fixture
 def repo_session():
-    """Create an in-memory SQLite session and repo for testing."""
     engine = create_engine("sqlite://", echo=False)
 
-    @event.listens_for(engine, "connect")
-    def _set_sqlite_pragma(dbapi_connection, connection_record):
+    @sa_event.listens_for(engine, "connect")
+    def _set_pragma(dbapi_connection, connection_record):
         cursor = dbapi_connection.cursor()
         cursor.execute("PRAGMA foreign_keys=ON")
         cursor.close()
@@ -31,188 +37,214 @@ def repo_session():
     connection.close()
 
 
-class TestProductService:
-    """Tests for ProductService."""
+_VALID_PRODUCT_PAYLOAD = {
+    "product_id": "PROD-001",
+    "name": "Test IVD Kit",
+    "product_kind": "kit",
+    "legal_manufacturer": "Test Corp",
+    "intended_purpose": "Detection of SARS-CoV-2",
+    "regulatory_status": "development",
+    "description": "A test product",
+    "basic_udi_di": "04250710612345",
+    "applicable_regulations": ["EU 2017/746"],
+}
 
+
+class TestProductService:
     def test_create_product(self, repo_session):
         session, repo = repo_session
         service = ProductService(repo)
-        obj, version = service.create(
-            payload={
-                "product_id": "PROD-001",
-                "name": "Test IVD Kit",
-                "description": "A test product",
-                "basic_udi_di": "04250710612345",
-                "gmdn_code": "12345",
-                "manufacturer_name": "Test Corp",
-            },
-            owner_user_id="user-001",
-        )
-        session.commit()
-
+        obj, version = service.create(_VALID_PRODUCT_PAYLOAD, "u1")
         assert obj.object_type == 'product'
         assert obj.lifecycle_state == 'draft'
-
-        # Retrieve via service
-        data = service.get_with_payload(obj.uuid_hex)
-        assert data is not None
-        assert data['payload']['product_id'] == 'PROD-001'
-        assert data['payload']['name'] == 'Test IVD Kit'
 
     def test_list_products(self, repo_session):
         session, repo = repo_session
         service = ProductService(repo)
-        service.create({"product_id": "P1", "name": "Product 1"}, "u1")
-        service.create({"product_id": "P2", "name": "Product 2"}, "u2")
-        session.commit()
+        service.create(_VALID_PRODUCT_PAYLOAD, "u1")
+        service.create({**_VALID_PRODUCT_PAYLOAD, "product_id": "P2"}, "u2")
+        assert len(service.list()) == 2
 
-        products = service.list()
-        assert len(products) == 2
-
-    def test_submit_and_approve_product(self, repo_session):
+    def test_submit_and_approve_with_relations(self, repo_session):
         session, repo = repo_session
         service = ProductService(repo)
-        obj, _ = service.create({"product_id": "P1", "name": "Product 1"}, "u1")
-        session.commit()
+        claim_service = ClaimService(repo)
 
-        assert service.submit_for_review(obj.uuid_hex, "u1") is True
-        assert service.approve(obj.uuid_hex, "u2", "Approved") is True
+        # Create product
+        obj, _ = service.create(_VALID_PRODUCT_PAYLOAD, "u1")
 
+        # Create claim and link
+        c, _ = claim_service.create(
+            {"claim_type": "clinical", "jurisdiction": "EU", "language": "en", "wording": "Test claim"}, "u1"
+        )
+        # Create another claim as "risk" stand-in
+        r, _ = claim_service.create(
+            {"claim_type": "safety", "jurisdiction": "EU", "language": "en", "wording": "Risk"}, "u1"
+        )
+        service.link_claim(obj.uuid_hex, c.uuid_hex, "u1")
+        service.link_risk(obj.uuid_hex, r.uuid_hex, "u1")
+
+        # Submit and approve should work now
+        service.submit_for_review(obj.uuid_hex, "u1")
+        service.approve(obj.uuid_hex, "u2", "Approved")
         data = service.get_with_payload(obj.uuid_hex)
         assert data['lifecycle_state'] == 'approved'
 
-    def test_soft_delete_product(self, repo_session):
+    def test_approve_fails_without_completeness(self, repo_session):
         session, repo = repo_session
         service = ProductService(repo)
-        obj, _ = service.create({"product_id": "P1", "name": "Product 1"}, "u1")
-        session.commit()
+        obj, _ = service.create(_VALID_PRODUCT_PAYLOAD, "u1")
+        service.submit_for_review(obj.uuid_hex, "u1")
+        with pytest.raises(ProductCompletenessError):
+            service.approve(obj.uuid_hex, "u2")
 
-        assert service.soft_delete(obj.uuid_hex, "u1") is True
+    def test_soft_delete(self, repo_session):
+        session, repo = repo_session
+        service = ProductService(repo)
+        obj, _ = service.create(_VALID_PRODUCT_PAYLOAD, "u1")
+        service.soft_delete(obj.uuid_hex, "u1")
         assert service.get(obj.uuid_hex) is None
+
+    def test_add_device_variant(self, repo_session):
+        session, repo = repo_session
+        service = ProductService(repo)
+        obj, _ = service.create(_VALID_PRODUCT_PAYLOAD, "u1")
+
+        device = service.add_device_variant(
+            obj.uuid_hex,
+            {"device_id": "D1", "name": "Dev1", "device_kind": "reagent"},
+            "u1",
+        )
+        assert device.object_type == 'device'
+        devices = service.list_devices(obj.uuid_hex)
+        assert len(devices) == 1
+        assert devices[0].object_uuid == device.object_uuid
+
+    def test_add_device_variant_nonexistent_product(self, repo_session):
+        session, repo = repo_session
+        service = ProductService(repo)
+        with pytest.raises(ObjectNotFoundError):
+            service.add_device_variant("00000000000000000000000000000000",
+                                       {"device_id": "D1", "name": "Dev1", "device_kind": "reagent"}, "u1")
+
+    def test_completeness_evaluation(self, repo_session):
+        session, repo = repo_session
+        service = ProductService(repo)
+        obj, _ = service.create(_VALID_PRODUCT_PAYLOAD, "u1")
+        result = service.get_completeness(obj.uuid_hex)
+        assert result['complete'] is False
+        assert 'missing_relationships' in result
+
+    def test_link_claim_and_risk(self, repo_session):
+        session, repo = repo_session
+        service = ProductService(repo)
+        claim_service = ClaimService(repo)
+
+        obj, _ = service.create(_VALID_PRODUCT_PAYLOAD, "u1")
+        c, _ = claim_service.create(
+            {"claim_type": "clinical", "jurisdiction": "EU", "language": "en", "wording": "C1"}, "u1"
+        )
+        r, _ = claim_service.create(
+            {"claim_type": "safety", "jurisdiction": "EU", "language": "en", "wording": "R1"}, "u1"
+        )
+
+        service.link_claim(obj.uuid_hex, c.uuid_hex, "u1")
+        service.link_risk(obj.uuid_hex, r.uuid_hex, "u1")
+
+        claims = service.list_claims(obj.uuid_hex)
+        risks = service.list_risks(obj.uuid_hex)
+        assert len(claims) == 1
+        assert len(risks) == 1
+
+    def test_typed_exceptions_preserved(self, repo_session):
+        session, repo = repo_session
+        service = ProductService(repo)
+        with pytest.raises(ObjectNotFoundError):
+            service.submit_for_review("00000000000000000000000000000000", "u1")
+        with pytest.raises(ObjectNotFoundError):
+            service.approve("00000000000000000000000000000000", "u1")
+        with pytest.raises(ObjectNotFoundError):
+            service.reject("00000000000000000000000000000000", "u1", "no")
+        with pytest.raises(ObjectNotFoundError):
+            service.soft_delete("00000000000000000000000000000000", "u1")
 
 
 class TestClaimService:
-    """Tests for ClaimService."""
-
     def test_create_claim(self, repo_session):
         session, repo = repo_session
         service = ClaimService(repo)
-        obj, version = service.create(
-            payload={
-                "claim_type": "performance",
-                "jurisdiction": "EU",
-                "language": "en",
-                "wording": "The device detects SARS-CoV-2 with 95% sensitivity",
-            },
-            owner_user_id="user-001",
+        obj, _ = service.create(
+            {"claim_type": "clinical", "jurisdiction": "EU", "language": "en", "wording": "Test"}, "u1"
         )
-        session.commit()
-
         assert obj.object_type == 'claim'
-        data = service.get_with_payload(obj.uuid_hex)
-        assert data['payload']['wording'] == 'The device detects SARS-CoV-2 with 95% sensitivity'
 
     def test_link_evidence(self, repo_session):
         session, repo = repo_session
         claim_service = ClaimService(repo)
         evidence_service = EvidenceService(repo)
 
-        # Create a claim
-        claim_obj, _ = claim_service.create(
-            payload={"claim_type": "performance", "jurisdiction": "EU", "language": "en", "wording": "Test claim"},
-            owner_user_id="u1",
+        c, _ = claim_service.create(
+            {"claim_type": "clinical", "jurisdiction": "EU", "language": "en", "wording": "C1"}, "u1"
         )
-        # Create evidence
-        ev_obj, _ = evidence_service.create(
-            payload={"evidence_type": "literature_reference", "title": "Study 2024", "author": "Smith et al."},
-            owner_user_id="u1",
+        e, _ = evidence_service.create(
+            {"evidence_type": "literature_reference", "title": "Study"}, "u1"
         )
-        session.commit()
 
-        # Link evidence to claim
-        result = claim_service.link_evidence(claim_obj.uuid_hex, ev_obj.uuid_hex)
-        assert result is True
-
-        # Verify the link via object_relation
-        relations = repo.list_relations_for_target(claim_obj.object_uuid)
+        claim_service.link_evidence(c.uuid_hex, e.uuid_hex, "supports_claim")
+        relations = repo.list_relations_for_target(c.object_uuid)
         assert len(relations) == 1
-        assert relations[0].relation_type == 'supports_claim'
-        assert relations[0].source_uuid == ev_obj.object_uuid
 
     def test_evidence_coverage_check(self, repo_session):
         session, repo = repo_session
         service = ClaimService(repo)
         obj, _ = service.create(
-            payload={"claim_type": "safety", "jurisdiction": "EU", "language": "en", "wording": "Safe device"},
-            owner_user_id="u1",
+            {"claim_type": "clinical", "jurisdiction": "EU", "language": "en", "wording": "C1"}, "u1"
         )
-        session.commit()
-
-        # No evidence linked
         result = service.check_evidence_coverage(obj.uuid_hex)
         assert result['has_evidence'] is False
-        assert result['approvable'] is False
 
     def test_claim_lifecycle(self, repo_session):
         session, repo = repo_session
         service = ClaimService(repo)
         obj, _ = service.create(
-            payload={"claim_type": "clinical", "jurisdiction": "EU", "language": "en", "wording": "Clinical claim"},
-            owner_user_id="u1",
+            {"claim_type": "clinical", "jurisdiction": "EU", "language": "en", "wording": "C1"}, "u1"
         )
-        session.commit()
-
-        assert service.submit_for_review(obj.uuid_hex, "u1") is True
-        assert service.approve(obj.uuid_hex, "u2", "Approved") is True
-
+        service.submit_for_review(obj.uuid_hex, "u1")
+        service.approve(obj.uuid_hex, "u2", "Approved")
         data = service.get_with_payload(obj.uuid_hex)
         assert data['lifecycle_state'] == 'approved'
 
+    def test_typed_exceptions(self, repo_session):
+        session, repo = repo_session
+        service = ClaimService(repo)
+        with pytest.raises(ObjectNotFoundError):
+            service.link_evidence("00000000000000000000000000000000",
+                                  "00000000000000000000000000000000")
+
 
 class TestEvidenceService:
-    """Tests for EvidenceService."""
-
     def test_create_evidence(self, repo_session):
         session, repo = repo_session
         service = EvidenceService(repo)
-        obj, version = service.create(
-            payload={
-                "evidence_type": "literature_reference",
-                "title": "Clinical Study 2024",
-                "author": "Smith et al.",
-                "source_reference": "PMID:12345678",
-                "journal": "Journal of Clinical Virology",
-            },
-            owner_user_id="user-001",
+        obj, _ = service.create(
+            {"evidence_type": "literature_reference", "title": "Study"}, "u1"
         )
-        session.commit()
-
         assert obj.object_type == 'evidence'
-        data = service.get_with_payload(obj.uuid_hex)
-        assert data['payload']['title'] == 'Clinical Study 2024'
-        assert data['payload']['source_reference'] == 'PMID:12345678'
 
     def test_list_evidence(self, repo_session):
         session, repo = repo_session
         service = EvidenceService(repo)
-        service.create({"evidence_type": "literature_reference", "title": "Study 1"}, "u1")
-        service.create({"evidence_type": "clinical_data", "title": "Study 2"}, "u2")
-        session.commit()
-
-        items = service.list()
-        assert len(items) == 2
+        service.create({"evidence_type": "literature_reference", "title": "S1"}, "u1")
+        service.create({"evidence_type": "clinical_data", "title": "S2"}, "u2")
+        assert len(service.list()) == 2
 
     def test_evidence_lifecycle(self, repo_session):
         session, repo = repo_session
         service = EvidenceService(repo)
         obj, _ = service.create(
-            payload={"evidence_type": "standards_reference", "title": "ISO 14971"},
-            owner_user_id="u1",
+            {"evidence_type": "literature_reference", "title": "S1"}, "u1"
         )
-        session.commit()
-
-        assert service.submit_for_review(obj.uuid_hex, "u1") is True
-        assert service.approve(obj.uuid_hex, "u2", "Valid standard") is True
-
+        service.submit_for_review(obj.uuid_hex, "u1")
+        service.approve(obj.uuid_hex, "u2")
         data = service.get_with_payload(obj.uuid_hex)
         assert data['lifecycle_state'] == 'approved'

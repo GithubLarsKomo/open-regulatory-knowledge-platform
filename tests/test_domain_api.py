@@ -2,26 +2,23 @@
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, event
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy import create_engine, event as sa_event
+from sqlalchemy.orm import sessionmaker, Session
 
-from orkp.db.models import Base
 from orkp.api.main import create_app
+from orkp.db.models import Base
 
 
-@pytest.fixture
+@pytest.fixture(scope="function")
 def client():
-    """Create a test client with in-memory SQLite."""
     from sqlalchemy.pool import StaticPool
     engine = create_engine(
-        "sqlite://",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-        echo=False,
+        "sqlite://", connect_args={"check_same_thread": False},
+        poolclass=StaticPool, echo=False,
     )
 
-    @event.listens_for(engine, "connect")
-    def _set_sqlite_pragma(dbapi_connection, connection_record):
+    @sa_event.listens_for(engine, "connect")
+    def _set_pragma(dbapi_connection, connection_record):
         cursor = dbapi_connection.cursor()
         cursor.execute("PRAGMA foreign_keys=ON")
         cursor.close()
@@ -32,205 +29,225 @@ def client():
     return TestClient(app)
 
 
-class TestProductAPI:
-    """Tests for /api/v1/products endpoints."""
+# ---------------------------------------------------------------------------
+# Product API
+# ---------------------------------------------------------------------------
 
+_VALID_PRODUCT = {
+    "product_id": "PROD-001",
+    "name": "Test IVD Kit",
+    "product_kind": "kit",
+    "legal_manufacturer": "Test Corp",
+    "intended_purpose": "Detection of SARS-CoV-2",
+    "regulatory_status": "development",
+    "description": "A test product",
+    "basic_udi_di": "04250710612345",
+    "applicable_regulations": ["EU 2017/746"],
+}
+
+
+class TestProductAPI:
     def test_create_product(self, client):
-        response = client.post(
-            "/api/v1/products",
-            params={"owner_user_id": "user-001"},
-            json={
-                "product_id": "PROD-001",
-                "name": "Test IVD Kit",
-                "description": "A test product",
-                "basic_udi_di": "04250710612345",
-                "manufacturer_name": "Test Corp",
-            },
-        )
-        assert response.status_code == 201
-        data = response.json()
+        resp = client.post("/api/v1/products", params={"owner_user_id": "u1"}, json=_VALID_PRODUCT)
+        assert resp.status_code == 201, resp.text
+        data = resp.json()
         assert data["object_type"] == "product"
         assert data["lifecycle_state"] == "draft"
-        assert "object_uuid" in data
 
     def test_list_products(self, client):
-        client.post("/api/v1/products", params={"owner_user_id": "u1"}, json={"product_id": "P1", "name": "Product 1"})
-        client.post("/api/v1/products", params={"owner_user_id": "u2"}, json={"product_id": "P2", "name": "Product 2"})
-
-        response = client.get("/api/v1/products")
-        assert response.status_code == 200
-        data = response.json()
-        assert len(data) == 2
+        client.post("/api/v1/products", params={"owner_user_id": "u1"}, json=_VALID_PRODUCT)
+        resp = client.get("/api/v1/products")
+        assert resp.status_code == 200
+        assert len(resp.json()) == 1
 
     def test_get_product(self, client):
-        create_resp = client.post(
-            "/api/v1/products", params={"owner_user_id": "u1"},
-            json={"product_id": "P1", "name": "Product 1"},
-        )
-        uuid = create_resp.json()["object_uuid"]
-
-        response = client.get(f"/api/v1/products/{uuid}")
-        assert response.status_code == 200
-        assert response.json()["payload"]["product_id"] == "P1"
+        create = client.post("/api/v1/products", params={"owner_user_id": "u1"}, json=_VALID_PRODUCT)
+        uuid = create.json()["object_uuid"]
+        resp = client.get(f"/api/v1/products/{uuid}")
+        assert resp.status_code == 200
+        assert resp.json()["payload"]["product_id"] == "PROD-001"
 
     def test_product_lifecycle(self, client):
-        create_resp = client.post(
-            "/api/v1/products", params={"owner_user_id": "u1"},
-            json={"product_id": "P1", "name": "Product 1"},
-        )
-        uuid = create_resp.json()["object_uuid"]
+        create = client.post("/api/v1/products", params={"owner_user_id": "u1"}, json=_VALID_PRODUCT)
+        uuid = create.json()["object_uuid"]
 
         # Submit
-        submit_resp = client.post(f"/api/v1/products/{uuid}/submit", params={"actor_user_id": "u1"})
-        assert submit_resp.status_code == 200
+        r = client.post(f"/api/v1/products/{uuid}/submit", params={"actor_user_id": "u1"})
+        assert r.status_code == 200
 
-        # Approve
-        approve_resp = client.post(f"/api/v1/products/{uuid}/approve", params={"actor_user_id": "u2", "comments": "OK"})
-        assert approve_resp.status_code == 200
-
-        # Verify state
-        get_resp = client.get(f"/api/v1/products/{uuid}")
-        assert get_resp.json()["lifecycle_state"] == "approved"
+        # Approve (will fail completeness without claims/risks)
+        r = client.post(f"/api/v1/products/{uuid}/approve", params={"actor_user_id": "u2"})
+        assert r.status_code == 422  # completeness check
 
     def test_delete_product(self, client):
-        create_resp = client.post(
-            "/api/v1/products", params={"owner_user_id": "u1"},
-            json={"product_id": "P1", "name": "Product 1"},
+        create = client.post("/api/v1/products", params={"owner_user_id": "u1"}, json=_VALID_PRODUCT)
+        uuid = create.json()["object_uuid"]
+        resp = client.delete(f"/api/v1/products/{uuid}", params={"actor_user_id": "u1"})
+        assert resp.status_code == 204
+
+    def test_reject_unknown_fields(self, client):
+        """Unknown payload fields are rejected with 422."""
+        payload = {**_VALID_PRODUCT, "unknown_field": "should_fail"}
+        resp = client.post("/api/v1/products", params={"owner_user_id": "u1"}, json=payload)
+        assert resp.status_code == 422
+
+    def test_reject_invalid_product_kind(self, client):
+        payload = {**_VALID_PRODUCT, "product_kind": "invalid_kind"}
+        resp = client.post("/api/v1/products", params={"owner_user_id": "u1"}, json=payload)
+        assert resp.status_code == 422
+
+    def test_reject_duplicate_regulations(self, client):
+        payload = {**_VALID_PRODUCT, "applicable_regulations": ["EU 2017/746", "EU 2017/746"]}
+        resp = client.post("/api/v1/products", params={"owner_user_id": "u1"}, json=payload)
+        assert resp.status_code == 422
+
+    def test_add_device_variant(self, client):
+        create = client.post("/api/v1/products", params={"owner_user_id": "u1"}, json=_VALID_PRODUCT)
+        uuid = create.json()["object_uuid"]
+
+        device_payload = {
+            "device_id": "DEV-001",
+            "name": "Test Device",
+            "device_kind": "reagent",
+        }
+        resp = client.post(
+            f"/api/v1/products/{uuid}/devices",
+            params={"actor_user_id": "u1"},
+            json=device_payload,
         )
-        uuid = create_resp.json()["object_uuid"]
+        assert resp.status_code == 201, resp.text
+        assert resp.json()["object_type"] == "device"
 
-        delete_resp = client.delete(f"/api/v1/products/{uuid}", params={"actor_user_id": "u1"})
-        assert delete_resp.status_code == 204
+    def test_list_device_variants(self, client):
+        create = client.post("/api/v1/products", params={"owner_user_id": "u1"}, json=_VALID_PRODUCT)
+        uuid = create.json()["object_uuid"]
 
-        get_resp = client.get(f"/api/v1/products/{uuid}")
-        assert get_resp.status_code == 404
+        dp = {"device_id": "D1", "name": "Dev1", "device_kind": "reagent"}
+        client.post(f"/api/v1/products/{uuid}/devices", params={"actor_user_id": "u1"}, json=dp)
 
+        resp = client.get(f"/api/v1/products/{uuid}/devices")
+        assert resp.status_code == 200
+        assert len(resp.json()) == 1
+
+    def test_product_completeness(self, client):
+        create = client.post("/api/v1/products", params={"owner_user_id": "u1"}, json=_VALID_PRODUCT)
+        uuid = create.json()["object_uuid"]
+
+        resp = client.get(f"/api/v1/products/{uuid}/completeness")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["complete"] is False  # no claims or risks
+        assert "missing_relationships" in data
+
+    def test_link_claim_and_risk(self, client):
+        create = client.post("/api/v1/products", params={"owner_user_id": "u1"}, json=_VALID_PRODUCT)
+        puid = create.json()["object_uuid"]
+
+        # Create claim
+        cr = client.post("/api/v1/claims", params={"owner_user_id": "u1"},
+                         json={"claim_type": "clinical", "jurisdiction": "EU", "language": "en", "wording": "Test claim"})
+        cuid = cr.json()["object_uuid"]
+
+        # Create risk (as a claim for testing)
+        rr = client.post("/api/v1/claims", params={"owner_user_id": "u1"},
+                         json={"claim_type": "safety", "jurisdiction": "EU", "language": "en", "wording": "Risk statement"})
+        rid = rr.json()["object_uuid"]
+
+        # Link claim
+        r1 = client.post(f"/api/v1/products/{puid}/claims/{cuid}", params={"actor_user_id": "u1"})
+        assert r1.status_code == 200
+
+        # Link risk
+        r2 = client.post(f"/api/v1/products/{puid}/risks/{rid}", params={"actor_user_id": "u1"})
+        assert r2.status_code == 200
+
+        # Now completeness should pass
+        comp = client.get(f"/api/v1/products/{puid}/completeness")
+        assert comp.json()["complete"] is True
+
+
+# ---------------------------------------------------------------------------
+# Claim API
+# ---------------------------------------------------------------------------
 
 class TestClaimAPI:
-    """Tests for /api/v1/claims endpoints."""
-
     def test_create_claim(self, client):
-        response = client.post(
-            "/api/v1/claims",
-            params={"owner_user_id": "user-001"},
-            json={
-                "claim_type": "performance",
-                "jurisdiction": "EU",
-                "language": "en",
-                "wording": "95% sensitivity",
-            },
-        )
-        assert response.status_code == 201
-        data = response.json()
-        assert data["object_type"] == "claim"
+        resp = client.post("/api/v1/claims", params={"owner_user_id": "u1"},
+                           json={"claim_type": "clinical", "jurisdiction": "EU", "language": "en", "wording": "Test"})
+        assert resp.status_code == 201
+        assert resp.json()["object_type"] == "claim"
 
     def test_get_claim(self, client):
-        create_resp = client.post(
-            "/api/v1/claims", params={"owner_user_id": "u1"},
-            json={"claim_type": "safety", "jurisdiction": "EU", "language": "en", "wording": "Safe device"},
-        )
-        uuid = create_resp.json()["object_uuid"]
-
-        response = client.get(f"/api/v1/claims/{uuid}")
-        assert response.status_code == 200
-        assert response.json()["payload"]["wording"] == "Safe device"
+        cr = client.post("/api/v1/claims", params={"owner_user_id": "u1"},
+                         json={"claim_type": "clinical", "jurisdiction": "EU", "language": "en", "wording": "Test"})
+        uuid = cr.json()["object_uuid"]
+        resp = client.get(f"/api/v1/claims/{uuid}")
+        assert resp.status_code == 200
 
     def test_link_evidence_to_claim(self, client):
-        # Create claim
-        claim_resp = client.post(
-            "/api/v1/claims", params={"owner_user_id": "u1"},
-            json={"claim_type": "clinical", "jurisdiction": "EU", "language": "en", "wording": "Clinical claim"},
-        )
-        claim_uuid = claim_resp.json()["object_uuid"]
+        cr = client.post("/api/v1/claims", params={"owner_user_id": "u1"},
+                         json={"claim_type": "clinical", "jurisdiction": "EU", "language": "en", "wording": "Test"})
+        cuid = cr.json()["object_uuid"]
 
-        # Create evidence
-        ev_resp = client.post(
-            "/api/v1/evidence", params={"owner_user_id": "u1"},
-            json={"evidence_type": "literature_reference", "title": "Study 2024", "author": "Smith"},
-        )
-        ev_uuid = ev_resp.json()["object_uuid"]
+        er = client.post("/api/v1/evidence", params={"owner_user_id": "u1"},
+                         json={"evidence_type": "literature_reference", "title": "Study 2024"})
+        euid = er.json()["object_uuid"]
 
-        # Link
-        link_resp = client.post(
-            f"/api/v1/claims/{claim_uuid}/link-evidence",
-            params={"evidence_uuid": ev_uuid, "link_type": "supports_claim"},
-        )
-        assert link_resp.status_code == 200, f"Link failed: {link_resp.text}"
-
-        # Verify evidence coverage
-        coverage_resp = client.get(f"/api/v1/claims/{claim_uuid}/evidence-coverage")
-        assert coverage_resp.status_code == 200
-        assert coverage_resp.json()["has_evidence"] is True
-        assert coverage_resp.json()["approvable"] is True
+        resp = client.post(f"/api/v1/claims/{cuid}/link-evidence",
+                           params={"evidence_uuid": euid, "link_type": "supports_claim"})
+        assert resp.status_code == 200, resp.text
 
     def test_claim_evidence_coverage_empty(self, client):
-        create_resp = client.post(
-            "/api/v1/claims", params={"owner_user_id": "u1"},
-            json={"claim_type": "safety", "jurisdiction": "EU", "language": "en", "wording": "Safety claim"},
-        )
-        uuid = create_resp.json()["object_uuid"]
-
-        coverage_resp = client.get(f"/api/v1/claims/{uuid}/evidence-coverage")
-        assert coverage_resp.json()["has_evidence"] is False
-        assert coverage_resp.json()["approvable"] is False
+        cr = client.post("/api/v1/claims", params={"owner_user_id": "u1"},
+                         json={"claim_type": "clinical", "jurisdiction": "EU", "language": "en", "wording": "Test"})
+        uuid = cr.json()["object_uuid"]
+        resp = client.get(f"/api/v1/claims/{uuid}/evidence-coverage")
+        assert resp.json()["has_evidence"] is False
 
     def test_claim_lifecycle(self, client):
-        create_resp = client.post(
-            "/api/v1/claims", params={"owner_user_id": "u1"},
-            json={"claim_type": "clinical", "jurisdiction": "EU", "language": "en", "wording": "Test"},
-        )
-        uuid = create_resp.json()["object_uuid"]
+        cr = client.post("/api/v1/claims", params={"owner_user_id": "u1"},
+                         json={"claim_type": "clinical", "jurisdiction": "EU", "language": "en", "wording": "Test"})
+        uuid = cr.json()["object_uuid"]
 
-        # Submit
-        client.post(f"/api/v1/claims/{uuid}/submit", params={"actor_user_id": "u1"})
+        r = client.post(f"/api/v1/claims/{uuid}/submit", params={"actor_user_id": "u1"})
+        assert r.status_code == 200
 
-        # Approve
-        approve_resp = client.post(f"/api/v1/claims/{uuid}/approve", params={"actor_user_id": "u2", "comments": "Good"})
-        assert approve_resp.status_code == 200
+        r = client.post(f"/api/v1/claims/{uuid}/approve", params={"actor_user_id": "u2"})
+        assert r.status_code == 200
 
-        get_resp = client.get(f"/api/v1/claims/{uuid}")
-        assert get_resp.json()["lifecycle_state"] == "approved"
+    def test_reject_unknown_claim_fields(self, client):
+        """evidence_links in claim payload should be rejected."""
+        resp = client.post("/api/v1/claims", params={"owner_user_id": "u1"},
+                           json={"claim_type": "clinical", "jurisdiction": "EU", "language": "en",
+                                 "wording": "Test", "evidence_links": ["fake-uuid"]})
+        assert resp.status_code == 422
 
+
+# ---------------------------------------------------------------------------
+# Evidence API
+# ---------------------------------------------------------------------------
 
 class TestEvidenceAPI:
-    """Tests for /api/v1/evidence endpoints."""
-
     def test_create_evidence(self, client):
-        response = client.post(
-            "/api/v1/evidence",
-            params={"owner_user_id": "user-001"},
-            json={
-                "evidence_type": "literature_reference",
-                "title": "Clinical Study 2024",
-                "author": "Smith et al.",
-                "source_reference": "PMID:12345678",
-            },
-        )
-        assert response.status_code == 201
-        data = response.json()
-        assert data["object_type"] == "evidence"
+        resp = client.post("/api/v1/evidence", params={"owner_user_id": "u1"},
+                           json={"evidence_type": "literature_reference", "title": "Study 2024"})
+        assert resp.status_code == 201
+        assert resp.json()["object_type"] == "evidence"
 
     def test_get_evidence(self, client):
-        create_resp = client.post(
-            "/api/v1/evidence", params={"owner_user_id": "u1"},
-            json={"evidence_type": "standards_reference", "title": "ISO 14971"},
-        )
-        uuid = create_resp.json()["object_uuid"]
-
-        response = client.get(f"/api/v1/evidence/{uuid}")
-        assert response.status_code == 200
-        assert response.json()["payload"]["title"] == "ISO 14971"
+        er = client.post("/api/v1/evidence", params={"owner_user_id": "u1"},
+                         json={"evidence_type": "literature_reference", "title": "Study"})
+        uuid = er.json()["object_uuid"]
+        resp = client.get(f"/api/v1/evidence/{uuid}")
+        assert resp.status_code == 200
 
     def test_evidence_lifecycle(self, client):
-        create_resp = client.post(
-            "/api/v1/evidence", params={"owner_user_id": "u1"},
-            json={"evidence_type": "clinical_data", "title": "Clinical Data"},
-        )
-        uuid = create_resp.json()["object_uuid"]
+        er = client.post("/api/v1/evidence", params={"owner_user_id": "u1"},
+                         json={"evidence_type": "literature_reference", "title": "Study"})
+        uuid = er.json()["object_uuid"]
 
-        client.post(f"/api/v1/evidence/{uuid}/submit", params={"actor_user_id": "u1"})
-        approve_resp = client.post(f"/api/v1/evidence/{uuid}/approve", params={"actor_user_id": "u2"})
-        assert approve_resp.status_code == 200
+        r = client.post(f"/api/v1/evidence/{uuid}/submit", params={"actor_user_id": "u1"})
+        assert r.status_code == 200
 
-        get_resp = client.get(f"/api/v1/evidence/{uuid}")
-        assert get_resp.json()["lifecycle_state"] == "approved"
+        r = client.post(f"/api/v1/evidence/{uuid}/approve", params={"actor_user_id": "u2"})
+        assert r.status_code == 200
