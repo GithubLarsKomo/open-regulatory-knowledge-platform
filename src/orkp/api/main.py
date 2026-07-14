@@ -27,8 +27,18 @@ from orkp.api.schemas import (
     StateTransitionRequest,
 )
 from orkp.db.repository import RegulatoryObjectRepository
+from orkp.db.models import _bin_to_str
 from orkp.db.session import create_engine_from_config, create_session_factory, get_session
 from orkp.config import load_config
+from orkp.domain.exceptions import (
+    ObjectNotFoundError,
+    ImmutableVersionError,
+    OptimisticLockError,
+    InvalidLifecycleTransitionError,
+    InvalidRelationError,
+    BaselineValidationError,
+    ORKPError,
+)
 from orkp.api.routers import create_product_router, create_claim_router, create_evidence_router
 
 # ---------------------------------------------------------------------------
@@ -82,6 +92,13 @@ def create_app(session_factory_override=None) -> FastAPI:
         return JSONResponse(
             status_code=exc.status_code,
             content=ErrorResponse(detail=exc.detail).model_dump(),
+        )
+
+    @app.exception_handler(ORKPError)
+    async def orkp_exception_handler(request, exc: ORKPError):
+        return JSONResponse(
+            status_code=exc.status_code,
+            content=ErrorResponse(detail=exc.message).model_dump(),
         )
 
     # ------------------------------------------------------------------
@@ -288,17 +305,17 @@ def create_app(session_factory_override=None) -> FastAPI:
                 detail=f"Object {object_uuid} not found",
             )
 
-        success = repo.transition_state(
-            object_uuid=obj.object_uuid,
-            new_state=body.new_state,
-            actor_user_id=body.actor_user_id,
-            comments=body.comments,
-        )
-        if not success:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=f"Cannot transition from '{obj.lifecycle_state}' to '{body.new_state}'",
+        try:
+            repo.transition_state(
+                object_uuid=obj.object_uuid,
+                new_state=body.new_state,
+                actor_user_id=body.actor_user_id,
+                comments=body.comments,
             )
+        except InvalidLifecycleTransitionError as e:
+            raise HTTPException(status_code=409, detail=e.message)
+        except OptimisticLockError as e:
+            raise HTTPException(status_code=409, detail=e.message)
 
         repo.session.commit()
         obj = repo.get_by_uuid(obj.object_uuid)  # refresh
@@ -337,9 +354,9 @@ def create_app(session_factory_override=None) -> FastAPI:
         events = repo.get_event_history(obj.object_uuid, limit=limit)
         return [
             EventLogResponse(
-                event_id=e.event_id,
-                object_uuid=_bin_to_str(e.object_uuid),
-                object_type=e.object_type,
+                event_uuid=_bin_to_str(e.event_uuid),
+                aggregate_type=e.aggregate_type,
+                aggregate_uuid=_bin_to_str(e.aggregate_uuid),
                 event_type=e.event_type,
                 event_data=e.event_data,
                 event_timestamp=e.event_timestamp,
@@ -370,15 +387,12 @@ def create_app(session_factory_override=None) -> FastAPI:
                 detail=f"Object {object_uuid} not found",
             )
 
-        success = repo.soft_delete(obj.object_uuid, actor_user_id)
-        if not success:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="Could not delete object",
-            )
+        try:
+            repo.soft_delete(obj.object_uuid, actor_user_id)
+        except (InvalidLifecycleTransitionError, OptimisticLockError) as e:
+            raise HTTPException(status_code=409, detail=e.message)
 
         repo.session.commit()
-        return None
 
     # ------------------------------------------------------------------
     # Mount domain-specific routers

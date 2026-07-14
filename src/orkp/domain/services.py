@@ -2,8 +2,14 @@
 
 from typing import Any, Dict, List, Optional, Tuple
 
-from orkp.db.models import RegulatoryObject
+from orkp.db.models import RegulatoryObject, _bin_to_str
 from orkp.db.repository import RegulatoryObjectRepository
+from orkp.domain.exceptions import (
+    ObjectNotFoundError,
+    InvalidLifecycleTransitionError,
+    ImmutableVersionError,
+    OptimisticLockError,
+)
 
 
 class DomainService:
@@ -46,6 +52,7 @@ class DomainService:
             "object_uuid": obj.uuid_hex,
             "object_type": obj.object_type,
             "current_version": obj.current_version,
+            "lock_version": obj.lock_version,
             "lifecycle_state": obj.lifecycle_state,
             "owner_user_id": obj.owner_user_id,
             "created_at": obj.created_at.isoformat() if obj.created_at else None,
@@ -66,51 +73,60 @@ class DomainService:
         obj = self.repo.get_by_uuid_hex(uuid_hex)
         if obj is None:
             return None
-        version = self.repo.create_version(obj.object_uuid, payload, created_by)
-        if version is None:
+        try:
+            version = self.repo.create_version(obj.object_uuid, payload, created_by)
+        except (ImmutableVersionError, OptimisticLockError):
             return None
         self.repo.session.commit()
         return self.get_with_payload(uuid_hex)
 
     def submit_for_review(self, uuid_hex: str, actor_user_id: str) -> bool:
         """Submit a draft object for review."""
-        obj = self.repo.get_by_uuid_hex(uuid_hex)
-        if obj is None:
-            return False
-        result = self.repo.transition_state(obj.object_uuid, 'in_review', actor_user_id)
-        if result:
+        try:
+            obj = self.repo.get_by_uuid_hex(uuid_hex)
+            if obj is None:
+                return False
+            self.repo.transition_state(obj.object_uuid, 'in_review', actor_user_id)
             self.repo.session.commit()
-        return result
+            return True
+        except (ObjectNotFoundError, InvalidLifecycleTransitionError, OptimisticLockError):
+            return False
 
     def approve(self, uuid_hex: str, approver_user_id: str, comments: Optional[str] = None) -> bool:
         """Approve an in-review object."""
-        obj = self.repo.get_by_uuid_hex(uuid_hex)
-        if obj is None:
-            return False
-        result = self.repo.transition_state(obj.object_uuid, 'approved', approver_user_id, comments)
-        if result:
+        try:
+            obj = self.repo.get_by_uuid_hex(uuid_hex)
+            if obj is None:
+                return False
+            self.repo.transition_state(obj.object_uuid, 'approved', approver_user_id, comments)
             self.repo.session.commit()
-        return result
+            return True
+        except (ObjectNotFoundError, InvalidLifecycleTransitionError, OptimisticLockError):
+            return False
 
     def reject(self, uuid_hex: str, reviewer_user_id: str, comments: str) -> bool:
         """Reject an in-review object with comments."""
-        obj = self.repo.get_by_uuid_hex(uuid_hex)
-        if obj is None:
-            return False
-        result = self.repo.transition_state(obj.object_uuid, 'rejected', reviewer_user_id, comments)
-        if result:
+        try:
+            obj = self.repo.get_by_uuid_hex(uuid_hex)
+            if obj is None:
+                return False
+            self.repo.transition_state(obj.object_uuid, 'rejected', reviewer_user_id, comments)
             self.repo.session.commit()
-        return result
+            return True
+        except (ObjectNotFoundError, InvalidLifecycleTransitionError, OptimisticLockError):
+            return False
 
     def soft_delete(self, uuid_hex: str, actor_user_id: str) -> bool:
         """Soft-delete a domain object."""
-        obj = self.repo.get_by_uuid_hex(uuid_hex)
-        if obj is None:
-            return False
-        result = self.repo.soft_delete(obj.object_uuid, actor_user_id)
-        if result:
+        try:
+            obj = self.repo.get_by_uuid_hex(uuid_hex)
+            if obj is None:
+                return False
+            self.repo.soft_delete(obj.object_uuid, actor_user_id)
             self.repo.session.commit()
-        return result
+            return True
+        except (ObjectNotFoundError, InvalidLifecycleTransitionError, OptimisticLockError):
+            return False
 
 
 # ---------------------------------------------------------------------------
@@ -136,47 +152,55 @@ class ClaimService(DomainService):
     def object_type(self) -> str:
         return 'claim'
 
-    def link_evidence(self, claim_uuid_hex: str, evidence_uuid_hex: str, link_type: str = 'supports') -> bool:
+    def link_evidence(
+        self,
+        claim_uuid_hex: str,
+        evidence_uuid_hex: str,
+        link_type: str = 'supports_claim',
+    ) -> bool:
         """
-        Link evidence to a claim by adding the evidence UUID to the claim's payload.
+        Link evidence to a claim using object_relation.
 
         REQ-CLAIM-0003: Each claim shall be linked to supporting evidence.
+        Relation references explicit claim and evidence versions (DB-OBJ-0005).
         """
-        claim_data = self.get_with_payload(claim_uuid_hex)
-        if claim_data is None:
+        claim_obj = self.repo.get_by_uuid_hex(claim_uuid_hex)
+        evidence_obj = self.repo.get_by_uuid_hex(evidence_uuid_hex)
+        if claim_obj is None or evidence_obj is None:
             return False
 
-        payload = claim_data['payload']
-        evidence_links = payload.get('evidence_links', [])
-        if evidence_uuid_hex not in evidence_links:
-            evidence_links.append(evidence_uuid_hex)
-            payload['evidence_links'] = evidence_links
-
-        result = self.update_payload(
-            claim_uuid_hex,
-            payload,
-            created_by=claim_data['owner_user_id'] or 'system',
-        )
-        return result is not None
+        try:
+            self.repo.create_relation(
+                source_uuid=evidence_obj.object_uuid,
+                source_version=evidence_obj.current_version,
+                target_uuid=claim_obj.object_uuid,
+                target_version=claim_obj.current_version,
+                relation_type=link_type,
+                created_by='system',
+            )
+            self.repo.session.commit()
+            return True
+        except Exception:
+            return False
 
     def check_evidence_coverage(self, uuid_hex: str) -> Dict[str, Any]:
         """
         Check if a claim has sufficient evidence for approval.
 
         REQ-CLAIM-0006: A claim shall not be approved without at least one evidence link.
+        Uses object_relation table as source of truth.
         """
-        claim_data = self.get_with_payload(uuid_hex)
-        if claim_data is None:
+        obj = self.repo.get_by_uuid_hex(uuid_hex)
+        if obj is None:
             return {"exists": False, "has_evidence": False}
 
-        payload = claim_data['payload']
-        evidence_links = payload.get('evidence_links', [])
-        has_evidence = len(evidence_links) > 0
+        relations = self.repo.list_relations_for_target(obj.object_uuid)
+        has_evidence = len(relations) > 0
 
         return {
             "exists": True,
             "has_evidence": has_evidence,
-            "evidence_count": len(evidence_links),
+            "evidence_count": len(relations),
             "approvable": has_evidence,
             "reason": None if has_evidence else "No evidence linked to this claim",
         }

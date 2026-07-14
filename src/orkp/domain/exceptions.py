@@ -1,0 +1,53 @@
+"""
+Typed domain exceptions for ORKP.
+
+Expected business failures use typed exceptions rather than None/False returns.
+API handlers map these to appropriate HTTP status codes.
+"""
+
+
+class ORKPError(Exception):
+    """Base exception for all ORKP domain errors."""
+    status_code: int = 500
+    message: str = "Internal server error"
+
+    def __init__(self, message: str | None = None):
+        if message:
+            self.message = message
+        super().__init__(self.message)
+
+
+class ObjectNotFoundError(ORKPError):
+    """Raised when a regulatory object is not found."""
+    status_code = 404
+    message = "Object not found"
+
+
+class InvalidLifecycleTransitionError(ORKPError):
+    """Raised when a lifecycle state transition is not allowed."""
+    status_code = 409
+    message = "Invalid lifecycle transition"
+
+
+class ImmutableVersionError(ORKPError):
+    """Raised when attempting to modify an approved/immutable version."""
+    status_code = 409
+    message = "Version is immutable after approval"
+
+
+class OptimisticLockError(ORKPError):
+    """Raised when a concurrent modification is detected."""
+    status_code = 409
+    message = "Concurrent modification detected; retry the operation"
+
+
+class InvalidRelationError(ORKPError):
+    """Raised when an object relation is invalid."""
+    status_code = 422
+    message = "Invalid object relation"
+
+
+class BaselineValidationError(ORKPError):
+    """Raised when baseline creation fails validation."""
+    status_code = 422
+    message = "Baseline validation failed"

@@ -133,9 +133,11 @@ class TestClaimService:
         result = claim_service.link_evidence(claim_obj.uuid_hex, ev_obj.uuid_hex)
         assert result is True
 
-        # Verify the link
-        data = claim_service.get_with_payload(claim_obj.uuid_hex)
-        assert ev_obj.uuid_hex in data['payload']['evidence_links']
+        # Verify the link via object_relation
+        relations = repo.list_relations_for_target(claim_obj.object_uuid)
+        assert len(relations) == 1
+        assert relations[0].relation_type == 'supports_claim'
+        assert relations[0].source_uuid == ev_obj.object_uuid
 
     def test_evidence_coverage_check(self, repo_session):
         session, repo = repo_session

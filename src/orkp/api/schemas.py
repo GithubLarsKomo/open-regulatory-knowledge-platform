@@ -100,9 +100,9 @@ class StateTransitionRequest(BaseModel):
 
 class EventLogResponse(BaseModel):
     """Response body for an event log entry."""
-    event_id: int
-    object_uuid: str
-    object_type: str
+    event_uuid: str
+    aggregate_type: str
+    aggregate_uuid: str
     event_type: str
     event_data: Optional[Dict[str, Any]] = None
     event_timestamp: datetime

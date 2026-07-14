@@ -153,9 +153,9 @@ class TestClaimAPI:
         # Link
         link_resp = client.post(
             f"/api/v1/claims/{claim_uuid}/link-evidence",
-            params={"evidence_uuid": ev_uuid, "link_type": "supports"},
+            params={"evidence_uuid": ev_uuid, "link_type": "supports_claim"},
         )
-        assert link_resp.status_code == 200
+        assert link_resp.status_code == 200, f"Link failed: {link_resp.text}"
 
         # Verify evidence coverage
         coverage_resp = client.get(f"/api/v1/claims/{claim_uuid}/evidence-coverage")

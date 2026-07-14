@@ -143,7 +143,7 @@ class ObjectVersion(Base):
 
     object_uuid: Mapped[bytes] = mapped_column(
         BINARY16,
-        ForeignKey('regulatory_object.object_uuid', ondelete='CASCADE'),
+        ForeignKey('regulatory_object.object_uuid', ondelete='RESTRICT'),
         primary_key=True,
     )
     version_no: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -176,6 +176,8 @@ class ObjectRelation(Base):
     __table_args__ = (
         Index('ix_relation_source', 'source_uuid', 'source_version'),
         Index('ix_relation_target', 'target_uuid', 'target_version'),
+        UniqueConstraint('source_uuid', 'source_version', 'target_uuid', 'target_version', 'relation_type',
+                         name='uq_relation_duplicate'),
     )
 
     relation_uuid: Mapped[bytes] = mapped_column(
@@ -208,23 +210,34 @@ class EventLog(Base):
     """
     Append-only event store for regulatory object lifecycle changes.
 
+    Supports polymorphic aggregate references: regulatory_object, baseline,
+    generated_artifact, or other entity types.
     Implements the event sourcing pattern (ADR-0001) for full auditability.
+
+    No foreign key constraint on aggregate_uuid — the event log must remain
+    valid for any entity type without cascading deletes.
     """
 
     __tablename__ = 'event_log'
     __table_args__ = (
-        Index('ix_event_object', 'object_uuid', 'event_type'),
+        Index('ix_event_aggregate', 'aggregate_type', 'aggregate_uuid'),
         Index('ix_event_timestamp', 'event_timestamp'),
     )
 
-    event_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    object_uuid: Mapped[bytes] = mapped_column(
-        BINARY16,
-        nullable=False,
-        index=True,
+    event_uuid: Mapped[bytes] = mapped_column(
+        BINARY16, primary_key=True, default=_new_uuid
     )
-    object_type: Mapped[str] = mapped_column(String(64), nullable=False)
-    event_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    aggregate_type: Mapped[str] = mapped_column(
+        String(64), nullable=False, default='regulatory_object',
+        comment='Entity type: regulatory_object, baseline, artifact'
+    )
+    aggregate_uuid: Mapped[bytes] = mapped_column(
+        BINARY16, nullable=False, index=True
+    )
+    event_type: Mapped[str] = mapped_column(
+        String(64), nullable=False,
+        comment='created|updated|submitted_for_review|approved|rejected|deleted|baseline_frozen|artifact_generated'
+    )
     event_data: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     event_timestamp: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, server_default=func.now()
@@ -233,7 +246,8 @@ class EventLog(Base):
 
     def __repr__(self) -> str:
         return (
-            f"<EventLog(id={self.event_id}, obj={_bin_to_str(self.object_uuid)}, "
+            f"<EventLog(event={_bin_to_str(self.event_uuid)}, "
+            f"agg={self.aggregate_type}/{_bin_to_str(self.aggregate_uuid)}, "
             f"type={self.event_type}, actor={self.actor_user_id})>"
         )
 

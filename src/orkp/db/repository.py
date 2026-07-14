@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
-from sqlalchemy import select, update, and_
+from sqlalchemy import select, update, and_, exists
 from sqlalchemy.orm import Session
 
 from orkp.db.models import (
@@ -18,6 +18,14 @@ from orkp.db.models import (
     _new_uuid,
     _bin_to_str,
 )
+from orkp.domain.exceptions import (
+    ObjectNotFoundError,
+    InvalidLifecycleTransitionError,
+    ImmutableVersionError,
+    OptimisticLockError,
+    InvalidRelationError,
+    BaselineValidationError,
+)
 
 
 # Valid lifecycle transitions per SPEC-CoreObjectStore
@@ -30,6 +38,9 @@ _VALID_TRANSITIONS: Dict[str, List[str]] = {
     'obsolete': ['deleted'],
     'deleted': [],
 }
+
+# Allowed deletion transitions (admin may bypass lifecycle)
+_ALLOWED_DELETION_STATES = {'draft', 'rejected', 'obsolete'}
 
 
 class RegulatoryObjectRepository:
@@ -49,10 +60,7 @@ class RegulatoryObjectRepository:
         owner_user_id: str,
         created_by: str,
     ) -> Tuple[RegulatoryObject, ObjectVersion]:
-        """Create a new regulatory object with its initial version.
-
-        Returns (regulatory_object, object_version).
-        """
+        """Create a new regulatory object with its initial version (atomic)."""
         obj = RegulatoryObject(
             object_type=object_type,
             lifecycle_state='draft',
@@ -70,14 +78,13 @@ class RegulatoryObjectRepository:
         )
         self.session.add(version)
 
-        event = EventLog(
-            object_uuid=obj.object_uuid,
-            object_type=object_type,
+        self._log_event(
+            aggregate_type='regulatory_object',
+            aggregate_uuid=obj.object_uuid,
             event_type='created',
             event_data={'version': 1, 'payload': payload},
             actor_user_id=created_by,
         )
-        self.session.add(event)
 
         return obj, version
 
@@ -183,9 +190,46 @@ class RegulatoryObjectRepository:
         )
         result = self.session.execute(stmt)
         if result.rowcount == 0:
-            return False  # Stale lock
+            return False
         obj.lock_version = old + 1
         return True
+
+    def _get_mutable_or_raise(self, object_uuid: bytes) -> RegulatoryObject:
+        """Get object or raise ObjectNotFoundError. Also check not immutable."""
+        obj = self.get_by_uuid(object_uuid)
+        if obj is None:
+            raise ObjectNotFoundError(f"Object {_bin_to_str(object_uuid)} not found")
+        return obj
+
+    def _check_immutable(self, obj: RegulatoryObject) -> None:
+        """Raise if the object is in an immutable state."""
+        if obj.lifecycle_state == 'approved':
+            raise ImmutableVersionError(
+                f"Object {_bin_to_str(obj.object_uuid)} is approved and cannot be modified"
+            )
+
+    def _check_not_deleted(self, obj: RegulatoryObject) -> None:
+        if obj.lifecycle_state == 'deleted':
+            raise ObjectNotFoundError(f"Object {_bin_to_str(obj.object_uuid)} is deleted")
+
+    def _log_event(
+        self,
+        aggregate_type: str,
+        aggregate_uuid: bytes,
+        event_type: str,
+        event_data: Optional[Dict[str, Any]] = None,
+        actor_user_id: str = 'system',
+    ) -> EventLog:
+        """Create an append-only event log entry."""
+        event = EventLog(
+            aggregate_type=aggregate_type,
+            aggregate_uuid=aggregate_uuid,
+            event_type=event_type,
+            event_data=event_data,
+            actor_user_id=actor_user_id,
+        )
+        self.session.add(event)
+        return event
 
     def create_version(
         self,
@@ -193,21 +237,20 @@ class RegulatoryObjectRepository:
         payload: Dict[str, Any],
         created_by: str,
         expected_lock_version: Optional[int] = None,
-    ) -> Optional[ObjectVersion]:
-        """Create a new version.
+    ) -> ObjectVersion:
+        """Create a new version (atomic: version + lock increment + event).
 
-        Returns None if not found or in immutable state.
-        Raises ValueError on stale lock version.
+        Raises:
+            ObjectNotFoundError: object not found
+            ImmutableVersionError: object is approved
+            OptimisticLockError: stale lock version
         """
-        obj = self.get_by_uuid(object_uuid)
-        if obj is None:
-            return None
-        if obj.lifecycle_state not in ('draft', 'in_review'):
-            return None
+        obj = self._get_mutable_or_raise(object_uuid)
+        self._check_immutable(obj)
 
         if not self._increment_lock(obj, expected_lock_version):
-            raise ValueError(
-                "Stale lock version -- object was modified by another transaction"
+            raise OptimisticLockError(
+                f"Stale lock version for object {_bin_to_str(object_uuid)}"
             )
 
         new_version_no = obj.current_version + 1
@@ -222,14 +265,13 @@ class RegulatoryObjectRepository:
 
         obj.current_version = new_version_no
 
-        event = EventLog(
-            object_uuid=object_uuid,
-            object_type=obj.object_type,
+        self._log_event(
+            aggregate_type='regulatory_object',
+            aggregate_uuid=object_uuid,
             event_type='updated',
             event_data={'version': new_version_no},
             actor_user_id=created_by,
         )
-        self.session.add(event)
 
         return version
 
@@ -240,24 +282,26 @@ class RegulatoryObjectRepository:
         actor_user_id: str,
         comments: Optional[str] = None,
         expected_lock_version: Optional[int] = None,
-    ) -> bool:
-        """Transition an object to a new lifecycle state.
+    ) -> None:
+        """Transition an object to a new lifecycle state (atomic).
 
-        Returns True if the transition succeeded, False otherwise.
-        Raises ValueError on stale lock version.
+        Raises:
+            ObjectNotFoundError: object not found
+            InvalidLifecycleTransitionError: transition not allowed
+            OptimisticLockError: stale lock version
         """
-        obj = self.get_by_uuid(object_uuid)
-        if obj is None:
-            return False
+        obj = self._get_mutable_or_raise(object_uuid)
 
         current = obj.lifecycle_state
         allowed = _VALID_TRANSITIONS.get(current, [])
         if new_state not in allowed:
-            return False
+            raise InvalidLifecycleTransitionError(
+                f"Cannot transition from '{current}' to '{new_state}'"
+            )
 
         if not self._increment_lock(obj, expected_lock_version):
-            raise ValueError(
-                "Stale lock version -- object was modified by another transaction"
+            raise OptimisticLockError(
+                f"Stale lock version for object {_bin_to_str(object_uuid)}"
             )
 
         obj.lifecycle_state = new_state
@@ -273,9 +317,9 @@ class RegulatoryObjectRepository:
         if new_state == 'in_review':
             event_type = 'submitted_for_review'
 
-        event = EventLog(
-            object_uuid=object_uuid,
-            object_type=obj.object_type,
+        self._log_event(
+            aggregate_type='regulatory_object',
+            aggregate_uuid=object_uuid,
             event_type=event_type,
             event_data={
                 'from_state': current,
@@ -284,7 +328,6 @@ class RegulatoryObjectRepository:
             },
             actor_user_id=actor_user_id,
         )
-        self.session.add(event)
 
         # Record approval decision
         if new_state in ('approved', 'rejected'):
@@ -297,10 +340,8 @@ class RegulatoryObjectRepository:
             )
             self.session.add(approval)
 
-        return True
-
     # ------------------------------------------------------------------
-    # Soft delete
+    # Soft delete — uses lifecycle policy
     # ------------------------------------------------------------------
 
     def soft_delete(
@@ -308,28 +349,39 @@ class RegulatoryObjectRepository:
         object_uuid: bytes,
         actor_user_id: str,
         expected_lock_version: Optional[int] = None,
-    ) -> bool:
-        """Soft-delete by setting lifecycle_state to 'deleted'."""
-        obj = self.get_by_uuid(object_uuid)
-        if obj is None:
-            return False
+    ) -> None:
+        """Soft-delete a regulatory object via lifecycle state.
+
+        Allowed from: draft, rejected, obsolete (per _ALLOWED_DELETION_STATES).
+        Not allowed from: in_review, approved, effective.
+
+        Raises:
+            ObjectNotFoundError: object not found
+            InvalidLifecycleTransitionError: deletion not allowed from current state
+            OptimisticLockError: stale lock version
+        """
+        obj = self._get_mutable_or_raise(object_uuid)
+
+        if obj.lifecycle_state not in _ALLOWED_DELETION_STATES:
+            raise InvalidLifecycleTransitionError(
+                f"Cannot delete object in state '{obj.lifecycle_state}'. "
+                f"Allowed from: {', '.join(sorted(_ALLOWED_DELETION_STATES))}"
+            )
 
         if not self._increment_lock(obj, expected_lock_version):
-            raise ValueError(
-                "Stale lock version -- object was modified by another transaction"
+            raise OptimisticLockError(
+                f"Stale lock version for object {_bin_to_str(object_uuid)}"
             )
 
         obj.lifecycle_state = 'deleted'
         obj.deleted_at = datetime.now(timezone.utc)
 
-        event = EventLog(
-            object_uuid=object_uuid,
-            object_type=obj.object_type,
+        self._log_event(
+            aggregate_type='regulatory_object',
+            aggregate_uuid=object_uuid,
             event_type='deleted',
             actor_user_id=actor_user_id,
         )
-        self.session.add(event)
-        return True
 
     # ------------------------------------------------------------------
     # Event log
@@ -337,14 +389,14 @@ class RegulatoryObjectRepository:
 
     def get_event_history(
         self,
-        object_uuid: bytes,
+        aggregate_uuid: bytes,
         limit: int = 100,
     ) -> List[EventLog]:
-        """Get the event history for an object."""
+        """Get the event history for an aggregate."""
         stmt = (
             select(EventLog)
-            .where(EventLog.object_uuid == object_uuid)
-            .order_by(EventLog.event_id.desc())
+            .where(EventLog.aggregate_uuid == aggregate_uuid)
+            .order_by(EventLog.event_timestamp.asc(), EventLog.event_uuid.asc())
             .limit(limit)
         )
         return list(self.session.execute(stmt).scalars().all())
@@ -362,16 +414,31 @@ class RegulatoryObjectRepository:
         relation_type: str,
         created_by: str,
         properties: Optional[Dict[str, Any]] = None,
-    ) -> Optional[ObjectRelation]:
+    ) -> ObjectRelation:
         """Create a versioned relationship between two objects.
 
         Validates that both source and target versions exist.
-        Returns None if either version does not exist.
+        Validates relation_type against the canonical list.
+
+        Raises:
+            InvalidRelationError: version not found or invalid relation type
         """
         sv = self.get_version(source_uuid, source_version)
         tv = self.get_version(target_uuid, target_version)
-        if sv is None or tv is None:
-            return None
+        if sv is None:
+            raise InvalidRelationError(
+                f"Source version {source_version} of {_bin_to_str(source_uuid)} not found"
+            )
+        if tv is None:
+            raise InvalidRelationError(
+                f"Target version {target_version} of {_bin_to_str(target_uuid)} not found"
+            )
+
+        from orkp.db.models import RELATION_TYPES
+        if relation_type not in RELATION_TYPES:
+            raise InvalidRelationError(
+                f"Invalid relation type '{relation_type}'. Valid: {', '.join(RELATION_TYPES)}"
+            )
 
         relation = ObjectRelation(
             source_uuid=source_uuid,
@@ -408,7 +475,7 @@ class RegulatoryObjectRepository:
         return list(self.session.execute(stmt).scalars().all())
 
     # ------------------------------------------------------------------
-    # Baselines (DB-OBJ-0009)
+    # Baselines (DB-OBJ-0009) — atomic with validation
     # ------------------------------------------------------------------
 
     def create_baseline(
@@ -418,10 +485,10 @@ class RegulatoryObjectRepository:
         object_versions: List[Tuple[bytes, int]],
         created_by: str,
     ) -> Baseline:
-        """Create a baseline with object-version pairs.
+        """Create a baseline with object-version pairs (atomic).
 
-        object_versions is a list of (object_uuid, version_no) tuples.
-        Each pair is validated to exist.
+        Raises:
+            BaselineValidationError: if a referenced version does not exist
         """
         baseline = Baseline(
             name=name,
@@ -434,7 +501,7 @@ class RegulatoryObjectRepository:
         for obj_uuid, ver_no in object_versions:
             version = self.get_version(obj_uuid, ver_no)
             if version is None:
-                raise ValueError(
+                raise BaselineValidationError(
                     f"Version {ver_no} of object {_bin_to_str(obj_uuid)} does not exist"
                 )
             obj = self.get_by_uuid_including_deleted(obj_uuid)
@@ -447,14 +514,13 @@ class RegulatoryObjectRepository:
             )
             self.session.add(item)
 
-        event = EventLog(
-            object_uuid=baseline.baseline_uuid,
-            object_type='baseline',
+        self._log_event(
+            aggregate_type='baseline',
+            aggregate_uuid=baseline.baseline_uuid,
             event_type='baseline_frozen',
             event_data={'name': name, 'item_count': len(object_versions)},
             actor_user_id=created_by,
         )
-        self.session.add(event)
 
         return baseline
 
