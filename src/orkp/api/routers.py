@@ -29,6 +29,9 @@ from orkp.domain.exceptions import (
     OptimisticLockError,
     InvalidRelationError,
     ProductCompletenessError,
+    ClaimApprovalError,
+    RelationNotFoundError,
+    RelationAlreadyInactiveError,
 )
 from orkp.db.repository import RegulatoryObjectRepository
 
@@ -45,8 +48,10 @@ def _call_or_404(service_fn):
         raise HTTPException(status_code=404, detail=e.message)
     except (InvalidLifecycleTransitionError, ImmutableVersionError, OptimisticLockError) as e:
         raise HTTPException(status_code=409, detail=e.message)
-    except (InvalidRelationError, ProductCompletenessError) as e:
+    except (InvalidRelationError, ProductCompletenessError, ClaimApprovalError) as e:
         raise HTTPException(status_code=422, detail=e.message)
+    except (RelationNotFoundError, RelationAlreadyInactiveError) as e:
+        raise HTTPException(status_code=409 if isinstance(e, RelationAlreadyInactiveError) else 404, detail=e.message)
 
 
 # ---------------------------------------------------------------------------
@@ -278,13 +283,25 @@ def create_claim_router(
         _call_or_404(lambda: service.link_evidence(uuid, evidence_uuid, link_type))
         return {"status": "linked", "claim_uuid": uuid, "evidence_uuid": evidence_uuid}
 
-    @router.delete("/{uuid}/evidence/{evidence_uuid}", response_model=dict)
+    @router.post("/{uuid}/evidence/{evidence_uuid}")
+    async def link_evidence_path(
+        uuid: str,
+        evidence_uuid: str,
+        link_type: str = Query("supported_by"),
+        service: ClaimService = Depends(_get_service),
+    ):
+        _call_or_404(lambda: service.link_evidence(uuid, evidence_uuid, link_type))
+        return {"status": "linked", "claim_uuid": uuid, "evidence_uuid": evidence_uuid}
+
+    @router.delete("/{uuid}/evidence/{evidence_uuid}")
     async def unlink_evidence(
         uuid: str,
         evidence_uuid: str,
+        actor_user_id: str = Query("system"),
+        reason: str = Query("Removed"),
         service: ClaimService = Depends(_get_service),
     ):
-        _call_or_404(lambda: service.unlink_evidence(uuid, evidence_uuid))
+        _call_or_404(lambda: service.unlink_evidence(uuid, evidence_uuid, actor_user_id, reason))
         return {"status": "unlinked", "claim_uuid": uuid, "evidence_uuid": evidence_uuid}
 
     @router.get("/{uuid}/evidence-coverage", response_model=dict)
@@ -303,6 +320,20 @@ def create_claim_router(
         service: ClaimService = Depends(_get_service),
     ):
         return _call_or_404(lambda: service.get_coverage_report(uuid))
+
+    @router.get("/{uuid}/approval-assessment", response_model=dict)
+    async def approval_assessment(
+        uuid: str,
+        service: ClaimService = Depends(_get_service),
+    ):
+        return _call_or_404(lambda: service.get_approval_assessment(uuid))
+
+    @router.get("/{uuid}/evidence", response_model=List[dict])
+    async def list_claim_evidence(
+        uuid: str,
+        service: ClaimService = Depends(_get_service),
+    ):
+        return _call_or_404(lambda: service.list_evidence(uuid))
 
     @router.get("/{uuid}/history", response_model=dict)
     async def claim_history(
@@ -443,7 +474,23 @@ def create_evidence_router(
         service: EvidenceService = Depends(_get_service),
     ):
         return _call_or_404(lambda: service.get_quality_summary(uuid))
-        return {"status": "approved", "uuid": uuid}
+
+    @router.post("/{uuid}/supersede/{replacement_uuid}")
+    async def supersede_evidence(
+        uuid: str,
+        replacement_uuid: str,
+        actor_user_id: str = Query(...),
+        reason: str = Query(...),
+        service: EvidenceService = Depends(_get_service),
+    ):
+        return _call_or_404(lambda: service.supersede_evidence(uuid, replacement_uuid, actor_user_id, reason))
+
+    @router.get("/{uuid}/impact", response_model=dict)
+    async def evidence_impact(
+        uuid: str,
+        service: EvidenceService = Depends(_get_service),
+    ):
+        return _call_or_404(lambda: service.get_impact(uuid))
 
     @router.delete("/{uuid}", status_code=204)
     async def delete_evidence(

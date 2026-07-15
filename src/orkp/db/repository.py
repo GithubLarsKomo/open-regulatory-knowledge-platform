@@ -25,6 +25,8 @@ from orkp.domain.exceptions import (
     OptimisticLockError,
     InvalidRelationError,
     BaselineValidationError,
+    RelationNotFoundError,
+    RelationAlreadyInactiveError,
 )
 
 
@@ -467,6 +469,122 @@ class RegulatoryObjectRepository:
         self, target_uuid: bytes
     ) -> List[ObjectRelation]:
         """List all relations where the given object is the target."""
+        stmt = (
+            select(ObjectRelation)
+            .where(ObjectRelation.target_uuid == target_uuid)
+            .order_by(ObjectRelation.created_at.desc())
+        )
+        return list(self.session.execute(stmt).scalars().all())
+
+    # ------------------------------------------------------------------
+    # Relation Lifecycle (DB-REL-0001..0006)
+    # ------------------------------------------------------------------
+
+    def get_relation(self, relation_uuid: bytes) -> Optional[ObjectRelation]:
+        """Get a relation by UUID."""
+        stmt = select(ObjectRelation).where(
+            ObjectRelation.relation_uuid == relation_uuid
+        )
+        return self.session.execute(stmt).scalar_one_or_none()
+
+    def get_relation_or_raise(self, relation_uuid_hex: str) -> ObjectRelation:
+        """Get a relation by hex UUID or raise RelationNotFoundError."""
+        try:
+            ruuid = uuid.UUID(hex=relation_uuid_hex).bytes
+        except (ValueError, AttributeError):
+            raise RelationNotFoundError(f"Invalid relation UUID: {relation_uuid_hex}")
+        rel = self.get_relation(ruuid)
+        if rel is None:
+            raise RelationNotFoundError(f"Relation {relation_uuid_hex} not found")
+        return rel
+
+    def deactivate_relation(
+        self,
+        relation_uuid: bytes,
+        actor_user_id: str,
+        reason: str,
+    ) -> None:
+        """Deactivate a relation (auditable soft-delete).
+
+        Raises:
+            RelationNotFoundError: relation not found
+            RelationAlreadyInactiveError: relation is already inactive
+        """
+        rel = self.get_relation(relation_uuid)
+        if rel is None:
+            raise RelationNotFoundError(
+                f"Relation {_bin_to_str(relation_uuid)} not found"
+            )
+        if rel.lifecycle_state == 'inactive':
+            raise RelationAlreadyInactiveError(
+                f"Relation {_bin_to_str(relation_uuid)} is already inactive"
+            )
+
+        rel.lifecycle_state = 'inactive'
+        rel.deactivated_at = datetime.now(timezone.utc)
+        rel.deactivated_by = actor_user_id
+        rel.deactivation_reason = reason
+
+        self._log_event(
+            aggregate_type='regulatory_object',
+            aggregate_uuid=rel.source_uuid,
+            event_type='relation_deactivated',
+            event_data={
+                'relation_uuid': _bin_to_str(relation_uuid),
+                'relation_type': rel.relation_type,
+                'target_uuid': _bin_to_str(rel.target_uuid),
+                'reason': reason,
+            },
+            actor_user_id=actor_user_id,
+        )
+
+    def list_active_relations_for_source(
+        self, source_uuid: bytes
+    ) -> List[ObjectRelation]:
+        """List active relations where the given object is the source."""
+        stmt = (
+            select(ObjectRelation)
+            .where(
+                and_(
+                    ObjectRelation.source_uuid == source_uuid,
+                    ObjectRelation.lifecycle_state == 'active',
+                )
+            )
+            .order_by(ObjectRelation.created_at.desc())
+        )
+        return list(self.session.execute(stmt).scalars().all())
+
+    def list_active_relations_for_target(
+        self, target_uuid: bytes
+    ) -> List[ObjectRelation]:
+        """List active relations where the given object is the target."""
+        stmt = (
+            select(ObjectRelation)
+            .where(
+                and_(
+                    ObjectRelation.target_uuid == target_uuid,
+                    ObjectRelation.lifecycle_state == 'active',
+                )
+            )
+            .order_by(ObjectRelation.created_at.desc())
+        )
+        return list(self.session.execute(stmt).scalars().all())
+
+    def list_all_relations_for_source(
+        self, source_uuid: bytes
+    ) -> List[ObjectRelation]:
+        """List all relations (active + inactive) for source."""
+        stmt = (
+            select(ObjectRelation)
+            .where(ObjectRelation.source_uuid == source_uuid)
+            .order_by(ObjectRelation.created_at.desc())
+        )
+        return list(self.session.execute(stmt).scalars().all())
+
+    def list_all_relations_for_target(
+        self, target_uuid: bytes
+    ) -> List[ObjectRelation]:
+        """List all relations (active + inactive) for target."""
         stmt = (
             select(ObjectRelation)
             .where(ObjectRelation.target_uuid == target_uuid)

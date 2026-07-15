@@ -1,6 +1,6 @@
 # ORKP Task Backlog
 
-Generated on 2026-07-14
+Generated on 2026-07-15
 
 - **Foundation tasks:** 5
 - **Generated tasks:** 14

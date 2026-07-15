@@ -162,8 +162,17 @@ class TestClaimAPI:
         assert client.post(f"/api/v1/claims/{uid}/approve", params={"actor_user_id": "u2"}).status_code == 422
 
     def test_approve_with_evidence(self, client):
+        # Create product
+        puid = client.post("/api/v1/products", params={"owner_user_id": "u1"}, json=_VALID_PRODUCT).json()["object_uuid"]
+        # Create claim
         cuid = client.post("/api/v1/claims", params={"owner_user_id": "u1"}, json=_VALID_CLAIM).json()["object_uuid"]
+        # Link product to claim
+        client.post(f"/api/v1/products/{puid}/claims/{cuid}", params={"actor_user_id": "u1"})
+        # Create and approve evidence
         euid = client.post("/api/v1/evidence", params={"owner_user_id": "u1"}, json=_VALID_EVIDENCE).json()["object_uuid"]
+        client.post(f"/api/v1/evidence/{euid}/submit", params={"actor_user_id": "u1"})
+        client.post(f"/api/v1/evidence/{euid}/approve", params={"actor_user_id": "u2"})
+        # Link evidence to claim
         client.post(f"/api/v1/claims/{cuid}/link-evidence", params={"evidence_uuid": euid, "link_type": "supported_by"})
         client.post(f"/api/v1/claims/{cuid}/submit", params={"actor_user_id": "u1"})
         assert client.post(f"/api/v1/claims/{cuid}/approve", params={"actor_user_id": "u2"}).status_code == 200

@@ -141,8 +141,16 @@ class TestClaimService:
         session, repo = repo_session
         cs = ClaimService(repo)
         es = EvidenceService(repo)
+        ps = ProductService(repo)
         c, _ = cs.create(_VALID_CLAIM, "u1")
         e, _ = es.create(_VALID_EVIDENCE, "u1")
+        # Create a product and link it
+        p, _ = ps.create(_VALID_PRODUCT, "u1")
+        ps.link_claim(p.uuid_hex, c.uuid_hex, "u1")
+        # Approve evidence first
+        es.submit_for_review(e.uuid_hex, "u1")
+        es.approve(e.uuid_hex, "u2")
+        # Link evidence to claim
         cs.link_evidence(c.uuid_hex, e.uuid_hex, "supported_by")
         cs.submit_for_review(c.uuid_hex, "u1")
         cs.approve(c.uuid_hex, "u2", "Approved")
@@ -208,7 +216,7 @@ class TestEvidenceService:
         s = EvidenceService(repo)
         obj, _ = s.create(_VALID_EVIDENCE, "u1")
         cov = s.get_coverage(obj.uuid_hex)
-        assert cov['linked_claim_count'] == 0
+        assert cov['total_active_relations'] == 0
 
     def test_quality_summary(self, repo_session):
         session, repo = repo_session

@@ -180,12 +180,16 @@ class ObjectRelation(Base):
 
     Every relationship references explicit object versions where regulatory
     reproducibility is required.
+
+    Supports lifecycle_state for auditable deactivation.
     """
 
     __tablename__ = 'object_relation'
     __table_args__ = (
         Index('ix_relation_source', 'source_uuid', 'source_version'),
         Index('ix_relation_target', 'target_uuid', 'target_version'),
+        Index('ix_relation_active', 'source_uuid', 'lifecycle_state'),
+        Index('ix_relation_target_active', 'target_uuid', 'lifecycle_state'),
         UniqueConstraint('source_uuid', 'source_version', 'target_uuid', 'target_version', 'relation_type',
                          name='uq_relation_duplicate'),
     )
@@ -198,17 +202,24 @@ class ObjectRelation(Base):
     target_uuid: Mapped[bytes] = mapped_column(BINARY16, nullable=False)
     target_version: Mapped[int] = mapped_column(Integer, nullable=False)
     relation_type: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    lifecycle_state: Mapped[str] = mapped_column(
+        String(16), nullable=False, default='active', index=True
+    )
     properties: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, server_default=func.now()
     )
     created_by: Mapped[str] = mapped_column(String(128), nullable=False)
+    deactivated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    deactivated_by: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    deactivation_reason: Mapped[Optional[str]] = mapped_column(String(256), nullable=True)
 
     def __repr__(self) -> str:
         return (
             f"<ObjectRelation({_bin_to_str(self.source_uuid)} v{self.source_version} "
             f"-{self.relation_type}-> "
-            f"{_bin_to_str(self.target_uuid)} v{self.target_version})>"
+            f"{_bin_to_str(self.target_uuid)} v{self.target_version} "
+            f"[{self.lifecycle_state}])>"
         )
 
 

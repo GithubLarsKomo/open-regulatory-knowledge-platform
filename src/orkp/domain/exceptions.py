@@ -71,6 +71,18 @@ class ConsistencyError(ORKPError):
     message = "Claim consistency check failed"
 
 
+class RelationNotFoundError(ORKPError):
+    """Raised when a relation is not found."""
+    status_code = 404
+    message = "Relation not found"
+
+
+class RelationAlreadyInactiveError(ORKPError):
+    """Raised when attempting to deactivate an already inactive relation."""
+    status_code = 409
+    message = "Relation is already inactive"
+
+
 class BaselineValidationError(ORKPError):
     """Raised when baseline creation fails validation."""
     status_code = 422
