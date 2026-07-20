@@ -73,6 +73,22 @@ RELATION_TYPES = (
     'manufactured_by',
     'approved_by',
     'marketed_in',
+    'originates_from',
+    'leads_to',
+    'creates_situation',
+    'may_cause',
+    'estimated_by',
+    'controlled_by',
+    'control_verified_by',
+    'control_implements',
+    'residual_of',
+    'benefit_risk_for',
+    'overall_risk_for',
+    'applies_to_product',
+    'applies_to_device',
+    'informed_by',
+    'impacts_risk',
+    'requires_review',
 )
 APPROVAL_DECISIONS = ('approved', 'rejected')
 EVENT_TYPES = (

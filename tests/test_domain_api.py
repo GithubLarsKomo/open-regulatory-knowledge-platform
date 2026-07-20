@@ -54,6 +54,7 @@ _VALID_CLAIM = {
 _VALID_EVIDENCE = {
     "evidence_type": "literature",
     "title": "Study 2024",
+    "quality_rating": "medium",
 }
 
 

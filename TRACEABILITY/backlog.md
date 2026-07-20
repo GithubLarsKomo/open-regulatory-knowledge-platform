@@ -1,10 +1,10 @@
 # ORKP Task Backlog
 
-Generated on 2026-07-15
+Generated on 2026-07-20
 
 - **Foundation tasks:** 5
 - **Generated tasks:** 14
-- **Total requirement IDs covered:** 141
+- **Total requirement IDs covered:** 159
 
 ## Epic 001 — Specification Foundation
 
@@ -194,6 +194,24 @@ Generated on 2026-07-15
 - REQ-RISK-0005
 - REQ-RISK-0006
 - REQ-RISK-0007
+- REQ-RISK-0008
+- REQ-RISK-0009
+- REQ-RISK-0010
+- REQ-RISK-0011
+- REQ-RISK-0012
+- REQ-RISK-0013
+- REQ-RISK-0014
+- REQ-RISK-0015
+- REQ-RISK-0016
+- REQ-RISK-0017
+- REQ-RISK-0018
+- REQ-RISK-0019
+- REQ-RISK-0020
+- REQ-RISK-0021
+- REQ-RISK-0022
+- REQ-RISK-0023
+- REQ-RISK-0024
+- REQ-RISK-0025
 
 **Scope:** Risk management per ISO 14971, control measures, residual risk.
 

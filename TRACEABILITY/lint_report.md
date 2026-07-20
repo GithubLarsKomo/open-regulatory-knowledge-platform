@@ -2,7 +2,7 @@
 
 - **Repository:** D:\Python\ORKP
 - **Files scanned:** 30
-- **Unique IDs defined:** 150
+- **Unique IDs defined:** 168
 - **Duplicates:** 0
 - **Invalid format:** 0
 - **Undefined references:** 0
@@ -21,7 +21,7 @@
 | OBJECT | 1 |
 | PRODUCT | 1 |
 | REP | 5 |
-| REQ | 93 |
+| REQ | 111 |
 | SEC | 5 |
 | TASK | 3 |
 | TEST | 5 |

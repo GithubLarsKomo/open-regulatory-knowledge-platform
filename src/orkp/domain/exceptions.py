@@ -87,3 +87,33 @@ class BaselineValidationError(ORKPError):
     """Raised when baseline creation fails validation."""
     status_code = 422
     message = "Baseline validation failed"
+
+
+class RiskCompletenessError(ORKPError):
+    """Raised when a risk analysis is not complete."""
+    status_code = 422
+    message = "Risk completeness check failed"
+
+
+class RiskEvaluationError(ORKPError):
+    """Raised when risk evaluation fails."""
+    status_code = 422
+    message = "Risk evaluation failed"
+
+
+class RiskControlVerificationError(ORKPError):
+    """Raised when risk control verification fails."""
+    status_code = 422
+    message = "Risk control verification failed"
+
+
+class AuthorizationError(ORKPError):
+    """Raised when an operation is not authorized."""
+    status_code = 403
+    message = "Operation not authorized"
+
+
+class SelfApprovalNotAllowedError(ORKPError):
+    """Raised when an author attempts to self-approve."""
+    status_code = 403
+    message = "Self-approval is not allowed"

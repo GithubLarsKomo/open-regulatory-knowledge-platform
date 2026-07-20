@@ -28,11 +28,19 @@ class EvidencePolicy:
         'software': ['literature', 'standard', 'internal_report'],
     })
 
+    _QUALITY_ORDER = {'unknown': 0, 'low': 1, 'medium': 2, 'high': 3}
+
     def get_min_quality_for_severity(self, severity: str) -> str:
         """Get minimum quality rating for a claim severity level."""
         if severity == 'high' and self.high_severity_requires_high_quality:
             return 'high'
         return self.minimum_quality_for_approval
+
+    def quality_meets_threshold(self, quality: Optional[str], required: str) -> bool:
+        """Check if quality meets the required threshold using deterministic ordering."""
+        q_val = self._QUALITY_ORDER.get(quality or 'unknown', 0)
+        r_val = self._QUALITY_ORDER.get(required, 0)
+        return q_val >= r_val
 
     def get_allowed_evidence_types(self, claim_type: str) -> List[str]:
         """Get allowed evidence types for a claim type."""

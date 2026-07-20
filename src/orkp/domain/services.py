@@ -153,12 +153,13 @@ class ProductService(DomainService):
         except ValidationError:
             raise ProductCompletenessError("Product payload is invalid")
 
-        # Collect relations
+        # Collect active relations only
         obj = self.repo.get_by_uuid_hex(uuid_hex)
         relations: Dict[str, list] = {}
         if obj:
+            all_rels = self.repo.list_active_relations_for_source(obj.object_uuid)
             for rel_type in ('has_claim', 'has_risk', 'has_evidence'):
-                relations[rel_type] = self.repo.list_relations_for_source(obj.object_uuid)
+                relations[rel_type] = [r for r in all_rels if r.relation_type == rel_type]
 
         result = evaluate_product_completeness(uuid_hex, payload, relations)
         if not result['complete']:
@@ -288,8 +289,9 @@ class ProductService(DomainService):
         obj = self.repo.get_by_uuid_hex(product_uuid_hex)
         relations: Dict[str, list] = {}
         if obj:
+            all_rels = self.repo.list_active_relations_for_source(obj.object_uuid)
             for rel_type in ('has_claim', 'has_risk', 'has_evidence'):
-                relations[rel_type] = self.repo.list_relations_for_source(obj.object_uuid)
+                relations[rel_type] = [r for r in all_rels if r.relation_type == rel_type]
 
         return evaluate_product_completeness(product_uuid_hex, payload, relations)
 
@@ -317,26 +319,30 @@ class ClaimService(DomainService):
     def get_approval_assessment(self, uuid_hex: str) -> Dict[str, Any]:
         """Get structured claim approval assessment.
 
+        Reports ALL blocking issues simultaneously (not conditioned).
         Checks: product relation, active supported_by evidence,
-        evidence version approved, no contradicted_by, quality threshold.
+        evidence version approved, no contradicted_by, quality threshold,
+        evidence type policy.
         """
         obj = self.repo.get_by_uuid_hex(uuid_hex)
         if obj is None:
             raise ObjectNotFoundError(f"Claim {uuid_hex} not found")
 
         from datetime import datetime, timezone
+        from orkp.domain.evidence_policy import default_evidence_policy
         issues: List[str] = []
         warnings: List[str] = []
         supporting: List[Dict] = []
         contradicting: List[Dict] = []
         product_relations: List[Dict] = []
         score = 0
-        total_checks = 6
+        total_checks = 8
 
+        # 1. Must be in_review
         if obj.lifecycle_state != 'in_review':
             issues.append("Claim is not in_review")
 
-        # Check product relation
+        # 2. Must have product relation
         all_relations = self.repo.list_all_relations_for_target(obj.object_uuid)
         for r in all_relations:
             if r.relation_type == 'has_claim' and r.lifecycle_state == 'active':
@@ -344,25 +350,41 @@ class ClaimService(DomainService):
                     "relation_uuid": _bin_to_str(r.relation_uuid),
                     "source_uuid": _bin_to_str(r.source_uuid),
                 })
-
         if not product_relations:
             issues.append("No active product relation")
         else:
             score += 1
 
-        # Check active supported_by relations — version-pinned
+        # 3. Must have active supported_by evidence
+        # 4. Evidence version must be approved
+        # 5. No contradicting evidence
+        # 6. Quality must meet threshold
+        # 7. Evidence type must be suitable
+        policy = default_evidence_policy()
+        payload = {}
+        version = self.repo.get_version(obj.object_uuid, obj.current_version)
+        if version:
+            payload = version.payload_json or {}
+        claim_severity = payload.get('severity', 'medium')
+        claim_type = payload.get('claim_type', '')
+        required_quality = policy.get_min_quality_for_severity(claim_severity)
+        allowed_types = policy.get_allowed_evidence_types(claim_type)
+
+        has_suitable_evidence = False
+        quality_ok = True
+
         for r in all_relations:
             if r.relation_type == 'supported_by' and r.lifecycle_state == 'active':
                 ev = self.repo.get_by_uuid(r.source_uuid)
                 if ev is None:
                     issues.append(f"Evidence {_bin_to_str(r.source_uuid)} not found")
                     continue
-                # Use the EXACT version stored in the relation
                 ev_version = self.repo.get_version(r.source_uuid, r.source_version)
                 ev_status = ev_version.status if ev_version else 'unknown'
                 ev_state = ev.lifecycle_state
                 ev_payload = ev_version.payload_json if ev_version else {}
                 ev_quality = ev_payload.get('quality_rating', 'unknown')
+                ev_type = ev_payload.get('evidence_type', '')
 
                 supporting.append({
                     "relation_uuid": _bin_to_str(r.relation_uuid),
@@ -371,6 +393,7 @@ class ClaimService(DomainService):
                     "evidence_version_status": ev_status,
                     "evidence_lifecycle_state": ev_state,
                     "quality_rating": ev_quality,
+                    "evidence_type": ev_type,
                 })
 
                 if ev_state in ('deleted', 'obsolete'):
@@ -379,9 +402,19 @@ class ClaimService(DomainService):
                     issues.append(f"Evidence version {r.source_version} status is '{ev_status}', not 'approved'")
                 else:
                     score += 1
+                    if not policy.quality_meets_threshold(ev_quality, required_quality):
+                        issues.append(
+                            f"Evidence {_bin_to_str(r.source_uuid)[:8]} quality '{ev_quality}' "
+                            f"below required '{required_quality}'"
+                        )
+                        quality_ok = False
+                    if ev_type in allowed_types:
+                        has_suitable_evidence = True
+                    else:
+                        warnings.append(
+                            f"Evidence type '{ev_type}' may not be suitable for claim type '{claim_type}'"
+                        )
 
-        # Check for active contradicted_by
-        for r in all_relations:
             if r.relation_type == 'contradicted_by' and r.lifecycle_state == 'active':
                 contradicting.append({
                     "relation_uuid": _bin_to_str(r.relation_uuid),
@@ -390,40 +423,15 @@ class ClaimService(DomainService):
                 })
                 issues.append("Active contradicted_by evidence exists")
 
-        if not supporting and not issues:
+        if not supporting:
             issues.append("No active supported_by evidence relation")
+            score += 1  # No evidence = no issue about quality/type
 
-        if not issues:
-            score += 1
+        # 8. If evidence exists but none suitable, block
+        if supporting and not has_suitable_evidence:
+            issues.append(f"No evidence with allowed type for '{claim_type}' claims")
 
-        # Check quality threshold
-        from orkp.domain.evidence_policy import default_evidence_policy
-        policy = default_evidence_policy()
-        payload = {}
-        version = self.repo.get_version(obj.object_uuid, obj.current_version)
-        if version:
-            payload = version.payload_json or {}
-        claim_severity = payload.get('severity', 'medium')
-        claim_type = payload.get('claim_type', '')
-        min_quality = policy.get_min_quality_for_severity(claim_severity)
-
-        for s in supporting:
-            if s['quality_rating'] == 'low' and min_quality == 'medium':
-                issues.append(f"Evidence {s['evidence_uuid'][:8]} has low quality, minimum is {min_quality}")
-                break
-
-        # Check claim type evidence type requirements
-        allowed_types = policy.get_allowed_evidence_types(claim_type)
-        for s in supporting:
-            ev_version = self.repo.get_version(
-                uuid.UUID(hex=s['evidence_uuid']).bytes, s['evidence_version']
-            ) if s['evidence_uuid'] else None
-            if ev_version:
-                ev_type = (ev_version.payload_json or {}).get('evidence_type', '')
-                if ev_type not in allowed_types:
-                    warnings.append(f"Evidence type '{ev_type}' may not be suitable for claim type '{claim_type}'")
-
-        # Calculate score
+        # Calculate score (penalize for missing items)
         score = min(100, int((score / max(total_checks, 1)) * 100))
 
         return {
@@ -500,20 +508,24 @@ class ClaimService(DomainService):
         self.repo.session.commit()
 
     def check_evidence_coverage(self, uuid_hex: str) -> Dict[str, Any]:
-        """Check claim evidence coverage via active relations only."""
+        """Check claim evidence coverage — only active supported_by counts as evidence."""
         obj = self.repo.get_by_uuid_hex(uuid_hex)
         if obj is None:
             return {"exists": False, "has_evidence": False}
 
         relations = self.repo.list_active_relations_for_target(obj.object_uuid)
-        has_evidence = len(relations) > 0
+        supporting = [r for r in relations if r.relation_type == 'supported_by']
+        contradicting = [r for r in relations if r.relation_type == 'contradicted_by']
+        has_evidence = len(supporting) > 0
 
         return {
             "exists": True,
             "has_evidence": has_evidence,
-            "evidence_count": len(relations),
+            "supporting_count": len(supporting),
+            "contradicting_count": len(contradicting),
+            "total_active_relations": len(relations),
             "approvable": has_evidence,
-            "reason": None if has_evidence else "No evidence linked to this claim",
+            "reason": None if has_evidence else "No supporting evidence linked to this claim",
         }
 
     def list_evidence(self, claim_uuid_hex: str) -> List[Dict[str, Any]]:
@@ -616,7 +628,7 @@ class EvidenceService(DomainService):
         return results
 
     def get_coverage(self, evidence_uuid_hex: str) -> Dict[str, Any]:
-        """Get coverage stats (active claim relations only)."""
+        """Get coverage stats — counts only active supported_by/contradicted_by."""
         obj = self.repo.get_by_uuid_hex(evidence_uuid_hex)
         if obj is None:
             raise ObjectNotFoundError(f"Evidence {evidence_uuid_hex} not found")
@@ -631,6 +643,8 @@ class EvidenceService(DomainService):
                 supporting += 1
             elif r.relation_type == 'contradicted_by':
                 contradicting += 1
+            else:
+                continue  # Only count claim relations
             target = self.repo.get_by_uuid(r.target_uuid)
             if target:
                 if target.lifecycle_state == 'approved':
@@ -646,7 +660,7 @@ class EvidenceService(DomainService):
             "approved_claim_count": approved,
             "draft_claim_count": draft,
             "obsolete_claim_count": obsolete,
-            "total_active_relations": len(relations),
+            "total_active_claim_relations": supporting + contradicting,
         }
 
     def get_quality_summary(self, evidence_uuid_hex: str) -> Dict[str, Any]:

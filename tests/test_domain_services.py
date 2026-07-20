@@ -60,6 +60,7 @@ _VALID_CLAIM = {
 _VALID_EVIDENCE = {
     "evidence_type": "literature",
     "title": "Study 2024",
+    "quality_rating": "medium",
 }
 
 
@@ -216,11 +217,11 @@ class TestEvidenceService:
         s = EvidenceService(repo)
         obj, _ = s.create(_VALID_EVIDENCE, "u1")
         cov = s.get_coverage(obj.uuid_hex)
-        assert cov['total_active_relations'] == 0
+        assert cov['total_active_claim_relations'] == 0
 
     def test_quality_summary(self, repo_session):
         session, repo = repo_session
         s = EvidenceService(repo)
         obj, _ = s.create(_VALID_EVIDENCE, "u1")
         q = s.get_quality_summary(obj.uuid_hex)
-        assert q['quality_rating'] is None
+        assert q['quality_rating'] == 'medium'
