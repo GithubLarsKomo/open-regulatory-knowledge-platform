@@ -48,7 +48,7 @@ def compare_initial_and_residual_risk(
 ) -> Dict[str, Any]:
     """Compare initial and residual risk estimates.
 
-    Returns ResidualRiskComparison.
+    Returns ResidualRiskComparison with correct improvement/worsening detection.
     """
     if policy is None:
         policy = default_risk_policy()
@@ -56,10 +56,25 @@ def compare_initial_and_residual_risk(
     initial = calculate_risk_level(initial_severity, initial_probability, policy)
     residual = calculate_risk_level(residual_severity, residual_probability, policy)
 
-    reduced = (
-        policy.get_severity_index(residual_severity) < policy.get_severity_index(initial_severity)
-        or policy.get_probability_index(residual_probability) < policy.get_probability_index(initial_probability)
-    )
+    sv_i = policy.get_severity_index(initial_severity)
+    sv_r = policy.get_severity_index(residual_severity)
+    pb_i = policy.get_probability_index(initial_probability)
+    pb_r = policy.get_probability_index(residual_probability)
+
+    severity_improved = sv_r < sv_i
+    severity_worsened = sv_r > sv_i
+    probability_improved = pb_r < pb_i
+    probability_worsened = pb_r > pb_i
+
+    # Reduced only if neither worsened AND at least one improved
+    reduced = (not severity_worsened and not probability_worsened) and (severity_improved or probability_improved)
+
+    # Risk level comparison
+    rl_order = {'low': 0, 'medium': 1, 'high': 2, 'intolerable': 3}
+    rl_i = rl_order.get(initial['risk_level'], 99)
+    rl_r = rl_order.get(residual['risk_level'], 99)
+    risk_level_improved = rl_r < rl_i
+    regression_detected = severity_worsened or probability_worsened or rl_r > rl_i
 
     benefit_risk_required = (
         not residual['acceptable']
@@ -69,7 +84,13 @@ def compare_initial_and_residual_risk(
     return {
         "initial_risk": initial,
         "residual_risk": residual,
+        "severity_improved": severity_improved,
+        "probability_improved": probability_improved,
+        "severity_worsened": severity_worsened,
+        "probability_worsened": probability_worsened,
+        "risk_level_improved": risk_level_improved,
         "reduced": reduced,
+        "regression_detected": regression_detected,
         "acceptable": residual['acceptable'],
         "benefit_risk_required": benefit_risk_required,
         "warnings": [],
