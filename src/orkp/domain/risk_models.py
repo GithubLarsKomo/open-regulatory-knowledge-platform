@@ -57,7 +57,7 @@ class SequenceOfEventsPayload(BaseModel):
     sequence_id: str = Field(..., min_length=1)
     description: str = Field(..., min_length=1)
     initiating_event: Optional[str] = None
-    intermediate_events: List[str] = []
+    intermediate_events: List[str] = Field(default_factory=list)
     foreseeable_conditions: Optional[str] = None
 
 
@@ -95,11 +95,23 @@ class RiskAnalysisPayload(BaseModel):
     rationale: Optional[str] = None
     severity: str = Field(..., description="negligible|minor|moderate|critical|catastrophic")
     probability: str = Field(..., description="improbable|unlikely|possible|likely|probable")
-    risk_level: Optional[str] = None
-    acceptability: Optional[str] = None
     estimation_method: Optional[str] = None
     uncertainty: Optional[str] = None
     assumptions: Optional[str] = None
+
+    @field_validator('severity')
+    @classmethod
+    def _validate_severity(cls, v: str) -> str:
+        if v not in SEVERITY_LEVELS:
+            raise ValueError(f"Invalid severity '{v}'")
+        return v
+
+    @field_validator('probability')
+    @classmethod
+    def _validate_probability(cls, v: str) -> str:
+        if v not in PROBABILITY_LEVELS:
+            raise ValueError(f"Invalid probability '{v}'")
+        return v
 
     @field_validator('severity')
     @classmethod
@@ -128,8 +140,6 @@ class ResidualRiskPayload(BaseModel):
     risk_analysis_uuid: str = Field(..., min_length=1)
     residual_severity: str = Field(..., description="negligible|minor|moderate|critical|catastrophic")
     residual_probability: str = Field(..., description="improbable|unlikely|possible|likely|probable")
-    residual_risk_level: Optional[str] = None
-    acceptability: Optional[str] = None
     rationale: Optional[str] = None
 
     @field_validator('residual_severity')
@@ -206,5 +216,5 @@ class OverallResidualRiskPayload(BaseModel):
     evaluation_id: str = Field(..., min_length=1)
     conclusion: str = Field(..., min_length=1)
     rationale: str = Field(..., min_length=1)
-    unresolved_risks: List[str] = []
+    unresolved_risks: List[str] = Field(default_factory=list)
     reviewer_notes: Optional[str] = None
