@@ -107,9 +107,12 @@ class TestProductService:
         cs = ClaimService(repo)
         obj, _ = ps.create(_VALID_PRODUCT, "u1")
         c, _ = cs.create(_VALID_CLAIM, "u1")
-        r, _ = cs.create({**_VALID_CLAIM, "claim_type": "safety", "claim_category": "safety", "severity": "high"}, "u1")
+        # Create a risk_analysis object
+        r, _ = repo.create_object(object_type='risk_analysis', payload={"risk_id": "R1", "title": "Test Risk", "severity": "moderate", "probability": "possible"}, owner_user_id="u1", created_by="u1")
+        session.commit()
+        risk_obj = r  # create_object returns (obj, version)
         ps.link_claim(obj.uuid_hex, c.uuid_hex, "u1")
-        ps.link_risk(obj.uuid_hex, r.uuid_hex, "u1")
+        ps.link_risk(obj.uuid_hex, risk_obj.uuid_hex, "u1")
         assert len(ps.list_claims(obj.uuid_hex)) == 1
         assert len(ps.list_risks(obj.uuid_hex)) == 1
 

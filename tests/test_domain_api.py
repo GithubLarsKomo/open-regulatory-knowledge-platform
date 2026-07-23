@@ -126,8 +126,9 @@ class TestProductAPI:
         cr = client.post("/api/v1/products", params={"owner_user_id": "u1"}, json=_VALID_PRODUCT)
         puid = cr.json()["object_uuid"]
         cuid = client.post("/api/v1/claims", params={"owner_user_id": "u1"}, json=_VALID_CLAIM).json()["object_uuid"]
-        rid = client.post("/api/v1/claims", params={"owner_user_id": "u1"},
-                          json={**_VALID_CLAIM, "claim_type": "safety", "claim_category": "safety", "severity": "high"}).json()["object_uuid"]
+        # Create a risk analysis object
+        risk_resp = client.post("/api/v1/objects", json={"object_type": "risk_analysis", "payload": {"risk_id": "R1", "title": "Test Risk", "severity": "moderate", "probability": "possible"}, "owner_user_id": "u1"})
+        rid = risk_resp.json()["object_uuid"]
         assert client.post(f"/api/v1/products/{puid}/claims/{cuid}", params={"actor_user_id": "u1"}).status_code == 200
         assert client.post(f"/api/v1/products/{puid}/risks/{rid}", params={"actor_user_id": "u1"}).status_code == 200
         assert client.get(f"/api/v1/products/{puid}/completeness").json()["complete"] is True

@@ -28,6 +28,7 @@ from orkp.domain.exceptions import (
     RelationNotFoundError,
     RelationAlreadyInactiveError,
 )
+from orkp.domain.relation_policy import validate_relation
 
 
 # Valid lifecycle transitions per SPEC-CoreObjectStore
@@ -421,9 +422,10 @@ class RegulatoryObjectRepository:
 
         Validates that both source and target versions exist.
         Validates relation_type against the canonical list.
+        Validates canonical source/target object types.
 
         Raises:
-            InvalidRelationError: version not found or invalid relation type
+            InvalidRelationError: version not found, invalid type, or type mismatch
         """
         sv = self.get_version(source_uuid, source_version)
         tv = self.get_version(target_uuid, target_version)
@@ -436,11 +438,17 @@ class RegulatoryObjectRepository:
                 f"Target version {target_version} of {_bin_to_str(target_uuid)} not found"
             )
 
-        from orkp.db.models import RELATION_TYPES
+        from orkp.db.models import RELATION_TYPES, _bin_to_str as _b2s
         if relation_type not in RELATION_TYPES:
             raise InvalidRelationError(
                 f"Invalid relation type '{relation_type}'. Valid: {', '.join(RELATION_TYPES)}"
             )
+
+        # Centralized canonical relation validation
+        src_obj = self.get_by_uuid_including_deleted(source_uuid)
+        tgt_obj = self.get_by_uuid_including_deleted(target_uuid)
+        if src_obj and tgt_obj:
+            validate_relation(src_obj.object_type, relation_type, tgt_obj.object_type)
 
         relation = ObjectRelation(
             source_uuid=source_uuid,

@@ -1,11 +1,10 @@
 """
-Strict Pydantic payload models for the Risk Management domain.
-
+Strict Pydantic payload models for persisted Risk Policy and Evaluations.
 Uses ConfigDict(extra="forbid") for all models.
 """
 
 from datetime import date
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from pydantic import BaseModel, Field, ConfigDict, field_validator
 
@@ -14,132 +13,154 @@ from pydantic import BaseModel, Field, ConfigDict, field_validator
 # Enums
 # ---------------------------------------------------------------------------
 
-HAZARD_CATEGORIES = {
-    'biological', 'chemical', 'electrical', 'energy', 'information',
-    'mechanical', 'radiation', 'thermal', 'use_error',
-}
-
-HARM_CATEGORIES = {
-    'death', 'injury', 'infection', 'misdiagnosis', 'delay_in_treatment',
-    'psychological', 'economic',
-}
-
 SEVERITY_LEVELS = {'negligible', 'minor', 'moderate', 'critical', 'catastrophic'}
 PROBABILITY_LEVELS = {'improbable', 'unlikely', 'possible', 'likely', 'probable'}
-RISK_ACCEPTABILITY = {'acceptable', 'unacceptable', 'as_low_as_reasonably_practicable'}
 RISK_CONTROL_OPTIONS = {'design_by_safety', 'protective_measure', 'information_for_safety'}
-CONTROL_IMPLEMENTATION_STATUS = {'proposed', 'implemented', 'verified'}
+CONTROL_IMPLEMENTATION_STATUS = {'proposed', 'implemented'}
+VERIFICATION_STATUS = {'draft', 'executed', 'in_review', 'approved', 'rejected'}
+VERIFICATION_CONCLUSION = {'passed', 'failed', 'inconclusive'}
 BENEFIT_RISK_CONCLUSION = {'favorable', 'unfavorable', 'inconclusive'}
+REQUIRED_ACTIONS = {'none', 'monitor', 'control_required', 'benefit_risk_required', 'prohibited'}
+POLICY_LIFECYCLE = {'draft', 'in_review', 'approved', 'effective', 'obsolete'}
 
 
 # ---------------------------------------------------------------------------
-# Hazard
+# Risk Policy
 # ---------------------------------------------------------------------------
 
-class HazardPayload(BaseModel):
+class RiskPolicyPayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    hazard_id: str = Field(..., min_length=1)
-    category: str = Field(..., description="biological|chemical|electrical|energy|information|mechanical|radiation|thermal|use_error")
-    description: str = Field(..., min_length=1)
-    source: Optional[str] = None
-    foreseeable_misuse: Optional[str] = None
-
-    @field_validator('category')
-    @classmethod
-    def _validate_category(cls, v: str) -> str:
-        if v not in HAZARD_CATEGORIES:
-            raise ValueError(f"Invalid hazard category '{v}'")
-        return v
-
-
-class SequenceOfEventsPayload(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    sequence_id: str = Field(..., min_length=1)
-    description: str = Field(..., min_length=1)
-    initiating_event: Optional[str] = None
-    intermediate_events: List[str] = Field(default_factory=list)
-    foreseeable_conditions: Optional[str] = None
-
-
-class HazardousSituationPayload(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    situation_id: str = Field(..., min_length=1)
-    description: str = Field(..., min_length=1)
-    exposed_persons: Optional[str] = None
-    exposure_context: Optional[str] = None
-
-
-class HarmPayload(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    harm_id: str = Field(..., min_length=1)
-    description: str = Field(..., min_length=1)
-    harm_category: str = Field(..., description="death|injury|infection|misdiagnosis|delay_in_treatment|psychological|economic")
-    clinical_consequence: Optional[str] = None
-
-    @field_validator('harm_category')
-    @classmethod
-    def _validate_harm_category(cls, v: str) -> str:
-        if v not in HARM_CATEGORIES:
-            raise ValueError(f"Invalid harm category '{v}'")
-        return v
+    policy_id: str = Field(..., min_length=1)
+    name: str = Field(..., min_length=1)
+    policy_version: str = Field(..., min_length=1)
+    severity_scale: List[str] = Field(..., min_length=1)
+    probability_scale: List[str] = Field(..., min_length=1)
+    risk_levels: List[str] = Field(..., min_length=1)
+    risk_matrix: Dict[str, Dict[str, str]]
+    acceptability_rules: Dict[str, bool]
+    required_actions: Dict[str, str]
+    control_hierarchy: List[str] = Field(..., min_length=1)
+    benefit_risk_required_for: List[str] = Field(default_factory=list)
+    effective_from: Optional[str] = None
+    effective_until: Optional[str] = None
+    jurisdiction: List[str] = Field(default_factory=list)
+    product_scope: List[str] = Field(default_factory=list)
+    notes: Optional[str] = None
 
 
 # ---------------------------------------------------------------------------
-# Risk Analysis
+# Initial Risk Evaluation
 # ---------------------------------------------------------------------------
 
-class RiskAnalysisPayload(BaseModel):
+class InitialRiskEvaluationPayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    risk_id: str = Field(..., min_length=1)
-    title: str = Field(..., min_length=1)
-    rationale: Optional[str] = None
-    severity: str = Field(..., description="negligible|minor|moderate|critical|catastrophic")
-    probability: str = Field(..., description="improbable|unlikely|possible|likely|probable")
-    estimation_method: Optional[str] = None
-    uncertainty: Optional[str] = None
-    assumptions: Optional[str] = None
-
-    @field_validator('severity')
-    @classmethod
-    def _validate_severity(cls, v: str) -> str:
-        if v not in SEVERITY_LEVELS:
-            raise ValueError(f"Invalid severity '{v}'")
-        return v
-
-    @field_validator('probability')
-    @classmethod
-    def _validate_probability(cls, v: str) -> str:
-        if v not in PROBABILITY_LEVELS:
-            raise ValueError(f"Invalid probability '{v}'")
-        return v
-
-    @field_validator('severity')
-    @classmethod
-    def _validate_severity(cls, v: str) -> str:
-        if v not in SEVERITY_LEVELS:
-            raise ValueError(f"Invalid severity '{v}'")
-        return v
-
-    @field_validator('probability')
-    @classmethod
-    def _validate_probability(cls, v: str) -> str:
-        if v not in PROBABILITY_LEVELS:
-            raise ValueError(f"Invalid probability '{v}'")
-        return v
-
-    @field_validator('acceptability')
-    @classmethod
-    def _validate_acceptability(cls, v: Optional[str]) -> Optional[str]:
-        if v is not None and v not in RISK_ACCEPTABILITY:
-            raise ValueError(f"Invalid acceptability '{v}'")
-        return v
-
-
-class ResidualRiskPayload(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    evaluation_id: str = Field(..., min_length=1)
     risk_analysis_uuid: str = Field(..., min_length=1)
-    residual_severity: str = Field(..., description="negligible|minor|moderate|critical|catastrophic")
-    residual_probability: str = Field(..., description="improbable|unlikely|possible|likely|probable")
+    risk_analysis_version: int = Field(...)
+    severity: str = Field(...)
+    probability: str = Field(...)
+    calculated_risk_level: str = Field(...)
+    acceptable: bool = Field(...)
+    action_required: str = Field(...)
+    policy_uuid: str = Field(..., min_length=1)
+    policy_version: str = Field(..., min_length=1)
+    evaluator_user_id: str = Field(..., min_length=1)
+    rationale: Optional[str] = None
+    assumptions: Optional[str] = None
+    uncertainty: Optional[str] = None
+    evaluated_at: str = Field(...)
+
+    @field_validator('severity')
+    @classmethod
+    def _validate_severity(cls, v: str) -> str:
+        if v not in SEVERITY_LEVELS:
+            raise ValueError(f"Invalid severity '{v}'")
+        return v
+
+    @field_validator('probability')
+    @classmethod
+    def _validate_probability(cls, v: str) -> str:
+        if v not in PROBABILITY_LEVELS:
+            raise ValueError(f"Invalid probability '{v}'")
+        return v
+
+
+class InitialRiskEvaluationCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    risk_policy_uuid: str = Field(..., min_length=1)
+    severity: str = Field(...)
+    probability: str = Field(...)
+    evaluator_user_id: str = Field(..., min_length=1)
+    rationale: Optional[str] = None
+    assumptions: Optional[str] = None
+    uncertainty: Optional[str] = None
+
+    @field_validator('severity')
+    @classmethod
+    def _validate_severity(cls, v: str) -> str:
+        if v not in SEVERITY_LEVELS:
+            raise ValueError(f"Invalid severity '{v}'")
+        return v
+
+    @field_validator('probability')
+    @classmethod
+    def _validate_probability(cls, v: str) -> str:
+        if v not in PROBABILITY_LEVELS:
+            raise ValueError(f"Invalid probability '{v}'")
+        return v
+
+
+# ---------------------------------------------------------------------------
+# Residual Risk Evaluation
+# ---------------------------------------------------------------------------
+
+class ResidualRiskEvaluationPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    evaluation_id: str = Field(..., min_length=1)
+    risk_analysis_uuid: str = Field(..., min_length=1)
+    risk_analysis_version: int = Field(...)
+    initial_evaluation_uuid: str = Field(..., min_length=1)
+    initial_evaluation_version: int = Field(...)
+    residual_severity: str = Field(...)
+    residual_probability: str = Field(...)
+    calculated_risk_level: str = Field(...)
+    acceptable: bool = Field(...)
+    action_required: str = Field(...)
+    severity_improved: bool = Field(...)
+    probability_improved: bool = Field(...)
+    severity_worsened: bool = Field(...)
+    probability_worsened: bool = Field(...)
+    risk_level_improved: bool = Field(...)
+    reduced: bool = Field(...)
+    regression_detected: bool = Field(...)
+    benefit_risk_required: bool = Field(...)
+    policy_uuid: str = Field(..., min_length=1)
+    policy_version: str = Field(..., min_length=1)
+    evaluator_user_id: str = Field(..., min_length=1)
+    rationale: Optional[str] = None
+    evaluated_at: str = Field(...)
+
+    @field_validator('residual_severity')
+    @classmethod
+    def _validate_rsev(cls, v: str) -> str:
+        if v not in SEVERITY_LEVELS:
+            raise ValueError(f"Invalid severity '{v}'")
+        return v
+
+    @field_validator('residual_probability')
+    @classmethod
+    def _validate_rprob(cls, v: str) -> str:
+        if v not in PROBABILITY_LEVELS:
+            raise ValueError(f"Invalid probability '{v}'")
+        return v
+
+
+class ResidualRiskEvaluationCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    initial_evaluation_uuid: str = Field(..., min_length=1)
+    residual_severity: str = Field(...)
+    residual_probability: str = Field(...)
+    evaluator_user_id: str = Field(..., min_length=1)
     rationale: Optional[str] = None
 
     @field_validator('residual_severity')
@@ -158,32 +179,35 @@ class ResidualRiskPayload(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Risk Control
+# Control Verification
 # ---------------------------------------------------------------------------
 
-class RiskControlPayload(BaseModel):
+class ControlVerificationPayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    control_id: str = Field(..., min_length=1)
-    title: str = Field(..., min_length=1)
-    description: str = Field(..., min_length=1)
-    control_option: str = Field(..., description="design_by_safety|protective_measure|information_for_safety")
-    implementation_status: str = Field(..., description="proposed|implemented|verified")
-    owner: Optional[str] = None
-    due_date: Optional[str] = None
-    verification_required: bool = True
+    verification_id: str = Field(..., min_length=1)
+    method: str = Field(..., min_length=1)
+    protocol_reference: Optional[str] = None
+    acceptance_criteria: Optional[str] = None
+    result_summary: Optional[str] = None
+    conclusion: str = Field(...)
+    verification_status: str = Field(...)
+    author_user_id: str = Field(..., min_length=1)
+    reviewer_user_id: Optional[str] = None
+    verification_date: Optional[str] = None
+    notes: Optional[str] = None
 
-    @field_validator('control_option')
+    @field_validator('conclusion')
     @classmethod
-    def _validate_ctrl_opt(cls, v: str) -> str:
-        if v not in RISK_CONTROL_OPTIONS:
-            raise ValueError(f"Invalid control option '{v}'")
+    def _validate_conclusion(cls, v: str) -> str:
+        if v not in VERIFICATION_CONCLUSION:
+            raise ValueError(f"Invalid conclusion '{v}'")
         return v
 
-    @field_validator('implementation_status')
+    @field_validator('verification_status')
     @classmethod
-    def _validate_impl_status(cls, v: str) -> str:
-        if v not in CONTROL_IMPLEMENTATION_STATUS:
-            raise ValueError(f"Invalid implementation status '{v}'")
+    def _validate_status(cls, v: str) -> str:
+        if v not in VERIFICATION_STATUS:
+            raise ValueError(f"Invalid verification status '{v}'")
         return v
 
 
@@ -197,7 +221,7 @@ class BenefitRiskPayload(BaseModel):
     benefits: str = Field(..., min_length=1)
     residual_risks: Optional[str] = None
     rationale: str = Field(..., min_length=1)
-    conclusion: str = Field(..., description="favorable|unfavorable|inconclusive")
+    conclusion: str = Field(...)
 
     @field_validator('conclusion')
     @classmethod
@@ -205,16 +229,3 @@ class BenefitRiskPayload(BaseModel):
         if v not in BENEFIT_RISK_CONCLUSION:
             raise ValueError(f"Invalid benefit-risk conclusion '{v}'")
         return v
-
-
-# ---------------------------------------------------------------------------
-# Overall Residual Risk
-# ---------------------------------------------------------------------------
-
-class OverallResidualRiskPayload(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    evaluation_id: str = Field(..., min_length=1)
-    conclusion: str = Field(..., min_length=1)
-    rationale: str = Field(..., min_length=1)
-    unresolved_risks: List[str] = Field(default_factory=list)
-    reviewer_notes: Optional[str] = None
