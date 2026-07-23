@@ -4,9 +4,9 @@ Product completeness evaluator for ORKP.
 Determines whether a product meets minimum requirements for approval.
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
-from orkp.domain.models import ProductPayload, PRODUCT_KINDS
+from orkp.domain.models import ProductPayload
 
 
 def evaluate_product_completeness(
@@ -42,13 +42,12 @@ def evaluate_product_completeness(
         missing_fields.append("regulatory_status")
 
     # Check at least one applicable regulation for assay or kit
-    if payload.product_kind in ('assay', 'kit') and not payload.applicable_regulations:
+    if payload.product_kind in ("assay", "kit") and not payload.applicable_regulations:
         warnings.append("No applicable regulations defined for assay/kit product")
 
     # Check relationships
-    has_claims = len(relations.get('has_claim', [])) > 0
-    has_risks = len(relations.get('has_risk', [])) > 0
-    has_evidence = len(relations.get('has_evidence', [])) > 0
+    has_claims = len(relations.get("has_claim", [])) > 0
+    has_risks = len(relations.get("has_risk", [])) > 0
 
     if not has_claims:
         missing_relationships.append("at least one claim relation")

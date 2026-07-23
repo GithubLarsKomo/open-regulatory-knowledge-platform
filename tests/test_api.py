@@ -1,17 +1,14 @@
 """Tests for the ORKP REST API endpoints."""
 
 import uuid
-from datetime import datetime
 
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, event
-from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy.orm import sessionmaker
 
 from orkp.api.main import create_app
-from orkp.api.schemas import RegulatoryObjectCreate
 from orkp.db.models import Base
-from orkp.db.repository import RegulatoryObjectRepository
 
 
 @pytest.fixture(scope="function")
@@ -19,6 +16,7 @@ def client():
     """Create a test client with in-memory SQLite."""
     # Use sqlite:// (not :memory:) to ensure connections share the same DB
     from sqlalchemy.pool import StaticPool
+
     engine = create_engine(
         "sqlite://",
         connect_args={"check_same_thread": False},
@@ -110,9 +108,7 @@ class TestGetObject:
         assert data["payload"] == {"hazard": "Electrical shock"}
 
     def test_get_nonexistent_object(self, client):
-        response = client.get(
-            f"/api/v1/objects/{uuid.uuid4().hex}"
-        )
+        response = client.get(f"/api/v1/objects/{uuid.uuid4().hex}")
         assert response.status_code == 404
 
     def test_get_object_invalid_uuid(self, client):
@@ -125,12 +121,22 @@ class TestListObjects:
 
     def test_list_objects(self, client):
         # Create two objects
-        client.post("/api/v1/objects", json={
-            "object_type": "claim", "payload": {"wording": "C1"}, "owner_user_id": "u1",
-        })
-        client.post("/api/v1/objects", json={
-            "object_type": "risk", "payload": {"hazard": "H1"}, "owner_user_id": "u2",
-        })
+        client.post(
+            "/api/v1/objects",
+            json={
+                "object_type": "claim",
+                "payload": {"wording": "C1"},
+                "owner_user_id": "u1",
+            },
+        )
+        client.post(
+            "/api/v1/objects",
+            json={
+                "object_type": "risk",
+                "payload": {"hazard": "H1"},
+                "owner_user_id": "u2",
+            },
+        )
 
         response = client.get("/api/v1/objects")
         assert response.status_code == 200
@@ -138,12 +144,22 @@ class TestListObjects:
         assert len(data) == 2
 
     def test_list_objects_filter_by_type(self, client):
-        client.post("/api/v1/objects", json={
-            "object_type": "claim", "payload": {}, "owner_user_id": "u1",
-        })
-        client.post("/api/v1/objects", json={
-            "object_type": "risk", "payload": {}, "owner_user_id": "u2",
-        })
+        client.post(
+            "/api/v1/objects",
+            json={
+                "object_type": "claim",
+                "payload": {},
+                "owner_user_id": "u1",
+            },
+        )
+        client.post(
+            "/api/v1/objects",
+            json={
+                "object_type": "risk",
+                "payload": {},
+                "owner_user_id": "u2",
+            },
+        )
 
         response = client.get("/api/v1/objects?object_type=claim")
         assert response.status_code == 200
@@ -157,9 +173,14 @@ class TestVersionHistory:
 
     def test_list_versions(self, client):
         # Create object
-        create_resp = client.post("/api/v1/objects", json={
-            "object_type": "claim", "payload": {"wording": "v1"}, "owner_user_id": "u1",
-        })
+        create_resp = client.post(
+            "/api/v1/objects",
+            json={
+                "object_type": "claim",
+                "payload": {"wording": "v1"},
+                "owner_user_id": "u1",
+            },
+        )
         obj_uuid = create_resp.json()["object_uuid"]
 
         # Create second version
@@ -177,9 +198,14 @@ class TestVersionHistory:
         assert data[1]["version_no"] == 1
 
     def test_create_version(self, client):
-        create_resp = client.post("/api/v1/objects", json={
-            "object_type": "claim", "payload": {"wording": "v1"}, "owner_user_id": "u1",
-        })
+        create_resp = client.post(
+            "/api/v1/objects",
+            json={
+                "object_type": "claim",
+                "payload": {"wording": "v1"},
+                "owner_user_id": "u1",
+            },
+        )
         obj_uuid = create_resp.json()["object_uuid"]
 
         response = client.post(
@@ -194,9 +220,14 @@ class TestLifecycleTransitions:
     """Tests for lifecycle state transitions via API."""
 
     def test_submit_for_review(self, client):
-        create_resp = client.post("/api/v1/objects", json={
-            "object_type": "claim", "payload": {}, "owner_user_id": "u1",
-        })
+        create_resp = client.post(
+            "/api/v1/objects",
+            json={
+                "object_type": "claim",
+                "payload": {},
+                "owner_user_id": "u1",
+            },
+        )
         obj_uuid = create_resp.json()["object_uuid"]
 
         response = client.post(
@@ -207,9 +238,14 @@ class TestLifecycleTransitions:
         assert response.json()["lifecycle_state"] == "in_review"
 
     def test_approve_object(self, client):
-        create_resp = client.post("/api/v1/objects", json={
-            "object_type": "claim", "payload": {}, "owner_user_id": "u1",
-        })
+        create_resp = client.post(
+            "/api/v1/objects",
+            json={
+                "object_type": "claim",
+                "payload": {},
+                "owner_user_id": "u1",
+            },
+        )
         obj_uuid = create_resp.json()["object_uuid"]
 
         # Submit for review
@@ -226,9 +262,14 @@ class TestLifecycleTransitions:
         assert response.json()["lifecycle_state"] == "approved"
 
     def test_invalid_transition(self, client):
-        create_resp = client.post("/api/v1/objects", json={
-            "object_type": "claim", "payload": {}, "owner_user_id": "u1",
-        })
+        create_resp = client.post(
+            "/api/v1/objects",
+            json={
+                "object_type": "claim",
+                "payload": {},
+                "owner_user_id": "u1",
+            },
+        )
         obj_uuid = create_resp.json()["object_uuid"]
 
         # Try to approve directly from draft (invalid)
@@ -243,9 +284,14 @@ class TestEventHistory:
     """Tests for event history API."""
 
     def test_get_event_history(self, client):
-        create_resp = client.post("/api/v1/objects", json={
-            "object_type": "claim", "payload": {}, "owner_user_id": "u1",
-        })
+        create_resp = client.post(
+            "/api/v1/objects",
+            json={
+                "object_type": "claim",
+                "payload": {},
+                "owner_user_id": "u1",
+            },
+        )
         obj_uuid = create_resp.json()["object_uuid"]
 
         # Perform some transitions
@@ -268,9 +314,14 @@ class TestDeleteObject:
     """Tests for soft-deleting objects via API."""
 
     def test_soft_delete(self, client):
-        create_resp = client.post("/api/v1/objects", json={
-            "object_type": "claim", "payload": {}, "owner_user_id": "u1",
-        })
+        create_resp = client.post(
+            "/api/v1/objects",
+            json={
+                "object_type": "claim",
+                "payload": {},
+                "owner_user_id": "u1",
+            },
+        )
         obj_uuid = create_resp.json()["object_uuid"]
 
         response = client.delete(f"/api/v1/objects/{obj_uuid}?actor_user_id=u1")
@@ -281,7 +332,5 @@ class TestDeleteObject:
         assert get_resp.status_code == 404
 
     def test_delete_nonexistent(self, client):
-        response = client.delete(
-            f"/api/v1/objects/{uuid.uuid4().hex}?actor_user_id=u1"
-        )
+        response = client.delete(f"/api/v1/objects/{uuid.uuid4().hex}?actor_user_id=u1")
         assert response.status_code == 404

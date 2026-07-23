@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
-from sqlalchemy import select, update, and_, exists
+from sqlalchemy import select, update, and_
 from sqlalchemy.orm import Session
 
 from orkp.db.models import (
@@ -15,7 +15,6 @@ from orkp.db.models import (
     ApprovalRecord,
     Baseline,
     BaselineItem,
-    _new_uuid,
     _bin_to_str,
 )
 from orkp.domain.exceptions import (
@@ -33,17 +32,17 @@ from orkp.domain.relation_policy import validate_relation
 
 # Valid lifecycle transitions per SPEC-CoreObjectStore
 _VALID_TRANSITIONS: Dict[str, List[str]] = {
-    'draft': ['in_review'],
-    'in_review': ['approved', 'rejected'],
-    'rejected': ['draft'],
-    'approved': ['effective'],
-    'effective': ['obsolete'],
-    'obsolete': ['deleted'],
-    'deleted': [],
+    "draft": ["in_review"],
+    "in_review": ["approved", "rejected"],
+    "rejected": ["draft"],
+    "approved": ["effective"],
+    "effective": ["obsolete"],
+    "obsolete": ["deleted"],
+    "deleted": [],
 }
 
 # Allowed deletion transitions (admin may bypass lifecycle)
-_ALLOWED_DELETION_STATES = {'draft', 'rejected', 'obsolete'}
+_ALLOWED_DELETION_STATES = {"draft", "rejected", "obsolete"}
 
 
 class RegulatoryObjectRepository:
@@ -66,7 +65,7 @@ class RegulatoryObjectRepository:
         """Create a new regulatory object with its initial version (atomic)."""
         obj = RegulatoryObject(
             object_type=object_type,
-            lifecycle_state='draft',
+            lifecycle_state="draft",
             owner_user_id=owner_user_id,
         )
         self.session.add(obj)
@@ -76,16 +75,16 @@ class RegulatoryObjectRepository:
             object_uuid=obj.object_uuid,
             version_no=1,
             payload_json=payload,
-            status='draft',
+            status="draft",
             created_by=created_by,
         )
         self.session.add(version)
 
         self._log_event(
-            aggregate_type='regulatory_object',
+            aggregate_type="regulatory_object",
             aggregate_uuid=obj.object_uuid,
-            event_type='created',
-            event_data={'version': 1, 'payload': payload},
+            event_type="created",
+            event_data={"version": 1, "payload": payload},
             actor_user_id=created_by,
         )
 
@@ -100,7 +99,7 @@ class RegulatoryObjectRepository:
         stmt = select(RegulatoryObject).where(
             and_(
                 RegulatoryObject.object_uuid == object_uuid,
-                RegulatoryObject.lifecycle_state != 'deleted',
+                RegulatoryObject.lifecycle_state != "deleted",
             )
         )
         return self.session.execute(stmt).scalar_one_or_none()
@@ -151,7 +150,7 @@ class RegulatoryObjectRepository:
         offset: int = 0,
     ) -> List[RegulatoryObject]:
         """List regulatory objects with optional filters. Excludes deleted."""
-        conditions = [RegulatoryObject.lifecycle_state != 'deleted']
+        conditions = [RegulatoryObject.lifecycle_state != "deleted"]
         if object_type:
             conditions.append(RegulatoryObject.object_type == object_type)
         if lifecycle_state:
@@ -206,14 +205,16 @@ class RegulatoryObjectRepository:
 
     def _check_immutable(self, obj: RegulatoryObject) -> None:
         """Raise if the object is in an immutable state."""
-        if obj.lifecycle_state == 'approved':
+        if obj.lifecycle_state == "approved":
             raise ImmutableVersionError(
                 f"Object {_bin_to_str(obj.object_uuid)} is approved and cannot be modified"
             )
 
     def _check_not_deleted(self, obj: RegulatoryObject) -> None:
-        if obj.lifecycle_state == 'deleted':
-            raise ObjectNotFoundError(f"Object {_bin_to_str(obj.object_uuid)} is deleted")
+        if obj.lifecycle_state == "deleted":
+            raise ObjectNotFoundError(
+                f"Object {_bin_to_str(obj.object_uuid)} is deleted"
+            )
 
     def _log_event(
         self,
@@ -221,7 +222,7 @@ class RegulatoryObjectRepository:
         aggregate_uuid: bytes,
         event_type: str,
         event_data: Optional[Dict[str, Any]] = None,
-        actor_user_id: str = 'system',
+        actor_user_id: str = "system",
     ) -> EventLog:
         """Create an append-only event log entry."""
         event = EventLog(
@@ -261,7 +262,7 @@ class RegulatoryObjectRepository:
             object_uuid=object_uuid,
             version_no=new_version_no,
             payload_json=payload,
-            status='draft',
+            status="draft",
             created_by=created_by,
         )
         self.session.add(version)
@@ -269,10 +270,10 @@ class RegulatoryObjectRepository:
         obj.current_version = new_version_no
 
         self._log_event(
-            aggregate_type='regulatory_object',
+            aggregate_type="regulatory_object",
             aggregate_uuid=object_uuid,
-            event_type='updated',
-            event_data={'version': new_version_no},
+            event_type="updated",
+            event_data={"version": new_version_no},
             actor_user_id=created_by,
         )
 
@@ -310,30 +311,30 @@ class RegulatoryObjectRepository:
         obj.lifecycle_state = new_state
 
         # If approved, mark the current version as immutable
-        if new_state == 'approved':
+        if new_state == "approved":
             version = self.get_version(object_uuid, obj.current_version)
             if version:
-                version.status = 'approved'
+                version.status = "approved"
 
         # Determine event type
         event_type = new_state
-        if new_state == 'in_review':
-            event_type = 'submitted_for_review'
+        if new_state == "in_review":
+            event_type = "submitted_for_review"
 
         self._log_event(
-            aggregate_type='regulatory_object',
+            aggregate_type="regulatory_object",
             aggregate_uuid=object_uuid,
             event_type=event_type,
             event_data={
-                'from_state': current,
-                'to_state': new_state,
-                'comments': comments,
+                "from_state": current,
+                "to_state": new_state,
+                "comments": comments,
             },
             actor_user_id=actor_user_id,
         )
 
         # Record approval decision
-        if new_state in ('approved', 'rejected'):
+        if new_state in ("approved", "rejected"):
             approval = ApprovalRecord(
                 object_uuid=object_uuid,
                 version_no=obj.current_version,
@@ -376,13 +377,13 @@ class RegulatoryObjectRepository:
                 f"Stale lock version for object {_bin_to_str(object_uuid)}"
             )
 
-        obj.lifecycle_state = 'deleted'
+        obj.lifecycle_state = "deleted"
         obj.deleted_at = datetime.now(timezone.utc)
 
         self._log_event(
-            aggregate_type='regulatory_object',
+            aggregate_type="regulatory_object",
             aggregate_uuid=object_uuid,
-            event_type='deleted',
+            event_type="deleted",
             actor_user_id=actor_user_id,
         )
 
@@ -438,7 +439,8 @@ class RegulatoryObjectRepository:
                 f"Target version {target_version} of {_bin_to_str(target_uuid)} not found"
             )
 
-        from orkp.db.models import RELATION_TYPES, _bin_to_str as _b2s
+        from orkp.db.models import RELATION_TYPES
+
         if relation_type not in RELATION_TYPES:
             raise InvalidRelationError(
                 f"Invalid relation type '{relation_type}'. Valid: {', '.join(RELATION_TYPES)}"
@@ -462,9 +464,7 @@ class RegulatoryObjectRepository:
         self.session.add(relation)
         return relation
 
-    def list_relations_for_source(
-        self, source_uuid: bytes
-    ) -> List[ObjectRelation]:
+    def list_relations_for_source(self, source_uuid: bytes) -> List[ObjectRelation]:
         """List all relations where the given object is the source."""
         stmt = (
             select(ObjectRelation)
@@ -473,9 +473,7 @@ class RegulatoryObjectRepository:
         )
         return list(self.session.execute(stmt).scalars().all())
 
-    def list_relations_for_target(
-        self, target_uuid: bytes
-    ) -> List[ObjectRelation]:
+    def list_relations_for_target(self, target_uuid: bytes) -> List[ObjectRelation]:
         """List all relations where the given object is the target."""
         stmt = (
             select(ObjectRelation)
@@ -523,25 +521,25 @@ class RegulatoryObjectRepository:
             raise RelationNotFoundError(
                 f"Relation {_bin_to_str(relation_uuid)} not found"
             )
-        if rel.lifecycle_state == 'inactive':
+        if rel.lifecycle_state == "inactive":
             raise RelationAlreadyInactiveError(
                 f"Relation {_bin_to_str(relation_uuid)} is already inactive"
             )
 
-        rel.lifecycle_state = 'inactive'
+        rel.lifecycle_state = "inactive"
         rel.deactivated_at = datetime.now(timezone.utc)
         rel.deactivated_by = actor_user_id
         rel.deactivation_reason = reason
 
         self._log_event(
-            aggregate_type='regulatory_object',
+            aggregate_type="regulatory_object",
             aggregate_uuid=rel.source_uuid,
-            event_type='relation_deactivated',
+            event_type="relation_deactivated",
             event_data={
-                'relation_uuid': _bin_to_str(relation_uuid),
-                'relation_type': rel.relation_type,
-                'target_uuid': _bin_to_str(rel.target_uuid),
-                'reason': reason,
+                "relation_uuid": _bin_to_str(relation_uuid),
+                "relation_type": rel.relation_type,
+                "target_uuid": _bin_to_str(rel.target_uuid),
+                "reason": reason,
             },
             actor_user_id=actor_user_id,
         )
@@ -555,7 +553,7 @@ class RegulatoryObjectRepository:
             .where(
                 and_(
                     ObjectRelation.source_uuid == source_uuid,
-                    ObjectRelation.lifecycle_state == 'active',
+                    ObjectRelation.lifecycle_state == "active",
                 )
             )
             .order_by(ObjectRelation.created_at.desc())
@@ -571,16 +569,14 @@ class RegulatoryObjectRepository:
             .where(
                 and_(
                     ObjectRelation.target_uuid == target_uuid,
-                    ObjectRelation.lifecycle_state == 'active',
+                    ObjectRelation.lifecycle_state == "active",
                 )
             )
             .order_by(ObjectRelation.created_at.desc())
         )
         return list(self.session.execute(stmt).scalars().all())
 
-    def list_all_relations_for_source(
-        self, source_uuid: bytes
-    ) -> List[ObjectRelation]:
+    def list_all_relations_for_source(self, source_uuid: bytes) -> List[ObjectRelation]:
         """List all relations (active + inactive) for source."""
         stmt = (
             select(ObjectRelation)
@@ -589,9 +585,7 @@ class RegulatoryObjectRepository:
         )
         return list(self.session.execute(stmt).scalars().all())
 
-    def list_all_relations_for_target(
-        self, target_uuid: bytes
-    ) -> List[ObjectRelation]:
+    def list_all_relations_for_target(self, target_uuid: bytes) -> List[ObjectRelation]:
         """List all relations (active + inactive) for target."""
         stmt = (
             select(ObjectRelation)
@@ -634,17 +628,17 @@ class RegulatoryObjectRepository:
             item = BaselineItem(
                 baseline_uuid=baseline.baseline_uuid,
                 object_uuid=obj_uuid,
-                object_type=obj.object_type if obj else 'unknown',
+                object_type=obj.object_type if obj else "unknown",
                 version_no=ver_no,
                 snapshot_json=version.payload_json,
             )
             self.session.add(item)
 
         self._log_event(
-            aggregate_type='baseline',
+            aggregate_type="baseline",
             aggregate_uuid=baseline.baseline_uuid,
-            event_type='baseline_frozen',
-            event_data={'name': name, 'item_count': len(object_versions)},
+            event_type="baseline_frozen",
+            event_data={"name": name, "item_count": len(object_versions)},
             actor_user_id=created_by,
         )
 

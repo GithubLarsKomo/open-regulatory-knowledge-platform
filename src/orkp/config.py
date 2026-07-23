@@ -2,7 +2,6 @@
 
 import os
 from dataclasses import dataclass, field
-from pathlib import Path
 
 
 @dataclass
@@ -25,7 +24,9 @@ class AppConfig:
     """Top-level application configuration."""
 
     db: DatabaseConfig = field(default_factory=DatabaseConfig)
-    debug: bool = field(default_factory=lambda: os.getenv("ORKP_DEBUG", "false").lower() == "true")
+    debug: bool = field(
+        default_factory=lambda: os.getenv("ORKP_DEBUG", "false").lower() == "true"
+    )
     testing: bool = False
 
 

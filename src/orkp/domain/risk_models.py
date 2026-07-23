@@ -3,7 +3,6 @@ Strict Pydantic payload models for persisted Risk Policy and Evaluations.
 Uses ConfigDict(extra="forbid") for all models.
 """
 
-from datetime import date
 from typing import Dict, List, Optional
 
 from pydantic import BaseModel, Field, ConfigDict, field_validator
@@ -13,20 +12,31 @@ from pydantic import BaseModel, Field, ConfigDict, field_validator
 # Enums
 # ---------------------------------------------------------------------------
 
-SEVERITY_LEVELS = {'negligible', 'minor', 'moderate', 'critical', 'catastrophic'}
-PROBABILITY_LEVELS = {'improbable', 'unlikely', 'possible', 'likely', 'probable'}
-RISK_CONTROL_OPTIONS = {'design_by_safety', 'protective_measure', 'information_for_safety'}
-CONTROL_IMPLEMENTATION_STATUS = {'proposed', 'implemented'}
-VERIFICATION_STATUS = {'draft', 'executed', 'in_review', 'approved', 'rejected'}
-VERIFICATION_CONCLUSION = {'passed', 'failed', 'inconclusive'}
-BENEFIT_RISK_CONCLUSION = {'favorable', 'unfavorable', 'inconclusive'}
-REQUIRED_ACTIONS = {'none', 'monitor', 'control_required', 'benefit_risk_required', 'prohibited'}
-POLICY_LIFECYCLE = {'draft', 'in_review', 'approved', 'effective', 'obsolete'}
+SEVERITY_LEVELS = {"negligible", "minor", "moderate", "critical", "catastrophic"}
+PROBABILITY_LEVELS = {"improbable", "unlikely", "possible", "likely", "probable"}
+RISK_CONTROL_OPTIONS = {
+    "design_by_safety",
+    "protective_measure",
+    "information_for_safety",
+}
+CONTROL_IMPLEMENTATION_STATUS = {"proposed", "implemented"}
+VERIFICATION_STATUS = {"draft", "executed", "in_review", "approved", "rejected"}
+VERIFICATION_CONCLUSION = {"passed", "failed", "inconclusive"}
+BENEFIT_RISK_CONCLUSION = {"favorable", "unfavorable", "inconclusive"}
+REQUIRED_ACTIONS = {
+    "none",
+    "monitor",
+    "control_required",
+    "benefit_risk_required",
+    "prohibited",
+}
+POLICY_LIFECYCLE = {"draft", "in_review", "approved", "effective", "obsolete"}
 
 
 # ---------------------------------------------------------------------------
 # Risk Policy
 # ---------------------------------------------------------------------------
+
 
 class RiskPolicyPayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -52,6 +62,7 @@ class RiskPolicyPayload(BaseModel):
 # Initial Risk Evaluation
 # ---------------------------------------------------------------------------
 
+
 class InitialRiskEvaluationPayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
     evaluation_id: str = Field(..., min_length=1)
@@ -71,14 +82,14 @@ class InitialRiskEvaluationPayload(BaseModel):
     uncertainty: Optional[str] = None
     evaluated_at: str = Field(...)
 
-    @field_validator('severity')
+    @field_validator("severity")
     @classmethod
     def _validate_severity(cls, v: str) -> str:
         if v not in SEVERITY_LEVELS:
             raise ValueError(f"Invalid severity '{v}'")
         return v
 
-    @field_validator('probability')
+    @field_validator("probability")
     @classmethod
     def _validate_probability(cls, v: str) -> str:
         if v not in PROBABILITY_LEVELS:
@@ -98,14 +109,14 @@ class InitialRiskEvaluationCreateRequest(BaseModel):
     assumptions: Optional[str] = None
     uncertainty: Optional[str] = None
 
-    @field_validator('severity')
+    @field_validator("severity")
     @classmethod
     def _validate_severity(cls, v: str) -> str:
         if v not in SEVERITY_LEVELS:
             raise ValueError(f"Invalid severity '{v}'")
         return v
 
-    @field_validator('probability')
+    @field_validator("probability")
     @classmethod
     def _validate_probability(cls, v: str) -> str:
         if v not in PROBABILITY_LEVELS:
@@ -116,6 +127,7 @@ class InitialRiskEvaluationCreateRequest(BaseModel):
 # ---------------------------------------------------------------------------
 # Residual Risk Evaluation
 # ---------------------------------------------------------------------------
+
 
 class ResidualRiskEvaluationPayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -144,14 +156,14 @@ class ResidualRiskEvaluationPayload(BaseModel):
     rationale: Optional[str] = None
     evaluated_at: str = Field(...)
 
-    @field_validator('residual_severity')
+    @field_validator("residual_severity")
     @classmethod
     def _validate_rsev(cls, v: str) -> str:
         if v not in SEVERITY_LEVELS:
             raise ValueError(f"Invalid severity '{v}'")
         return v
 
-    @field_validator('residual_probability')
+    @field_validator("residual_probability")
     @classmethod
     def _validate_rprob(cls, v: str) -> str:
         if v not in PROBABILITY_LEVELS:
@@ -169,14 +181,14 @@ class ResidualRiskEvaluationCreateRequest(BaseModel):
     evaluator_user_id: str = Field(..., min_length=1)
     rationale: Optional[str] = None
 
-    @field_validator('residual_severity')
+    @field_validator("residual_severity")
     @classmethod
     def _validate_rsev(cls, v: str) -> str:
         if v not in SEVERITY_LEVELS:
             raise ValueError(f"Invalid severity '{v}'")
         return v
 
-    @field_validator('residual_probability')
+    @field_validator("residual_probability")
     @classmethod
     def _validate_rprob(cls, v: str) -> str:
         if v not in PROBABILITY_LEVELS:
@@ -187,6 +199,7 @@ class ResidualRiskEvaluationCreateRequest(BaseModel):
 # ---------------------------------------------------------------------------
 # Control Verification
 # ---------------------------------------------------------------------------
+
 
 class ControlVerificationPayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -202,14 +215,14 @@ class ControlVerificationPayload(BaseModel):
     verification_date: Optional[str] = None
     notes: Optional[str] = None
 
-    @field_validator('conclusion')
+    @field_validator("conclusion")
     @classmethod
     def _validate_conclusion(cls, v: str) -> str:
         if v not in VERIFICATION_CONCLUSION:
             raise ValueError(f"Invalid conclusion '{v}'")
         return v
 
-    @field_validator('verification_status')
+    @field_validator("verification_status")
     @classmethod
     def _validate_status(cls, v: str) -> str:
         if v not in VERIFICATION_STATUS:
@@ -221,6 +234,7 @@ class ControlVerificationPayload(BaseModel):
 # Benefit-Risk
 # ---------------------------------------------------------------------------
 
+
 class BenefitRiskPayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
     analysis_id: str = Field(..., min_length=1)
@@ -229,7 +243,7 @@ class BenefitRiskPayload(BaseModel):
     rationale: str = Field(..., min_length=1)
     conclusion: str = Field(...)
 
-    @field_validator('conclusion')
+    @field_validator("conclusion")
     @classmethod
     def _validate_conclusion(cls, v: str) -> str:
         if v not in BENEFIT_RISK_CONCLUSION:
@@ -240,6 +254,7 @@ class BenefitRiskPayload(BaseModel):
 # ---------------------------------------------------------------------------
 # Response Models
 # ---------------------------------------------------------------------------
+
 
 class InitialRiskEvaluationResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")

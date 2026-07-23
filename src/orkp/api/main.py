@@ -27,23 +27,28 @@ from orkp.api.schemas import (
     StateTransitionRequest,
 )
 from orkp.db.repository import RegulatoryObjectRepository
-from orkp.db.models import _bin_to_str
-from orkp.db.session import create_engine_from_config, create_session_factory, get_session
+from orkp.db.session import (
+    create_engine_from_config,
+    create_session_factory,
+    get_session,
+)
 from orkp.config import load_config
 from orkp.domain.exceptions import (
-    ObjectNotFoundError,
-    ImmutableVersionError,
     OptimisticLockError,
     InvalidLifecycleTransitionError,
-    InvalidRelationError,
-    BaselineValidationError,
     ORKPError,
 )
-from orkp.api.routers import create_product_router, create_claim_router, create_evidence_router
+from orkp.api.routers import (
+    create_product_router,
+    create_claim_router,
+    create_evidence_router,
+)
+from orkp.api.risk_routers import create_risk_evaluation_router
 
 # ---------------------------------------------------------------------------
 # App factory
 # ---------------------------------------------------------------------------
+
 
 def create_app(session_factory_override=None) -> FastAPI:
     """Create and configure the FastAPI application.
@@ -149,7 +154,9 @@ def create_app(session_factory_override=None) -> FastAPI:
     )
     async def list_objects(
         object_type: Optional[str] = Query(None, description="Filter by object type"),
-        lifecycle_state: Optional[str] = Query(None, description="Filter by lifecycle state"),
+        lifecycle_state: Optional[str] = Query(
+            None, description="Filter by lifecycle state"
+        ),
         limit: int = Query(100, ge=1, le=1000, description="Max items per page"),
         offset: int = Query(0, ge=0, description="Number of items to skip"),
         repo: RegulatoryObjectRepository = Depends(get_repo),
@@ -401,6 +408,7 @@ def create_app(session_factory_override=None) -> FastAPI:
     app.include_router(create_product_router(get_repo))
     app.include_router(create_claim_router(get_repo))
     app.include_router(create_evidence_router(get_repo))
+    app.include_router(create_risk_evaluation_router(get_repo))
 
     return app
 
@@ -409,9 +417,11 @@ def create_app(session_factory_override=None) -> FastAPI:
 # Helper
 # ---------------------------------------------------------------------------
 
+
 def _bin_to_str(b: bytes) -> str:
     """Convert binary UUID to hex string."""
     import uuid
+
     return uuid.UUID(bytes=b).hex
 
 
@@ -423,6 +433,7 @@ app = create_app()
 
 if __name__ == "__main__":
     import uvicorn
+
     config = load_config()
     uvicorn.run(
         "orkp.api.main:app",

@@ -6,7 +6,7 @@ with type and lifecycle validation.
 """
 
 from dataclasses import dataclass
-from typing import Dict, List, Optional
+from typing import List, Optional
 
 from orkp.db.models import RegulatoryObject, ObjectVersion
 from orkp.db.repository import RegulatoryObjectRepository
@@ -19,11 +19,13 @@ from orkp.domain.exceptions import (
     InvalidObjectIdentifierError,
 )
 from orkp.domain.risk_policy import RiskPolicy
+from orkp.domain.risk_models import RiskPolicyPayload
 
 
 @dataclass(frozen=True)
 class LoadedVersionedObject:
     """Typed result of loading an object by UUID + exact version."""
+
     object: RegulatoryObject
     version: ObjectVersion
     payload: dict
@@ -32,17 +34,18 @@ class LoadedVersionedObject:
 @dataclass(frozen=True)
 class LoadedRiskPolicyResult:
     """Typed result of loading a persisted RiskPolicy."""
+
     object: RegulatoryObject
     version: ObjectVersion
-    payload: dict
+    payload: RiskPolicyPayload
     policy: RiskPolicy
     revision: str
-    validated_payload: object  # RiskPolicyPayload instance
 
 
 def _validate_uuid(uuid_hex: str) -> str:
     """Validate UUID hex format, return normalized form."""
     import uuid as _uuid
+
     try:
         u = _uuid.UUID(hex=uuid_hex)
         return u.hex
@@ -84,7 +87,10 @@ def load_versioned_object(
             f"Expected type '{expected_object_type}', got '{obj.object_type}'"
         )
 
-    if allowed_lifecycle_states is not None and obj.lifecycle_state not in allowed_lifecycle_states:
+    if (
+        allowed_lifecycle_states is not None
+        and obj.lifecycle_state not in allowed_lifecycle_states
+    ):
         raise InvalidLifecycleStateError(
             f"Object {uuid_hex} is in state '{obj.lifecycle_state}', "
             f"expected one of: {', '.join(allowed_lifecycle_states)}"
@@ -118,8 +124,11 @@ def load_risk_policy(
     from orkp.domain.risk_models import RiskPolicyPayload
 
     loaded = load_versioned_object(
-        repo, policy_uuid, policy_object_version,
-        'risk_policy', allowed_lifecycle_states=['approved', 'effective'],
+        repo,
+        policy_uuid,
+        policy_object_version,
+        "risk_policy",
+        allowed_lifecycle_states=["approved", "effective"],
     )
 
     # Validate payload with Pydantic
@@ -145,8 +154,7 @@ def load_risk_policy(
     return LoadedRiskPolicyResult(
         object=loaded.object,
         version=loaded.version,
-        payload=loaded.payload,
+        payload=validated,
         policy=policy,
         revision=validated.policy_version,
-        validated_payload=validated,
     )

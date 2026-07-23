@@ -25,7 +25,7 @@ def calculate_risk_level(
 
     risk_level = policy.calculate_risk_level(severity, probability)
     acceptable = policy.is_acceptable(risk_level)
-    action_required = 'none' if acceptable else 'controls_required'
+    action_required = "none" if acceptable else "controls_required"
 
     return {
         "severity": severity,
@@ -67,19 +67,20 @@ def compare_initial_and_residual_risk(
     probability_worsened = pb_r > pb_i
 
     # Reduced only if neither worsened AND at least one improved
-    reduced = (not severity_worsened and not probability_worsened) and (severity_improved or probability_improved)
+    reduced = (not severity_worsened and not probability_worsened) and (
+        severity_improved or probability_improved
+    )
 
     # Risk level comparison
-    rl_order = {'low': 0, 'medium': 1, 'high': 2, 'intolerable': 3}
-    rl_i = rl_order.get(initial['risk_level'], 99)
-    rl_r = rl_order.get(residual['risk_level'], 99)
+    rl_order = {"low": 0, "medium": 1, "high": 2, "intolerable": 3}
+    rl_i = rl_order.get(initial["risk_level"], 99)
+    rl_r = rl_order.get(residual["risk_level"], 99)
     risk_level_improved = rl_r < rl_i
     regression_detected = severity_worsened or probability_worsened or rl_r > rl_i
 
-    benefit_risk_required = (
-        not residual['acceptable']
-        and (policy.is_benefit_risk_required(initial['risk_level'])
-             or policy.is_benefit_risk_required(residual['risk_level']))
+    benefit_risk_required = not residual["acceptable"] and (
+        policy.is_benefit_risk_required(initial["risk_level"])
+        or policy.is_benefit_risk_required(residual["risk_level"])
     )
 
     return {
@@ -92,7 +93,7 @@ def compare_initial_and_residual_risk(
         "risk_level_improved": risk_level_improved,
         "reduced": reduced,
         "regression_detected": regression_detected,
-        "acceptable": residual['acceptable'],
+        "acceptable": residual["acceptable"],
         "benefit_risk_required": benefit_risk_required,
         "warnings": [],
     }
@@ -110,16 +111,18 @@ def evaluate_control_effectiveness(
     issues: List[str] = []
     effective = False
 
-    if control_status == 'proposed':
+    if control_status == "proposed":
         issues.append("Control is only proposed, not implemented")
-    elif control_status == 'implemented':
+    elif control_status == "implemented":
         if verification_required and not has_approved_verification:
             issues.append("Control requires verification but no approved evidence")
         else:
             effective = True
-    elif control_status == 'verified':
+    elif control_status == "verified":
         if verification_required and not has_approved_verification:
-            issues.append("Control status is 'verified' but no approved verification evidence found")
+            issues.append(
+                "Control status is 'verified' but no approved verification evidence found"
+            )
         else:
             effective = True
 

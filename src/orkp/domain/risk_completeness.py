@@ -6,7 +6,7 @@ from Hazard to verification are met.
 """
 
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 
 def evaluate_risk_completeness(
@@ -38,13 +38,43 @@ def evaluate_risk_completeness(
 
     checks = [
         (has_hazard, "No hazard linked", "hazard", "RISK-CHAIN-HAZARD-001"),
-        (has_sequence, "No sequence of events linked", "sequence_of_events", "RISK-CHAIN-SEQUENCE-001"),
-        (has_situation, "No hazardous situation linked", "hazardous_situation", "RISK-CHAIN-SITUATION-001"),
+        (
+            has_sequence,
+            "No sequence of events linked",
+            "sequence_of_events",
+            "RISK-CHAIN-SEQUENCE-001",
+        ),
+        (
+            has_situation,
+            "No hazardous situation linked",
+            "hazardous_situation",
+            "RISK-CHAIN-SITUATION-001",
+        ),
         (has_harm, "No harm linked", "harm", "RISK-CHAIN-HARM-001"),
-        (has_product, "No product/device relation", "product_relation", "RISK-PRODUCT-LINK-001"),
-        (has_controls, "No risk controls linked", "risk_controls", "RISK-CONTROL-MISSING-001"),
-        (controls_verified, "Not all required controls have approved verification", "verification", "RISK-CONTROL-VERIFICATION-MISSING-001"),
-        (residual_evaluated, "Residual risk not evaluated", "residual_evaluation", "RISK-EVAL-RESIDUAL-MISSING-001"),
+        (
+            has_product,
+            "No product/device relation",
+            "product_relation",
+            "RISK-PRODUCT-LINK-001",
+        ),
+        (
+            has_controls,
+            "No risk controls linked",
+            "risk_controls",
+            "RISK-CONTROL-MISSING-001",
+        ),
+        (
+            controls_verified,
+            "Not all required controls have approved verification",
+            "verification",
+            "RISK-CONTROL-VERIFICATION-MISSING-001",
+        ),
+        (
+            residual_evaluated,
+            "Residual risk not evaluated",
+            "residual_evaluation",
+            "RISK-EVAL-RESIDUAL-MISSING-001",
+        ),
     ]
 
     for passed, issue, obj_name, rule_code in checks:
@@ -53,21 +83,27 @@ def evaluate_risk_completeness(
             score += 1
         else:
             issues.append(f"[{rule_code}] {issue}")
-            if obj_name not in ('verification', 'residual_evaluation'):
+            if obj_name not in ("verification", "residual_evaluation"):
                 missing_objects.append(obj_name)
-            elif obj_name == 'verification':
+            elif obj_name == "verification":
                 unverified_controls.append("Controls lack approved verification")
-            elif obj_name == 'residual_evaluation':
+            elif obj_name == "residual_evaluation":
                 unacceptable_residual.append("Residual risk not evaluated")
 
     # If residual is evaluated but unacceptable — require benefit-risk
     if residual_evaluated and not residual_acceptable:
         if benefit_risk_approved:
-            warnings.append("[RISK-BENEFIT-001] Residual risk unacceptable but Benefit-Risk analysis approved")
+            warnings.append(
+                "[RISK-BENEFIT-001] Residual risk unacceptable but Benefit-Risk analysis approved"
+            )
             score += 1
         else:
-            issues.append("[RISK-BENEFIT-001] Unacceptable residual risk requires approved Benefit-Risk analysis")
-            unacceptable_residual.append("No approved Benefit-Risk analysis for unacceptable residual risk")
+            issues.append(
+                "[RISK-BENEFIT-001] Unacceptable residual risk requires approved Benefit-Risk analysis"
+            )
+            unacceptable_residual.append(
+                "No approved Benefit-Risk analysis for unacceptable residual risk"
+            )
     elif not residual_evaluated:
         # Already handled above
         pass
@@ -80,11 +116,17 @@ def evaluate_risk_completeness(
 
     if residual_evaluated and not residual_acceptable:
         if benefit_risk_approved:
-            warnings.append("Residual risk unacceptable but Benefit-Risk analysis approved")
+            warnings.append(
+                "Residual risk unacceptable but Benefit-Risk analysis approved"
+            )
             score += 1
         else:
-            issues.append("Unacceptable residual risk requires approved Benefit-Risk analysis")
-            unacceptable_residual.append("No approved Benefit-Risk analysis for unacceptable residual risk")
+            issues.append(
+                "Unacceptable residual risk requires approved Benefit-Risk analysis"
+            )
+            unacceptable_residual.append(
+                "No approved Benefit-Risk analysis for unacceptable residual risk"
+            )
 
     total_checks += 1
     if residual_acceptable or (not residual_acceptable and benefit_risk_approved):

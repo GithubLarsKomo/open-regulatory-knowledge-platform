@@ -29,15 +29,17 @@ def evaluate_evidence_coverage(
     linked_evidence_uuids: List[str] = []
 
     for rel in evidence_relations:
-        ev_uuid = rel.get('source_uuid_hex', '')
+        ev_uuid = rel.get("source_uuid_hex", "")
         linked_evidence_uuids.append(ev_uuid)
         ev = evidence_objects.get(ev_uuid)
-        if ev and ev.get('lifecycle_state') == 'approved':
+        if ev and ev.get("lifecycle_state") == "approved":
             approved_evidence += 1
-            if ev.get('quality_rating') == 'high':
+            if ev.get("quality_rating") == "high":
                 high_quality += 1
-            elif ev.get('quality_rating') == 'low':
-                quality_warnings.append(f"Evidence {ev_uuid[:8]} has low quality rating")
+            elif ev.get("quality_rating") == "low":
+                quality_warnings.append(
+                    f"Evidence {ev_uuid[:8]} has low quality rating"
+                )
 
     coverage_score = 0
     if total_relations > 0:

@@ -10,34 +10,21 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from orkp.api.schemas import (
     RegulatoryObjectResponse,
-    ProductCreateRequest,
     ProductDetailResponse,
     ProductCompletenessResponse,
-    DeviceCreateRequest,
 )
-from orkp.domain.models import ClaimPayload, EvidencePayload, ProductPayload, DevicePayload
+from orkp.domain.models import (
+    ClaimPayload,
+    EvidencePayload,
+    ProductPayload,
+    DevicePayload,
+)
 from orkp.domain.services import (
     ClaimService,
     EvidenceService,
     ProductService,
-    DeviceService,
 )
-from orkp.domain.exceptions import (
-    ObjectNotFoundError,
-    InvalidLifecycleTransitionError,
-    ImmutableVersionError,
-    OptimisticLockError,
-    InvalidRelationError,
-    ProductCompletenessError,
-    ClaimApprovalError,
-    RelationNotFoundError,
-    RelationAlreadyInactiveError,
-    ObjectTypeMismatchError,
-    ObjectVersionNotFoundError,
-    InvalidLifecycleStateError,
-    InvalidPersistedPayloadError,
-    InvalidObjectIdentifierError,
-)
+from orkp.domain.exceptions import ORKPError
 from orkp.db.repository import RegulatoryObjectRepository
 
 
@@ -45,36 +32,33 @@ from orkp.db.repository import RegulatoryObjectRepository
 # Helper: wrap domain exceptions into HTTP
 # ---------------------------------------------------------------------------
 
+
 def _call_or_404(service_fn):
-    """Call a service method; let ORKPError handler deal with it."""
+    """Call a service method; map ORKPError to HTTP."""
     try:
         return service_fn()
-    except ObjectNotFoundError as e:
-        raise HTTPException(status_code=404, detail=e.message)
-    except (InvalidLifecycleTransitionError, ImmutableVersionError, OptimisticLockError) as e:
-        raise HTTPException(status_code=409, detail=e.message)
-    except (InvalidRelationError, ProductCompletenessError, ClaimApprovalError,
-            ObjectTypeMismatchError, InvalidPersistedPayloadError, InvalidObjectIdentifierError) as e:
-        raise HTTPException(status_code=422, detail=e.message)
-    except (RelationNotFoundError, RelationAlreadyInactiveError) as e:
-        raise HTTPException(status_code=409 if isinstance(e, RelationAlreadyInactiveError) else 404, detail=e.message)
-    except (ObjectVersionNotFoundError, InvalidLifecycleStateError) as e:
-        raise HTTPException(status_code=404 if isinstance(e, ObjectVersionNotFoundError) else 409, detail=e.message)
+    except ORKPError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.message) from e
 
 
 # ---------------------------------------------------------------------------
 # Product Router
 # ---------------------------------------------------------------------------
 
+
 def create_product_router(
     get_repo: Callable[[], RegulatoryObjectRepository],
 ) -> APIRouter:
     router = APIRouter(prefix="/api/v1/products", tags=["Products"])
 
-    def _get_service(repo: RegulatoryObjectRepository = Depends(get_repo)) -> ProductService:
+    def _get_service(
+        repo: RegulatoryObjectRepository = Depends(get_repo),
+    ) -> ProductService:
         return ProductService(repo)
 
-    @router.post("", response_model=RegulatoryObjectResponse, status_code=status.HTTP_201_CREATED)
+    @router.post(
+        "", response_model=RegulatoryObjectResponse, status_code=status.HTTP_201_CREATED
+    )
     async def create_product(
         payload: ProductPayload,
         owner_user_id: str = Query(...),
@@ -101,11 +85,15 @@ def create_product_router(
         objects = service.list(limit=limit, offset=offset)
         return [
             RegulatoryObjectResponse(
-                object_uuid=obj.uuid_hex, object_type=obj.object_type,
-                current_version=obj.current_version, lifecycle_state=obj.lifecycle_state,
-                owner_user_id=obj.owner_user_id, created_at=obj.created_at,
+                object_uuid=obj.uuid_hex,
+                object_type=obj.object_type,
+                current_version=obj.current_version,
+                lifecycle_state=obj.lifecycle_state,
+                owner_user_id=obj.owner_user_id,
+                created_at=obj.created_at,
                 updated_at=obj.updated_at,
-            ) for obj in objects
+            )
+            for obj in objects
         ]
 
     @router.get("/{uuid}", response_model=ProductDetailResponse)
@@ -154,14 +142,20 @@ def create_product_router(
     ):
         _call_or_404(lambda: service.soft_delete(uuid, actor_user_id))
 
-    @router.post("/{uuid}/devices", response_model=RegulatoryObjectResponse, status_code=201)
+    @router.post(
+        "/{uuid}/devices", response_model=RegulatoryObjectResponse, status_code=201
+    )
     async def add_device(
         uuid: str,
         payload: DevicePayload,
         actor_user_id: str = Query(...),
         service: ProductService = Depends(_get_service),
     ):
-        device = _call_or_404(lambda: service.add_device_variant(uuid, payload.model_dump(), actor_user_id))
+        device = _call_or_404(
+            lambda: service.add_device_variant(
+                uuid, payload.model_dump(), actor_user_id
+            )
+        )
         return RegulatoryObjectResponse(
             object_uuid=device.uuid_hex,
             object_type=device.object_type,
@@ -180,11 +174,15 @@ def create_product_router(
         devices = _call_or_404(lambda: service.list_devices(uuid))
         return [
             RegulatoryObjectResponse(
-                object_uuid=d.uuid_hex, object_type=d.object_type,
-                current_version=d.current_version, lifecycle_state=d.lifecycle_state,
-                owner_user_id=d.owner_user_id, created_at=d.created_at,
+                object_uuid=d.uuid_hex,
+                object_type=d.object_type,
+                current_version=d.current_version,
+                lifecycle_state=d.lifecycle_state,
+                owner_user_id=d.owner_user_id,
+                created_at=d.created_at,
                 updated_at=d.updated_at,
-            ) for d in devices
+            )
+            for d in devices
         ]
 
     @router.post("/{uuid}/claims/{claim_uuid}")
@@ -232,15 +230,20 @@ def create_product_router(
 # Claim Router
 # ---------------------------------------------------------------------------
 
+
 def create_claim_router(
     get_repo: Callable[[], RegulatoryObjectRepository],
 ) -> APIRouter:
     router = APIRouter(prefix="/api/v1/claims", tags=["Claims"])
 
-    def _get_service(repo: RegulatoryObjectRepository = Depends(get_repo)) -> ClaimService:
+    def _get_service(
+        repo: RegulatoryObjectRepository = Depends(get_repo),
+    ) -> ClaimService:
         return ClaimService(repo)
 
-    @router.post("", response_model=RegulatoryObjectResponse, status_code=status.HTTP_201_CREATED)
+    @router.post(
+        "", response_model=RegulatoryObjectResponse, status_code=status.HTTP_201_CREATED
+    )
     async def create_claim(
         payload: ClaimPayload,
         owner_user_id: str = Query(...),
@@ -249,9 +252,12 @@ def create_claim_router(
         obj, version = service.create(payload.model_dump(), owner_user_id)
         service.repo.session.commit()
         return RegulatoryObjectResponse(
-            object_uuid=obj.uuid_hex, object_type=obj.object_type,
-            current_version=obj.current_version, lifecycle_state=obj.lifecycle_state,
-            owner_user_id=obj.owner_user_id, created_at=obj.created_at,
+            object_uuid=obj.uuid_hex,
+            object_type=obj.object_type,
+            current_version=obj.current_version,
+            lifecycle_state=obj.lifecycle_state,
+            owner_user_id=obj.owner_user_id,
+            created_at=obj.created_at,
             updated_at=obj.updated_at,
         )
 
@@ -264,11 +270,15 @@ def create_claim_router(
         objects = service.list(limit=limit, offset=offset)
         return [
             RegulatoryObjectResponse(
-                object_uuid=obj.uuid_hex, object_type=obj.object_type,
-                current_version=obj.current_version, lifecycle_state=obj.lifecycle_state,
-                owner_user_id=obj.owner_user_id, created_at=obj.created_at,
+                object_uuid=obj.uuid_hex,
+                object_type=obj.object_type,
+                current_version=obj.current_version,
+                lifecycle_state=obj.lifecycle_state,
+                owner_user_id=obj.owner_user_id,
+                created_at=obj.created_at,
                 updated_at=obj.updated_at,
-            ) for obj in objects
+            )
+            for obj in objects
         ]
 
     @router.get("/{uuid}", response_model=dict)
@@ -309,8 +319,14 @@ def create_claim_router(
         reason: str = Query("Removed"),
         service: ClaimService = Depends(_get_service),
     ):
-        _call_or_404(lambda: service.unlink_evidence(uuid, evidence_uuid, actor_user_id, reason))
-        return {"status": "unlinked", "claim_uuid": uuid, "evidence_uuid": evidence_uuid}
+        _call_or_404(
+            lambda: service.unlink_evidence(uuid, evidence_uuid, actor_user_id, reason)
+        )
+        return {
+            "status": "unlinked",
+            "claim_uuid": uuid,
+            "evidence_uuid": evidence_uuid,
+        }
 
     @router.get("/{uuid}/evidence-coverage", response_model=dict)
     async def check_evidence_coverage(
@@ -394,15 +410,20 @@ def create_claim_router(
 # Evidence Router
 # ---------------------------------------------------------------------------
 
+
 def create_evidence_router(
     get_repo: Callable[[], RegulatoryObjectRepository],
 ) -> APIRouter:
     router = APIRouter(prefix="/api/v1/evidence", tags=["Evidence"])
 
-    def _get_service(repo: RegulatoryObjectRepository = Depends(get_repo)) -> EvidenceService:
+    def _get_service(
+        repo: RegulatoryObjectRepository = Depends(get_repo),
+    ) -> EvidenceService:
         return EvidenceService(repo)
 
-    @router.post("", response_model=RegulatoryObjectResponse, status_code=status.HTTP_201_CREATED)
+    @router.post(
+        "", response_model=RegulatoryObjectResponse, status_code=status.HTTP_201_CREATED
+    )
     async def create_evidence(
         payload: EvidencePayload,
         owner_user_id: str = Query(...),
@@ -411,9 +432,12 @@ def create_evidence_router(
         obj, _ = service.create(payload.model_dump(), owner_user_id)
         service.repo.session.commit()
         return RegulatoryObjectResponse(
-            object_uuid=obj.uuid_hex, object_type=obj.object_type,
-            current_version=obj.current_version, lifecycle_state=obj.lifecycle_state,
-            owner_user_id=obj.owner_user_id, created_at=obj.created_at,
+            object_uuid=obj.uuid_hex,
+            object_type=obj.object_type,
+            current_version=obj.current_version,
+            lifecycle_state=obj.lifecycle_state,
+            owner_user_id=obj.owner_user_id,
+            created_at=obj.created_at,
             updated_at=obj.updated_at,
         )
 
@@ -426,11 +450,15 @@ def create_evidence_router(
         objects = service.list(limit=limit, offset=offset)
         return [
             RegulatoryObjectResponse(
-                object_uuid=obj.uuid_hex, object_type=obj.object_type,
-                current_version=obj.current_version, lifecycle_state=obj.lifecycle_state,
-                owner_user_id=obj.owner_user_id, created_at=obj.created_at,
+                object_uuid=obj.uuid_hex,
+                object_type=obj.object_type,
+                current_version=obj.current_version,
+                lifecycle_state=obj.lifecycle_state,
+                owner_user_id=obj.owner_user_id,
+                created_at=obj.created_at,
                 updated_at=obj.updated_at,
-            ) for obj in objects
+            )
+            for obj in objects
         ]
 
     @router.get("/{uuid}", response_model=dict)
@@ -491,7 +519,11 @@ def create_evidence_router(
         reason: str = Query(...),
         service: EvidenceService = Depends(_get_service),
     ):
-        return _call_or_404(lambda: service.supersede_evidence(uuid, replacement_uuid, actor_user_id, reason))
+        return _call_or_404(
+            lambda: service.supersede_evidence(
+                uuid, replacement_uuid, actor_user_id, reason
+            )
+        )
 
     @router.get("/{uuid}/impact", response_model=dict)
     async def evidence_impact(

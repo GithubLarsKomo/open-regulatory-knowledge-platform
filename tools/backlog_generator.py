@@ -28,28 +28,42 @@ from typing import Any, Dict, List, Optional, Tuple
 # Constants
 # ---------------------------------------------------------------------------
 
-ID_PATTERN = re.compile(r'(?<!`)\b([A-Z]+-[A-Z]+-\d{4})\b(?!`)', re.IGNORECASE)
-EXCLUDE_DIRS = {'.git', 'node_modules', '__pycache__', '.venv', 'venv'}
+ID_PATTERN = re.compile(r"(?<!`)\b([A-Z]+-[A-Z]+-\d{4})\b(?!`)", re.IGNORECASE)
+EXCLUDE_DIRS = {".git", "node_modules", "__pycache__", ".venv", "venv"}
 EXCLUDE_FILES = {
-    'lint_report.md', 'backlog.md', 'backlog.csv', 'Requirements.csv',
-    'test_spec_linter.py', 'test_backlog_generator.py',
-    'README.md', 'GLOSSARY.md', 'ROADMAP.md', 'VISION.md',
+    "lint_report.md",
+    "backlog.md",
+    "backlog.csv",
+    "Requirements.csv",
+    "test_spec_linter.py",
+    "test_backlog_generator.py",
+    "README.md",
+    "GLOSSARY.md",
+    "ROADMAP.md",
+    "VISION.md",
 }
-GENERATED_FILES = {'TASK.md', 'TRACEABILITY/backlog.md', 'TRACEABILITY/backlog.csv', 'TRACEABILITY/Requirements.csv', 'TRACEABILITY/lint_report.md'}
+GENERATED_FILES = {
+    "TASK.md",
+    "TRACEABILITY/backlog.md",
+    "TRACEABILITY/backlog.csv",
+    "TRACEABILITY/Requirements.csv",
+    "TRACEABILITY/lint_report.md",
+}
 
-CONFIG_PATH = 'META/task_groups.json'
+CONFIG_PATH = "META/task_groups.json"
 
 
 # ---------------------------------------------------------------------------
 # Config loading
 # ---------------------------------------------------------------------------
 
+
 def load_config(root: Path) -> Dict[str, Any]:
     """Load task group configuration from META/task_groups.json."""
     config_path = root / CONFIG_PATH
     if not config_path.is_file():
         raise FileNotFoundError(f"Config file not found: {config_path}")
-    with open(config_path, 'r', encoding='utf-8') as f:
+    with open(config_path, "r", encoding="utf-8") as f:
         return json.load(f)
 
 
@@ -57,18 +71,26 @@ def load_config(root: Path) -> Dict[str, Any]:
 # File discovery
 # ---------------------------------------------------------------------------
 
+
 def find_markdown_files(root: Path) -> List[Path]:
     """Find all .md SPEC files, excluding unwanted dirs and generated files."""
     md_files = []
-    for entry in root.rglob('*.md'):
+    for entry in root.rglob("*.md"):
         if any(part in EXCLUDE_DIRS for part in entry.relative_to(root).parts):
             continue
         if entry.name in EXCLUDE_FILES:
             continue
-        if entry.name in GENERATED_FILES or str(entry.relative_to(root)) in GENERATED_FILES:
+        if (
+            entry.name in GENERATED_FILES
+            or str(entry.relative_to(root)) in GENERATED_FILES
+        ):
             continue
         # Only include SPEC.md, REQ-*.md, and SPEC-*.md
-        if entry.name == 'SPEC.md' or entry.name.startswith('SPEC-') or entry.name.startswith('REQ-'):
+        if (
+            entry.name == "SPEC.md"
+            or entry.name.startswith("SPEC-")
+            or entry.name.startswith("REQ-")
+        ):
             md_files.append(entry)
     return sorted(md_files)
 
@@ -76,7 +98,7 @@ def find_markdown_files(root: Path) -> List[Path]:
 def is_heading_line(line: str) -> bool:
     """Check if a line is a Markdown heading (any level)."""
     stripped = line.strip()
-    return stripped.startswith('#')
+    return stripped.startswith("#")
 
 
 def extract_requirement_ids(filepath: Path) -> List[str]:
@@ -87,7 +109,7 @@ def extract_requirement_ids(filepath: Path) -> List[str]:
     seen: set[str] = set()
     results: list[str] = []
     try:
-        with open(filepath, 'r', encoding='utf-8') as f:
+        with open(filepath, "r", encoding="utf-8") as f:
             for line in f:
                 if is_heading_line(line):
                     for match in ID_PATTERN.finditer(line):
@@ -103,15 +125,15 @@ def extract_requirement_ids(filepath: Path) -> List[str]:
 def is_definition_file(name: str) -> bool:
     """Check if a filename is a definition source (SPEC file, not generated)."""
     basename = Path(name).name
-    if basename == 'SPEC-IDScheme.md':
+    if basename == "SPEC-IDScheme.md":
         return False
-    if basename == 'TASK.md':
+    if basename == "TASK.md":
         return False
-    if basename == 'SPEC.md':
+    if basename == "SPEC.md":
         return True
-    if basename.startswith('SPEC-') and basename.endswith('.md'):
+    if basename.startswith("SPEC-") and basename.endswith(".md"):
         return True
-    if basename.startswith('REQ-') and basename.endswith('.md'):
+    if basename.startswith("REQ-") and basename.endswith(".md"):
         return True
     return False
 
@@ -137,6 +159,7 @@ def collect_definitions(root: Path) -> Dict[str, List[str]]:
 # Backlog generation
 # ---------------------------------------------------------------------------
 
+
 def generate_backlog(root: Path) -> Tuple[List[Dict], List[Dict]]:
     """Generate task backlog from SPEC files.
 
@@ -144,8 +167,8 @@ def generate_backlog(root: Path) -> Tuple[List[Dict], List[Dict]]:
         (foundation_tasks, generated_tasks) where each is a list of task dicts.
     """
     config = load_config(root)
-    domain_groups = config.get('domain_groups', [])
-    foundation_tasks_cfg = config.get('foundation_tasks', [])
+    domain_groups = config.get("domain_groups", [])
+    foundation_tasks_cfg = config.get("foundation_tasks", [])
 
     # Collect all requirement definitions from SPEC files
     all_definitions = collect_definitions(root)
@@ -160,29 +183,32 @@ def generate_backlog(root: Path) -> Tuple[List[Dict], List[Dict]]:
     undefined_foundation_reqs = []
     for ft in foundation_tasks_cfg:
         # Validate that all referenced requirements are defined
-        for req in ft.get('requirements', []):
+        for req in ft.get("requirements", []):
             if req not in all_defined_ids:
-                undefined_foundation_reqs.append((ft['task_id'], req))
-        foundation_tasks.append({
-            'task_id': ft['task_id'],
-            'title': ft['title'],
-            'requirements': list(ft['requirements']),
-            'epic': ft['epic'],
-            'phase': ft['phase'],
-            'scope': ft.get('scope', ''),
-        })
+                undefined_foundation_reqs.append((ft["task_id"], req))
+        foundation_tasks.append(
+            {
+                "task_id": ft["task_id"],
+                "title": ft["title"],
+                "requirements": list(ft["requirements"]),
+                "epic": ft["epic"],
+                "phase": ft["phase"],
+                "scope": ft.get("scope", ""),
+            }
+        )
 
     # Fail hard if foundation tasks reference undefined requirements
     if undefined_foundation_reqs:
         msg_parts = [f"{tid} -> {req}" for tid, req in undefined_foundation_reqs]
         raise ValueError(
-            f"Foundation tasks reference undefined requirements:\n  " + "\n  ".join(msg_parts)
+            "Foundation tasks reference undefined requirements:\n  "
+            + "\n  ".join(msg_parts)
         )
 
     # Collect requirements already covered by foundation tasks
     covered_reqs: set[str] = set()
     for ft in foundation_tasks:
-        for r in ft['requirements']:
+        for r in ft["requirements"]:
             covered_reqs.add(r)
 
     # Group remaining requirement IDs by domain prefix
@@ -191,29 +217,29 @@ def generate_backlog(root: Path) -> Tuple[List[Dict], List[Dict]]:
     for rid in remaining_ids:
         matched = False
         for group in domain_groups:
-            if rid.startswith(group['prefix']):
-                groups[group['task_suffix']].append(rid)
+            if rid.startswith(group["prefix"]):
+                groups[group["task_suffix"]].append(rid)
                 matched = True
                 break
         if not matched:
-            parts = rid.split('-')
+            parts = rid.split("-")
             if len(parts) >= 2:
                 groups[parts[0]].append(rid)
 
     # Generate tasks — deterministic IDs (always -0001 per group)
     generated_tasks = []
     for group in domain_groups:
-        suffix = group['task_suffix']
+        suffix = group["task_suffix"]
         if suffix not in groups:
             continue
         req_ids = sorted(groups[suffix])
         task = {
-            'task_id': f'TASK-{suffix}-0001',
-            'title': group['title'],
-            'requirements': req_ids,
-            'epic': group['epic'],
-            'phase': group['phase'],
-            'scope': group['scope'],
+            "task_id": f"TASK-{suffix}-0001",
+            "title": group["title"],
+            "requirements": req_ids,
+            "epic": group["epic"],
+            "phase": group["phase"],
+            "scope": group["scope"],
         }
         generated_tasks.append(task)
 
@@ -224,12 +250,15 @@ def generate_backlog(root: Path) -> Tuple[List[Dict], List[Dict]]:
 # Output generators
 # ---------------------------------------------------------------------------
 
+
 def today_str() -> str:
     """Return today's date as ISO string (YYYY-MM-DD)."""
     return date.today().isoformat()
 
 
-def generate_markdown_backlog(foundation_tasks: List[Dict], generated_tasks: List[Dict], output_path: Path) -> None:
+def generate_markdown_backlog(
+    foundation_tasks: List[Dict], generated_tasks: List[Dict], output_path: Path
+) -> None:
     """Generate a Markdown backlog file."""
     lines = []
     lines.append("# ORKP Task Backlog")
@@ -239,13 +268,13 @@ def generate_markdown_backlog(foundation_tasks: List[Dict], generated_tasks: Lis
     all_tasks = foundation_tasks + generated_tasks
     lines.append(f"- **Foundation tasks:** {len(foundation_tasks)}")
     lines.append(f"- **Generated tasks:** {len(generated_tasks)}")
-    total_reqs = sum(len(t['requirements']) for t in all_tasks)
+    total_reqs = sum(len(t["requirements"]) for t in all_tasks)
     lines.append(f"- **Total requirement IDs covered:** {total_reqs}")
     lines.append("")
 
     epics = defaultdict(list)
     for task in all_tasks:
-        epics[task['epic']].append(task)
+        epics[task["epic"]].append(task)
 
     for epic_name in sorted(epics.keys()):
         lines.append(f"## {epic_name}")
@@ -254,47 +283,57 @@ def generate_markdown_backlog(foundation_tasks: List[Dict], generated_tasks: Lis
             lines.append(f"### {task['task_id']} — {task['title']}")
             lines.append("")
             lines.append("**Source requirements:**")
-            for req_id in task['requirements']:
+            for req_id in task["requirements"]:
                 lines.append(f"- {req_id}")
             lines.append("")
-            if task.get('scope'):
+            if task.get("scope"):
                 lines.append(f"**Scope:** {task['scope']}")
                 lines.append("")
             lines.append(f"**Phase:** {task['phase']}")
             lines.append("")
 
-    output_path.write_text('\n'.join(lines), encoding='utf-8')
+    output_path.write_text("\n".join(lines), encoding="utf-8")
 
 
-def generate_csv_backlog(foundation_tasks: List[Dict], generated_tasks: List[Dict], output_path: Path) -> None:
+def generate_csv_backlog(
+    foundation_tasks: List[Dict], generated_tasks: List[Dict], output_path: Path
+) -> None:
     """Generate a CSV backlog file."""
     all_tasks = foundation_tasks + generated_tasks
-    with open(output_path, 'w', newline='', encoding='utf-8') as f:
+    with open(output_path, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
-        writer.writerow(['task_id', 'title', 'requirement_ids', 'epic', 'phase'])
+        writer.writerow(["task_id", "title", "requirement_ids", "epic", "phase"])
         for task in all_tasks:
-            writer.writerow([
-                task['task_id'],
-                task['title'],
-                '; '.join(task['requirements']),
-                task['epic'],
-                task['phase'],
-            ])
+            writer.writerow(
+                [
+                    task["task_id"],
+                    task["title"],
+                    "; ".join(task["requirements"]),
+                    task["epic"],
+                    task["phase"],
+                ]
+            )
 
 
-def generate_task_md(foundation_tasks: List[Dict], generated_tasks: List[Dict], output_path: Path) -> None:
+def generate_task_md(
+    foundation_tasks: List[Dict], generated_tasks: List[Dict], output_path: Path
+) -> None:
     """Generate TASK.md from backlog data with detailed task structure."""
     lines = []
     lines.append("# SWE Batch Plan (Auto-Generated)")
     lines.append("")
-    lines.append("> This file is auto-generated from SPEC files by `tools/backlog_generator.py`.")
-    lines.append("> Do not edit manually — regenerate with `python tools/backlog_generator.py --task-md`.")
+    lines.append(
+        "> This file is auto-generated from SPEC files by `tools/backlog_generator.py`."
+    )
+    lines.append(
+        "> Do not edit manually — regenerate with `python tools/backlog_generator.py --task-md`."
+    )
     lines.append("")
 
     all_tasks = foundation_tasks + generated_tasks
     epics = defaultdict(list)
     for task in all_tasks:
-        epics[task['epic']].append(task)
+        epics[task["epic"]].append(task)
 
     for epic_name in sorted(epics.keys()):
         lines.append(f"## {epic_name}")
@@ -305,35 +344,41 @@ def generate_task_md(foundation_tasks: List[Dict], generated_tasks: List[Dict], 
             lines.append("")
             lines.append("Source requirements:")
             lines.append("")
-            for req_id in task['requirements']:
+            for req_id in task["requirements"]:
                 lines.append(f"- {req_id}")
             lines.append("")
-            scope_text = task.get('scope', '')
+            scope_text = task.get("scope", "")
             if scope_text:
                 lines.append("Scope:")
                 lines.append("")
-                for item in scope_text.split(', '):
+                for item in scope_text.split(", "):
                     lines.append(f"- {item}")
                 lines.append("")
             lines.append("Goal:")
             lines.append("")
-            lines.append(f"Implement the {task['title'].lower()} according to the referenced requirements.")
+            lines.append(
+                f"Implement the {task['title'].lower()} according to the referenced requirements."
+            )
             lines.append("")
             lines.append("Acceptance criteria:")
             lines.append("")
-            lines.append(f"- Each referenced requirement is satisfied through implementation.")
-            lines.append(f"- Unit tests cover the implemented functionality.")
-            lines.append(f"- The implementation follows the existing patterns in the repository.")
+            lines.append(
+                "- Each referenced requirement is satisfied through implementation."
+            )
+            lines.append("- Unit tests cover the implemented functionality.")
+            lines.append(
+                "- The implementation follows the existing patterns in the repository."
+            )
             lines.append("")
             lines.append("Definition of Done:")
             lines.append("")
-            lines.append(f"- Code is implemented and committed.")
-            lines.append(f"- All unit tests pass.")
-            lines.append(f"- `python tools/spec_linter.py --strict` passes.")
-            lines.append(f"- Generated artifacts are up to date.")
+            lines.append("- Code is implemented and committed.")
+            lines.append("- All unit tests pass.")
+            lines.append("- `python tools/spec_linter.py --strict` passes.")
+            lines.append("- Generated artifacts are up to date.")
             lines.append("")
 
-    output_path.write_text('\n'.join(lines), encoding='utf-8')
+    output_path.write_text("\n".join(lines), encoding="utf-8")
     print(f"   TASK.md:  {output_path}")
 
 
@@ -341,26 +386,30 @@ def generate_task_md(foundation_tasks: List[Dict], generated_tasks: List[Dict], 
 # CLI
 # ---------------------------------------------------------------------------
 
+
 def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="ORKP Task Backlog Generator — generate task stubs from SPEC requirements."
     )
     parser.add_argument(
-        '--path', '-p',
+        "--path",
+        "-p",
         type=Path,
         default=Path.cwd(),
-        help="Root path of the repository (default: current directory)."
+        help="Root path of the repository (default: current directory).",
     )
     parser.add_argument(
-        '--output-dir', '-o',
+        "--output-dir",
+        "-o",
         type=Path,
         default=None,
-        help="Output directory for backlog files (default: TRACEABILITY/)."
+        help="Output directory for backlog files (default: TRACEABILITY/).",
     )
     parser.add_argument(
-        '--task-md', '-t',
-        action='store_true',
-        help="Also generate TASK.md in the repository root."
+        "--task-md",
+        "-t",
+        action="store_true",
+        help="Also generate TASK.md in the repository root.",
     )
     return parser.parse_args(argv)
 
@@ -373,7 +422,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         print(f"Error: {repo_root} is not a valid directory.", file=sys.stderr)
         return 1
 
-    output_dir = args.output_dir or (repo_root / 'TRACEABILITY')
+    output_dir = args.output_dir or (repo_root / "TRACEABILITY")
     output_dir.mkdir(parents=True, exist_ok=True)
 
     print(f"📋 Generating backlog from {repo_root} ...")
@@ -382,8 +431,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     print(f"   Foundation tasks: {len(foundation_tasks)}")
     print(f"   Generated tasks:  {len(generated_tasks)}")
 
-    md_path = output_dir / 'backlog.md'
-    csv_path = output_dir / 'backlog.csv'
+    md_path = output_dir / "backlog.md"
+    csv_path = output_dir / "backlog.csv"
 
     generate_markdown_backlog(foundation_tasks, generated_tasks, md_path)
     print(f"   Markdown: {md_path}")
@@ -392,14 +441,12 @@ def main(argv: Optional[List[str]] = None) -> int:
     print(f"   CSV:      {csv_path}")
 
     if args.task_md:
-        task_md_path = repo_root / 'TASK.md'
+        task_md_path = repo_root / "TASK.md"
         generate_task_md(foundation_tasks, generated_tasks, task_md_path)
 
-    print(f"\n✅ Backlog generated.")
+    print("\n✅ Backlog generated.")
     return 0
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     sys.exit(main())
-
-

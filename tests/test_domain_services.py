@@ -69,7 +69,7 @@ class TestProductService:
         session, repo = repo_session
         s = ProductService(repo)
         obj, _ = s.create(_VALID_PRODUCT, "u1")
-        assert obj.object_type == 'product'
+        assert obj.object_type == "product"
 
     def test_list(self, repo_session):
         session, repo = repo_session
@@ -97,8 +97,12 @@ class TestProductService:
         session, repo = repo_session
         s = ProductService(repo)
         obj, _ = s.create(_VALID_PRODUCT, "u1")
-        device = s.add_device_variant(obj.uuid_hex, {"device_id": "D1", "name": "Dev1", "device_kind": "reagent"}, "u1")
-        assert device.object_type == 'device'
+        device = s.add_device_variant(
+            obj.uuid_hex,
+            {"device_id": "D1", "name": "Dev1", "device_kind": "reagent"},
+            "u1",
+        )
+        assert device.object_type == "device"
         assert len(s.list_devices(obj.uuid_hex)) == 1
 
     def test_link_claim_and_risk(self, repo_session):
@@ -108,7 +112,17 @@ class TestProductService:
         obj, _ = ps.create(_VALID_PRODUCT, "u1")
         c, _ = cs.create(_VALID_CLAIM, "u1")
         # Create a risk_analysis object
-        r, _ = repo.create_object(object_type='risk_analysis', payload={"risk_id": "R1", "title": "Test Risk", "severity": "moderate", "probability": "possible"}, owner_user_id="u1", created_by="u1")
+        r, _ = repo.create_object(
+            object_type="risk_analysis",
+            payload={
+                "risk_id": "R1",
+                "title": "Test Risk",
+                "severity": "moderate",
+                "probability": "possible",
+            },
+            owner_user_id="u1",
+            created_by="u1",
+        )
         session.commit()
         risk_obj = r  # create_object returns (obj, version)
         ps.link_claim(obj.uuid_hex, c.uuid_hex, "u1")
@@ -122,7 +136,7 @@ class TestClaimService:
         session, repo = repo_session
         s = ClaimService(repo)
         obj, _ = s.create(_VALID_CLAIM, "u1")
-        assert obj.object_type == 'claim'
+        assert obj.object_type == "claim"
 
     def test_link_evidence(self, repo_session):
         session, repo = repo_session
@@ -159,27 +173,29 @@ class TestClaimService:
         cs.submit_for_review(c.uuid_hex, "u1")
         cs.approve(c.uuid_hex, "u2", "Approved")
         data = cs.get_with_payload(c.uuid_hex)
-        assert data['lifecycle_state'] == 'approved'
+        assert data["lifecycle_state"] == "approved"
 
     def test_coverage_report(self, repo_session):
         session, repo = repo_session
         s = ClaimService(repo)
         obj, _ = s.create(_VALID_CLAIM, "u1")
         report = s.get_coverage_report(obj.uuid_hex)
-        assert report['total_evidence_relations'] == 0
+        assert report["total_evidence_relations"] == 0
 
     def test_history(self, repo_session):
         session, repo = repo_session
         s = ClaimService(repo)
         obj, _ = s.create(_VALID_CLAIM, "u1")
         h = s.get_history(obj.uuid_hex)
-        assert h['version_count'] >= 1
+        assert h["version_count"] >= 1
 
     def test_typed_exceptions(self, repo_session):
         session, repo = repo_session
         s = ClaimService(repo)
         with pytest.raises(ObjectNotFoundError):
-            s.link_evidence("00000000000000000000000000000000", "00000000000000000000000000000000")
+            s.link_evidence(
+                "00000000000000000000000000000000", "00000000000000000000000000000000"
+            )
 
 
 class TestEvidenceService:
@@ -187,7 +203,7 @@ class TestEvidenceService:
         session, repo = repo_session
         s = EvidenceService(repo)
         obj, _ = s.create(_VALID_EVIDENCE, "u1")
-        assert obj.object_type == 'evidence'
+        assert obj.object_type == "evidence"
 
     def test_list(self, repo_session):
         session, repo = repo_session
@@ -203,7 +219,7 @@ class TestEvidenceService:
         s.submit_for_review(obj.uuid_hex, "u1")
         s.approve(obj.uuid_hex, "u2")
         data = s.get_with_payload(obj.uuid_hex)
-        assert data['lifecycle_state'] == 'approved'
+        assert data["lifecycle_state"] == "approved"
 
     def test_find_claims(self, repo_session):
         session, repo = repo_session
@@ -220,11 +236,11 @@ class TestEvidenceService:
         s = EvidenceService(repo)
         obj, _ = s.create(_VALID_EVIDENCE, "u1")
         cov = s.get_coverage(obj.uuid_hex)
-        assert cov['total_active_claim_relations'] == 0
+        assert cov["total_active_claim_relations"] == 0
 
     def test_quality_summary(self, repo_session):
         session, repo = repo_session
         s = EvidenceService(repo)
         obj, _ = s.create(_VALID_EVIDENCE, "u1")
         q = s.get_quality_summary(obj.uuid_hex)
-        assert q['quality_rating'] == 'medium'
+        assert q["quality_rating"] == "medium"

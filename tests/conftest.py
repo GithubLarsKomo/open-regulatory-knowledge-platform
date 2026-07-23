@@ -1,11 +1,9 @@
 """Test fixtures and configuration for ORKP database tests."""
 
-import uuid
-from pathlib import Path
 
 import pytest
 from sqlalchemy import create_engine, event
-from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy.orm import Session
 
 from orkp.db.models import Base
 
@@ -46,4 +44,5 @@ def session(engine):
 def repo(session):
     """Create a RegulatoryObjectRepository for testing."""
     from orkp.db.repository import RegulatoryObjectRepository
+
     return RegulatoryObjectRepository(session)
