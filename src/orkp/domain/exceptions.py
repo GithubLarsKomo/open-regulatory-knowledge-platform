@@ -117,3 +117,27 @@ class SelfApprovalNotAllowedError(ORKPError):
     """Raised when an author attempts to self-approve."""
     status_code = 403
     message = "Self-approval is not allowed"
+
+
+class ObjectTypeMismatchError(ORKPError):
+    """Raised when an object's type does not match the expected type."""
+    status_code = 422
+    message = "Object type mismatch"
+
+
+class ObjectVersionNotFoundError(ORKPError):
+    """Raised when a specific object version is not found."""
+    status_code = 404
+    message = "Object version not found"
+
+
+class InvalidLifecycleStateError(ORKPError):
+    """Raised when an object is in an invalid lifecycle state."""
+    status_code = 409
+    message = "Invalid lifecycle state for operation"
+
+
+class InvalidPersistedPayloadError(ORKPError):
+    """Raised when a persisted payload fails validation."""
+    status_code = 422
+    message = "Invalid persisted payload"

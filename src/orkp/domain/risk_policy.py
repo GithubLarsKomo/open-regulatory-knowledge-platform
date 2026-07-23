@@ -19,7 +19,6 @@ class RiskPolicy:
         ['improbable', 'unlikely', 'possible', 'likely', 'probable'])
 
     # Risk matrix: severity -> probability -> risk_level
-    # Default is ISO 14971-like
     risk_matrix: Dict[str, Dict[str, str]] = field(default_factory=lambda: {
         'catastrophic': {'improbable': 'high', 'unlikely': 'high', 'possible': 'intolerable', 'likely': 'intolerable', 'probable': 'intolerable'},
         'critical': {'improbable': 'medium', 'unlikely': 'high', 'possible': 'high', 'likely': 'intolerable', 'probable': 'intolerable'},
@@ -28,22 +27,19 @@ class RiskPolicy:
         'negligible': {'improbable': 'low', 'unlikely': 'low', 'possible': 'medium', 'likely': 'medium', 'probable': 'high'},
     })
 
-    # Acceptability rules: risk_level -> acceptable bool
     acceptability_rules: Dict[str, bool] = field(default_factory=lambda: {
-        'low': True,
-        'medium': True,
-        'high': False,
-        'intolerable': False,
+        'low': True, 'medium': True, 'high': False, 'intolerable': False,
     })
 
-    # Control hierarchy (ISO 14971: design safety > protective > information)
+    required_actions: Dict[str, str] = field(default_factory=lambda: {
+        'low': 'none', 'medium': 'monitor', 'high': 'control_required', 'intolerable': 'prohibited',
+    })
+
     control_hierarchy: List[str] = field(default_factory=lambda:
         ['design_by_safety', 'protective_measure', 'information_for_safety'])
 
-    # Whether Benefit-Risk is required for unacceptable residual risk
-    benefit_risk_required_for_unacceptable: bool = True
+    benefit_risk_required_for: List[str] = field(default_factory=lambda: ['high', 'intolerable'])
 
-    # Policy version identifier
     version: str = '1.0'
 
     def get_severity_index(self, severity: str) -> int:
@@ -69,6 +65,14 @@ class RiskPolicy:
     def is_acceptable(self, risk_level: str) -> bool:
         """Check if risk level is acceptable."""
         return self.acceptability_rules.get(risk_level, False)
+
+    def get_required_action(self, risk_level: str) -> str:
+        """Get the required action for a risk level."""
+        return self.required_actions.get(risk_level, 'control_required')
+
+    def is_benefit_risk_required(self, risk_level: str) -> bool:
+        """Check if benefit-risk analysis is required for this risk level."""
+        return risk_level in self.benefit_risk_required_for
 
     def validate(self) -> List[str]:
         """Validate policy completeness and consistency. Returns list of issues."""

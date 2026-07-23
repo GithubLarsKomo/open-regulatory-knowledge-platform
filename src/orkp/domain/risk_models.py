@@ -56,14 +56,15 @@ class InitialRiskEvaluationPayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
     evaluation_id: str = Field(..., min_length=1)
     risk_analysis_uuid: str = Field(..., min_length=1)
-    risk_analysis_version: int = Field(...)
+    risk_analysis_version: int = Field(..., ge=1)
     severity: str = Field(...)
     probability: str = Field(...)
     calculated_risk_level: str = Field(...)
     acceptable: bool = Field(...)
     action_required: str = Field(...)
-    policy_uuid: str = Field(..., min_length=1)
-    policy_version: str = Field(..., min_length=1)
+    risk_policy_uuid: str = Field(..., min_length=1)
+    risk_policy_version: int = Field(..., ge=1)
+    policy_revision: str = Field(..., min_length=1)
     evaluator_user_id: str = Field(..., min_length=1)
     rationale: Optional[str] = None
     assumptions: Optional[str] = None
@@ -87,7 +88,9 @@ class InitialRiskEvaluationPayload(BaseModel):
 
 class InitialRiskEvaluationCreateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
+    risk_analysis_version: int = Field(..., ge=1)
     risk_policy_uuid: str = Field(..., min_length=1)
+    risk_policy_version: int = Field(..., ge=1)
     severity: str = Field(...)
     probability: str = Field(...)
     evaluator_user_id: str = Field(..., min_length=1)
@@ -118,9 +121,9 @@ class ResidualRiskEvaluationPayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
     evaluation_id: str = Field(..., min_length=1)
     risk_analysis_uuid: str = Field(..., min_length=1)
-    risk_analysis_version: int = Field(...)
+    risk_analysis_version: int = Field(..., ge=1)
     initial_evaluation_uuid: str = Field(..., min_length=1)
-    initial_evaluation_version: int = Field(...)
+    initial_evaluation_version: int = Field(..., ge=1)
     residual_severity: str = Field(...)
     residual_probability: str = Field(...)
     calculated_risk_level: str = Field(...)
@@ -134,8 +137,9 @@ class ResidualRiskEvaluationPayload(BaseModel):
     reduced: bool = Field(...)
     regression_detected: bool = Field(...)
     benefit_risk_required: bool = Field(...)
-    policy_uuid: str = Field(..., min_length=1)
-    policy_version: str = Field(..., min_length=1)
+    risk_policy_uuid: str = Field(..., min_length=1)
+    risk_policy_version: int = Field(..., ge=1)
+    policy_revision: str = Field(..., min_length=1)
     evaluator_user_id: str = Field(..., min_length=1)
     rationale: Optional[str] = None
     evaluated_at: str = Field(...)
@@ -157,7 +161,9 @@ class ResidualRiskEvaluationPayload(BaseModel):
 
 class ResidualRiskEvaluationCreateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
+    risk_analysis_version: int = Field(..., ge=1)
     initial_evaluation_uuid: str = Field(..., min_length=1)
+    initial_evaluation_version: int = Field(..., ge=1)
     residual_severity: str = Field(...)
     residual_probability: str = Field(...)
     evaluator_user_id: str = Field(..., min_length=1)
