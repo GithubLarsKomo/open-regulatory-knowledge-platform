@@ -16,6 +16,7 @@ from orkp.domain.exceptions import (
     ObjectVersionNotFoundError,
     InvalidLifecycleStateError,
     InvalidPersistedPayloadError,
+    InvalidObjectIdentifierError,
 )
 from orkp.domain.risk_policy import RiskPolicy
 
@@ -36,6 +37,7 @@ class LoadedRiskPolicyResult:
     payload: dict
     policy: RiskPolicy
     revision: str
+    validated_payload: object  # RiskPolicyPayload instance
 
 
 def _validate_uuid(uuid_hex: str) -> str:
@@ -45,7 +47,7 @@ def _validate_uuid(uuid_hex: str) -> str:
         u = _uuid.UUID(hex=uuid_hex)
         return u.hex
     except (ValueError, AttributeError):
-        raise ObjectNotFoundError(f"Invalid UUID format: {uuid_hex}")
+        raise InvalidObjectIdentifierError(f"Invalid UUID format: {uuid_hex}")
 
 
 def load_versioned_object(
@@ -146,4 +148,5 @@ def load_risk_policy(
         payload=loaded.payload,
         policy=policy,
         revision=validated.policy_version,
+        validated_payload=validated,
     )

@@ -141,3 +141,9 @@ class InvalidPersistedPayloadError(ORKPError):
     """Raised when a persisted payload fails validation."""
     status_code = 422
     message = "Invalid persisted payload"
+
+
+class InvalidObjectIdentifierError(ORKPError):
+    """Raised when an object identifier has an invalid format."""
+    status_code = 422
+    message = "Invalid object identifier format"

@@ -13,6 +13,7 @@ from orkp.domain.exceptions import (
     InvalidLifecycleStateError,
     InvalidPersistedPayloadError,
     InvalidRelationError,
+    InvalidObjectIdentifierError,
 )
 from orkp.domain.risk_models import (
     InitialRiskEvaluationCreateRequest,
@@ -121,7 +122,7 @@ class TestLoader:
 
     def test_invalid_uuid(self, repo_session):
         session, repo = repo_session
-        with pytest.raises(ObjectNotFoundError):
+        with pytest.raises(InvalidObjectIdentifierError):
             load_versioned_object(repo, "not-a-uuid", 1, 'risk_analysis')
 
     def test_wrong_type(self, repo_session):

@@ -104,20 +104,23 @@ class InitialRiskEvaluationService:
             created_by=request.evaluator_user_id,
         )
 
-        # 7. Create version-pinned relations
-        self.repo.create_relation(
-            source_uuid=eval_obj.object_uuid, source_version=eval_obj.current_version,
-            target_uuid=ra_loaded.object.object_uuid, target_version=request.risk_analysis_version,
-            relation_type='evaluates_initial_risk_of', created_by=request.evaluator_user_id,
-        )
-        self.repo.create_relation(
-            source_uuid=eval_obj.object_uuid, source_version=eval_obj.current_version,
-            target_uuid=policy_loaded.object.object_uuid, target_version=request.risk_policy_version,
-            relation_type='uses_risk_policy', created_by=request.evaluator_user_id,
-        )
-
-        # 8. One atomic commit
-        self.repo.session.commit()
+        try:
+            # 7. Create version-pinned relations
+            self.repo.create_relation(
+                source_uuid=eval_obj.object_uuid, source_version=eval_obj.current_version,
+                target_uuid=ra_loaded.object.object_uuid, target_version=request.risk_analysis_version,
+                relation_type='evaluates_initial_risk_of', created_by=request.evaluator_user_id,
+            )
+            self.repo.create_relation(
+                source_uuid=eval_obj.object_uuid, source_version=eval_obj.current_version,
+                target_uuid=policy_loaded.object.object_uuid, target_version=request.risk_policy_version,
+                relation_type='uses_risk_policy', created_by=request.evaluator_user_id,
+            )
+            # 8. One atomic commit
+            self.repo.session.commit()
+        except Exception:
+            self.repo.session.rollback()
+            raise
 
         return InitialRiskEvaluationResponse(
             object_uuid=eval_obj.uuid_hex,

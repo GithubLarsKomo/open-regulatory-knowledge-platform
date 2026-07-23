@@ -141,20 +141,28 @@ class ResidualRiskEvaluationService:
             created_by=request.evaluator_user_id,
         )
 
-        # 9. Create version-pinned relations
-        self.repo.create_relation(
-            source_uuid=eval_obj.object_uuid, source_version=eval_obj.current_version,
-            target_uuid=ra_loaded.object.object_uuid, target_version=request.risk_analysis_version,
-            relation_type='residual_of', created_by=request.evaluator_user_id,
-        )
-        self.repo.create_relation(
-            source_uuid=eval_obj.object_uuid, source_version=eval_obj.current_version,
-            target_uuid=ie_loaded.object.object_uuid, target_version=request.initial_evaluation_version,
-            relation_type='derived_from_initial_evaluation', created_by=request.evaluator_user_id,
-        )
-
-        # 10. One atomic commit
-        self.repo.session.commit()
+        try:
+            # 9. Create version-pinned relations
+            self.repo.create_relation(
+                source_uuid=eval_obj.object_uuid, source_version=eval_obj.current_version,
+                target_uuid=ra_loaded.object.object_uuid, target_version=request.risk_analysis_version,
+                relation_type='residual_of', created_by=request.evaluator_user_id,
+            )
+            self.repo.create_relation(
+                source_uuid=eval_obj.object_uuid, source_version=eval_obj.current_version,
+                target_uuid=ie_loaded.object.object_uuid, target_version=request.initial_evaluation_version,
+                relation_type='derived_from_initial_evaluation', created_by=request.evaluator_user_id,
+            )
+            self.repo.create_relation(
+                source_uuid=eval_obj.object_uuid, source_version=eval_obj.current_version,
+                target_uuid=policy_loaded.object.object_uuid, target_version=validated_ie.risk_policy_version,
+                relation_type='uses_risk_policy', created_by=request.evaluator_user_id,
+            )
+            # 10. One atomic commit
+            self.repo.session.commit()
+        except Exception:
+            self.repo.session.rollback()
+            raise
 
         return ResidualRiskEvaluationResponse(
             object_uuid=eval_obj.uuid_hex,

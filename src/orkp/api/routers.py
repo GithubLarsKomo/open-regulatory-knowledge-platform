@@ -32,6 +32,11 @@ from orkp.domain.exceptions import (
     ClaimApprovalError,
     RelationNotFoundError,
     RelationAlreadyInactiveError,
+    ObjectTypeMismatchError,
+    ObjectVersionNotFoundError,
+    InvalidLifecycleStateError,
+    InvalidPersistedPayloadError,
+    InvalidObjectIdentifierError,
 )
 from orkp.db.repository import RegulatoryObjectRepository
 
@@ -48,10 +53,13 @@ def _call_or_404(service_fn):
         raise HTTPException(status_code=404, detail=e.message)
     except (InvalidLifecycleTransitionError, ImmutableVersionError, OptimisticLockError) as e:
         raise HTTPException(status_code=409, detail=e.message)
-    except (InvalidRelationError, ProductCompletenessError, ClaimApprovalError) as e:
+    except (InvalidRelationError, ProductCompletenessError, ClaimApprovalError,
+            ObjectTypeMismatchError, InvalidPersistedPayloadError, InvalidObjectIdentifierError) as e:
         raise HTTPException(status_code=422, detail=e.message)
     except (RelationNotFoundError, RelationAlreadyInactiveError) as e:
         raise HTTPException(status_code=409 if isinstance(e, RelationAlreadyInactiveError) else 404, detail=e.message)
+    except (ObjectVersionNotFoundError, InvalidLifecycleStateError) as e:
+        raise HTTPException(status_code=404 if isinstance(e, ObjectVersionNotFoundError) else 409, detail=e.message)
 
 
 # ---------------------------------------------------------------------------

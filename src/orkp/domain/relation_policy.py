@@ -29,9 +29,9 @@ RELATION_SCHEMA: Dict[str, Tuple[str, str]] = {
     'controlled_by': ('risk_analysis', 'risk_control'),
     'verifies_control': ('evidence', 'risk_control'),
     'supports_verification': ('evidence', 'control_verification'),
-    # Evaluations
+    # Evaluations — uses_risk_policy accepts multiple source types
     'evaluates_initial_risk_of': ('initial_risk_evaluation', 'risk_analysis'),
-    'uses_risk_policy': ('initial_risk_evaluation', 'risk_policy'),
+    'uses_risk_policy': (('initial_risk_evaluation', 'residual_risk_evaluation'), 'risk_policy'),
     'residual_of': ('residual_risk_evaluation', 'risk_analysis'),
     'derived_from_initial_evaluation': ('residual_risk_evaluation', 'initial_risk_evaluation'),
     # Benefit-Risk
@@ -65,9 +65,11 @@ def validate_relation(source_object_type: str, relation_type: str, target_object
     if schema is None:
         raise InvalidRelationError(f"Unknown relation type '{relation_type}'")
     expected_src, expected_tgt = schema
-    if source_object_type != expected_src:
+    # Allow multiple source types for polymorphic relations
+    allowed_sources = expected_src if isinstance(expected_src, tuple) else (expected_src,)
+    if source_object_type not in allowed_sources:
         raise InvalidRelationError(
-            f"Relation '{relation_type}' requires source type '{expected_src}', got '{source_object_type}'"
+            f"Relation '{relation_type}' requires source type one of {allowed_sources}, got '{source_object_type}'"
         )
     if target_object_type != expected_tgt:
         raise InvalidRelationError(
