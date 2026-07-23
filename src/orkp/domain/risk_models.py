@@ -235,3 +235,23 @@ class BenefitRiskPayload(BaseModel):
         if v not in BENEFIT_RISK_CONCLUSION:
             raise ValueError(f"Invalid benefit-risk conclusion '{v}'")
         return v
+
+
+# ---------------------------------------------------------------------------
+# Response Models
+# ---------------------------------------------------------------------------
+
+class InitialRiskEvaluationResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    object_uuid: str
+    object_version: int
+    lifecycle_state: str
+    payload: InitialRiskEvaluationPayload
+
+
+class ResidualRiskEvaluationResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    object_uuid: str
+    object_version: int
+    lifecycle_state: str
+    payload: ResidualRiskEvaluationPayload

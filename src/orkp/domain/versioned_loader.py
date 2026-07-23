@@ -1,13 +1,14 @@
 """
 Versioned object loader for ORKP.
 
-Provides reusable functions for loading objects by UUID + exact version
+Typed, immutable results for loading objects by UUID + exact version
 with type and lifecycle validation.
 """
 
-import uuid
-from typing import Any, Dict, List, Optional, Tuple
+from dataclasses import dataclass
+from typing import Dict, List, Optional
 
+from orkp.db.models import RegulatoryObject, ObjectVersion
 from orkp.db.repository import RegulatoryObjectRepository
 from orkp.domain.exceptions import (
     ObjectNotFoundError,
@@ -16,6 +17,35 @@ from orkp.domain.exceptions import (
     InvalidLifecycleStateError,
     InvalidPersistedPayloadError,
 )
+from orkp.domain.risk_policy import RiskPolicy
+
+
+@dataclass(frozen=True)
+class LoadedVersionedObject:
+    """Typed result of loading an object by UUID + exact version."""
+    object: RegulatoryObject
+    version: ObjectVersion
+    payload: dict
+
+
+@dataclass(frozen=True)
+class LoadedRiskPolicyResult:
+    """Typed result of loading a persisted RiskPolicy."""
+    object: RegulatoryObject
+    version: ObjectVersion
+    payload: dict
+    policy: RiskPolicy
+    revision: str
+
+
+def _validate_uuid(uuid_hex: str) -> str:
+    """Validate UUID hex format, return normalized form."""
+    import uuid as _uuid
+    try:
+        u = _uuid.UUID(hex=uuid_hex)
+        return u.hex
+    except (ValueError, AttributeError):
+        raise ObjectNotFoundError(f"Invalid UUID format: {uuid_hex}")
 
 
 def load_versioned_object(
@@ -24,7 +54,7 @@ def load_versioned_object(
     expected_version: int,
     expected_object_type: str,
     allowed_lifecycle_states: Optional[List[str]] = None,
-) -> Tuple[Any, Dict[str, Any]]:
+) -> LoadedVersionedObject:
     """Load a regulatory object by UUID and exact version.
 
     Args:
@@ -35,15 +65,15 @@ def load_versioned_object(
         allowed_lifecycle_states: Optional list of allowed lifecycle states.
 
     Returns:
-        Tuple of (regulatory_object, version_payload_dict).
+        LoadedVersionedObject with object, version entity, and payload dict.
 
     Raises:
-        ObjectNotFoundError: Object not found.
-        ObjectTypeMismatchError: Object type does not match.
-        ObjectVersionNotFoundError: Specific version not found.
-        InvalidLifecycleStateError: Lifecycle state not allowed.
+        ObjectNotFoundError, ObjectTypeMismatchError,
+        ObjectVersionNotFoundError, InvalidLifecycleStateError
     """
-    obj = repo.get_by_uuid_hex(uuid_hex)
+    hex_val = _validate_uuid(uuid_hex)
+
+    obj = repo.get_by_uuid_hex(hex_val)
     if obj is None:
         raise ObjectNotFoundError(f"Object {uuid_hex} not found")
 
@@ -65,49 +95,55 @@ def load_versioned_object(
         )
 
     payload = version.payload_json or {}
-    return obj, payload
+    return LoadedVersionedObject(object=obj, version=version, payload=payload)
 
 
 def load_risk_policy(
     repo: RegulatoryObjectRepository,
     policy_uuid: str,
     policy_object_version: int,
-) -> Tuple[Any, Dict[str, Any], Any]:
+) -> LoadedRiskPolicyResult:
     """Load a persisted RiskPolicy by UUID and exact object-store version.
 
     Returns:
-        Tuple of (policy_object, policy_payload_dict, risk_policy_instance).
+        LoadedRiskPolicyResult with full typed data.
 
     Raises:
         ObjectNotFoundError, ObjectTypeMismatchError, ObjectVersionNotFoundError,
         InvalidLifecycleStateError, InvalidPersistedPayloadError.
     """
+    from pydantic import ValidationError
     from orkp.domain.risk_models import RiskPolicyPayload
-    from orkp.domain.risk_policy import RiskPolicy
 
-    obj, payload = load_versioned_object(
+    loaded = load_versioned_object(
         repo, policy_uuid, policy_object_version,
         'risk_policy', allowed_lifecycle_states=['approved', 'effective'],
     )
 
     # Validate payload with Pydantic
     try:
-        validated = RiskPolicyPayload(**payload)
-    except Exception as e:
+        validated = RiskPolicyPayload(**loaded.payload)
+    except ValidationError as exc:
         raise InvalidPersistedPayloadError(
-            f"Risk policy {policy_uuid} v{policy_object_version} payload invalid: {e}"
-        )
+            f"Risk policy {policy_uuid} v{policy_object_version} payload invalid"
+        ) from exc
 
-    # Build RiskPolicy instance
+    # Build RiskPolicy instance — use direct field access, no getattr defaults
     policy = RiskPolicy(
         severity_scale=list(validated.severity_scale),
         probability_scale=list(validated.probability_scale),
         risk_matrix=dict(validated.risk_matrix),
         acceptability_rules=dict(validated.acceptability_rules),
-        required_actions=dict(getattr(validated, 'required_actions', {})),
+        required_actions=dict(validated.required_actions),
         control_hierarchy=list(validated.control_hierarchy),
-        benefit_risk_required_for=list(getattr(validated, 'benefit_risk_required_for', [])),
+        benefit_risk_required_for=list(validated.benefit_risk_required_for),
         version=validated.policy_version,
     )
 
-    return obj, payload, policy
+    return LoadedRiskPolicyResult(
+        object=loaded.object,
+        version=loaded.version,
+        payload=loaded.payload,
+        policy=policy,
+        revision=validated.policy_version,
+    )

@@ -78,7 +78,8 @@ def compare_initial_and_residual_risk(
 
     benefit_risk_required = (
         not residual['acceptable']
-        and policy.benefit_risk_required_for_unacceptable
+        and (policy.is_benefit_risk_required(initial['risk_level'])
+             or policy.is_benefit_risk_required(residual['risk_level']))
     )
 
     return {
