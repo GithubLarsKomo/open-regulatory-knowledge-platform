@@ -1,8 +1,4 @@
-"""
-Centralized relation policy for ORKP.
-
-Validates canonical source/target object types for every relation type.
-"""
+"""Centralized canonical relation policy for ORKP."""
 
 from dataclasses import dataclass
 from typing import Dict, FrozenSet
@@ -12,133 +8,100 @@ from orkp.domain.exceptions import InvalidRelationError
 
 @dataclass(frozen=True)
 class RelationRule:
-    """Canonical rule for a relation type."""
-
     source_types: FrozenSet[str]
     target_types: FrozenSet[str]
 
 
-# Canonical relation schema
 RELATION_SCHEMA: Dict[str, RelationRule] = {
-    # Product
-    "variant_of": RelationRule(
-        source_types=frozenset({"device"}), target_types=frozenset({"product"})
-    ),
-    "has_claim": RelationRule(
-        source_types=frozenset({"product"}), target_types=frozenset({"claim"})
-    ),
-    "has_risk": RelationRule(
-        source_types=frozenset({"product"}), target_types=frozenset({"risk_analysis"})
-    ),
-    "has_evidence": RelationRule(
-        source_types=frozenset({"product"}), target_types=frozenset({"evidence"})
-    ),
-    "supported_by": RelationRule(
-        source_types=frozenset({"evidence"}), target_types=frozenset({"claim"})
-    ),
-    "contradicted_by": RelationRule(
-        source_types=frozenset({"evidence"}), target_types=frozenset({"claim"})
-    ),
+    "variant_of": RelationRule(frozenset({"device"}), frozenset({"product"})),
+    "has_claim": RelationRule(frozenset({"product"}), frozenset({"claim"})),
+    "has_risk": RelationRule(frozenset({"product"}), frozenset({"risk_analysis"})),
+    "has_evidence": RelationRule(frozenset({"product"}), frozenset({"evidence"})),
+    "supported_by": RelationRule(frozenset({"evidence"}), frozenset({"claim"})),
+    "contradicted_by": RelationRule(frozenset({"evidence"}), frozenset({"claim"})),
     "supersedes": RelationRule(
-        source_types=frozenset({"evidence"}), target_types=frozenset({"evidence"})
+        frozenset({"evidence", "control_verification"}),
+        frozenset({"evidence", "control_verification"}),
     ),
-    "has_hazard": RelationRule(
-        source_types=frozenset({"risk_analysis"}), target_types=frozenset({"hazard"})
-    ),
+    "has_hazard": RelationRule(frozenset({"risk_analysis"}), frozenset({"hazard"})),
     "followed_by": RelationRule(
-        source_types=frozenset({"hazard"}),
-        target_types=frozenset({"sequence_of_events"}),
+        frozenset({"hazard"}), frozenset({"sequence_of_events"})
     ),
     "creates_situation": RelationRule(
-        source_types=frozenset({"sequence_of_events"}),
-        target_types=frozenset({"hazardous_situation"}),
+        frozenset({"sequence_of_events"}), frozenset({"hazardous_situation"})
     ),
     "may_cause": RelationRule(
-        source_types=frozenset({"hazardous_situation"}),
-        target_types=frozenset({"harm"}),
+        frozenset({"hazardous_situation"}), frozenset({"harm"})
     ),
     "estimated_for": RelationRule(
-        source_types=frozenset({"risk_analysis"}),
-        target_types=frozenset({"hazardous_situation"}),
+        frozenset({"risk_analysis"}), frozenset({"hazardous_situation"})
     ),
     "controlled_by": RelationRule(
-        source_types=frozenset({"risk_analysis"}),
-        target_types=frozenset({"risk_control"}),
+        frozenset({"risk_analysis"}), frozenset({"risk_control"})
     ),
     "verifies_control": RelationRule(
-        source_types=frozenset({"evidence"}), target_types=frozenset({"risk_control"})
+        frozenset({"evidence", "control_verification"}),
+        frozenset({"risk_control"}),
     ),
     "supports_verification": RelationRule(
-        source_types=frozenset({"evidence"}),
-        target_types=frozenset({"control_verification"}),
+        frozenset({"evidence"}), frozenset({"control_verification"})
     ),
     "evaluates_initial_risk_of": RelationRule(
-        source_types=frozenset({"initial_risk_evaluation"}),
-        target_types=frozenset({"risk_analysis"}),
+        frozenset({"initial_risk_evaluation"}), frozenset({"risk_analysis"})
     ),
     "uses_risk_policy": RelationRule(
-        source_types=frozenset({"initial_risk_evaluation", "residual_risk_evaluation"}),
-        target_types=frozenset({"risk_policy"}),
+        frozenset(
+            {
+                "initial_risk_evaluation",
+                "residual_risk_evaluation",
+                "control_verification",
+            }
+        ),
+        frozenset({"risk_policy"}),
     ),
     "residual_of": RelationRule(
-        source_types=frozenset({"residual_risk_evaluation"}),
-        target_types=frozenset({"risk_analysis"}),
+        frozenset({"residual_risk_evaluation"}), frozenset({"risk_analysis"})
     ),
     "derived_from_initial_evaluation": RelationRule(
-        source_types=frozenset({"residual_risk_evaluation"}),
-        target_types=frozenset({"initial_risk_evaluation"}),
+        frozenset({"residual_risk_evaluation", "control_verification"}),
+        frozenset({"initial_risk_evaluation"}),
     ),
     "benefit_risk_for": RelationRule(
-        source_types=frozenset({"benefit_risk"}),
-        target_types=frozenset({"residual_risk_evaluation"}),
+        frozenset({"benefit_risk"}), frozenset({"residual_risk_evaluation"})
     ),
     "applies_to_product": RelationRule(
-        source_types=frozenset({"risk_analysis"}), target_types=frozenset({"product"})
+        frozenset({"risk_analysis"}), frozenset({"product"})
     ),
     "applies_to_device": RelationRule(
-        source_types=frozenset({"risk_analysis"}), target_types=frozenset({"device"})
+        frozenset({"risk_analysis"}), frozenset({"device"})
     ),
     "overall_risk_for": RelationRule(
-        source_types=frozenset({"overall_residual_risk"}),
-        target_types=frozenset({"product"}),
+        frozenset({"overall_residual_risk"}), frozenset({"product"})
     ),
-    "governed_by": RelationRule(
-        source_types=frozenset({"product"}), target_types=frozenset({"regulation"})
-    ),
+    "governed_by": RelationRule(frozenset({"product"}), frozenset({"regulation"})),
     "manufactured_by": RelationRule(
-        source_types=frozenset({"product"}), target_types=frozenset({"organization"})
+        frozenset({"product"}), frozenset({"organization"})
     ),
-    "approved_by": RelationRule(
-        source_types=frozenset({"risk_analysis"}), target_types=frozenset({"user"})
-    ),
+    "approved_by": RelationRule(frozenset({"risk_analysis"}), frozenset({"user"})),
     "marketed_in": RelationRule(
-        source_types=frozenset({"product"}), target_types=frozenset({"jurisdiction"})
+        frozenset({"product"}), frozenset({"jurisdiction"})
     ),
-    "references": RelationRule(
-        source_types=frozenset({"claim"}), target_types=frozenset({"standard"})
-    ),
+    "references": RelationRule(frozenset({"claim"}), frozenset({"standard"})),
     "derived_from": RelationRule(
-        source_types=frozenset({"claim"}), target_types=frozenset({"study"})
+        frozenset({"claim", "control_verification", "residual_risk_evaluation"}),
+        frozenset({"study", "risk_analysis", "control_verification"}),
     ),
-    "generated_from": RelationRule(
-        source_types=frozenset({"report"}), target_types=frozenset({"claim"})
-    ),
-    "included_in": RelationRule(
-        source_types=frozenset({"section"}), target_types=frozenset({"report"})
-    ),
-    "impacts": RelationRule(
-        source_types=frozenset({"change"}), target_types=frozenset({"risk_analysis"})
-    ),
+    "generated_from": RelationRule(frozenset({"report"}), frozenset({"claim"})),
+    "included_in": RelationRule(frozenset({"section"}), frozenset({"report"})),
+    "impacts": RelationRule(frozenset({"change"}), frozenset({"risk_analysis"})),
     "informed_by": RelationRule(
-        source_types=frozenset({"risk_analysis"}),
-        target_types=frozenset({"post_market_information"}),
+        frozenset({"risk_analysis"}), frozenset({"post_market_information"})
     ),
     "impacts_risk": RelationRule(
-        source_types=frozenset({"post_market_information"}),
-        target_types=frozenset({"risk_analysis"}),
+        frozenset({"post_market_information"}), frozenset({"risk_analysis"})
     ),
     "requires_review": RelationRule(
-        source_types=frozenset({"finding"}), target_types=frozenset({"risk_analysis"})
+        frozenset({"finding"}), frozenset({"risk_analysis"})
     ),
 }
 
@@ -146,18 +109,16 @@ RELATION_SCHEMA: Dict[str, RelationRule] = {
 def validate_relation(
     source_object_type: str, relation_type: str, target_object_type: str
 ) -> None:
-    """Validate that a relation between source and target types is canonical.
-
-    Raises InvalidRelationError if the relation is not defined or types mismatch.
-    """
     rule = RELATION_SCHEMA.get(relation_type)
     if rule is None:
         raise InvalidRelationError(f"Unknown relation type '{relation_type}'")
     if source_object_type not in rule.source_types:
         raise InvalidRelationError(
-            f"Relation '{relation_type}' requires source type in {rule.source_types}, got '{source_object_type}'"
+            f"Relation '{relation_type}' requires source type in {rule.source_types}, "
+            f"got '{source_object_type}'"
         )
     if target_object_type not in rule.target_types:
         raise InvalidRelationError(
-            f"Relation '{relation_type}' requires target type in {rule.target_types}, got '{target_object_type}'"
+            f"Relation '{relation_type}' requires target type in {rule.target_types}, "
+            f"got '{target_object_type}'"
         )
