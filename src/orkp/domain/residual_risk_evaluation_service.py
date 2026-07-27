@@ -1,29 +1,25 @@
-"""
-Residual Risk Evaluation service for ORKP.
-
-Persists the residual risk evaluation referencing exact InitialEvaluation
-and RiskPolicy versions. One atomic transaction.
-"""
+"""Residual Risk Evaluation service for ORKP."""
 
 from datetime import datetime, timezone
+import uuid
+
+from pydantic import ValidationError
 
 from orkp.db.repository import RegulatoryObjectRepository
-from orkp.domain.exceptions import (
-    InvalidRelationError,
-    InvalidPersistedPayloadError,
-)
+from orkp.domain.control_verification_service import ControlVerificationService
+from orkp.domain.exceptions import InvalidRelationError, InvalidPersistedPayloadError
 from orkp.domain.risk_models import (
+    InitialRiskEvaluationPayload,
     ResidualRiskEvaluationCreateRequest,
     ResidualRiskEvaluationPayload,
     ResidualRiskEvaluationResponse,
-    InitialRiskEvaluationPayload,
 )
 from orkp.domain.risk_evaluation import compare_initial_and_residual_risk
 from orkp.domain.versioned_loader import load_versioned_object, load_risk_policy
 
 
 class ResidualRiskEvaluationService:
-    """Service for creating persisted Residual Risk Evaluations."""
+    """Create version-pinned residual risk evaluations atomically."""
 
     def __init__(self, repo: RegulatoryObjectRepository):
         self.repo = repo
@@ -33,75 +29,84 @@ class ResidualRiskEvaluationService:
         risk_analysis_hex: str,
         request: ResidualRiskEvaluationCreateRequest,
     ) -> ResidualRiskEvaluationResponse:
-        """Create a persisted Residual Risk Evaluation.
-
-        Pins exact RiskAnalysis, InitialEvaluation, and RiskPolicy versions.
-        Client must not supply derived fields.
-        One atomic transaction.
-        """
-        # 1. Load RiskAnalysis with exact version
-        ra_loaded = load_versioned_object(
+        risk_analysis_hex = uuid.UUID(risk_analysis_hex).hex
+        risk_analysis = load_versioned_object(
             self.repo,
             risk_analysis_hex,
             request.risk_analysis_version,
             "risk_analysis",
         )
-
-        # 2. Load and validate InitialEvaluation
-        ie_loaded = load_versioned_object(
+        initial_evaluation = load_versioned_object(
             self.repo,
             request.initial_evaluation_uuid,
             request.initial_evaluation_version,
             "initial_risk_evaluation",
         )
 
-        from pydantic import ValidationError
-
         try:
-            validated_ie = InitialRiskEvaluationPayload(**ie_loaded.payload)
+            initial_payload = InitialRiskEvaluationPayload(**initial_evaluation.payload)
         except ValidationError as exc:
             raise InvalidPersistedPayloadError(
                 f"Initial evaluation {request.initial_evaluation_uuid} payload invalid"
             ) from exc
 
-        # 3. Verify initial evaluation belongs to this risk analysis
-        if validated_ie.risk_analysis_uuid != risk_analysis_hex:
+        if initial_payload.risk_analysis_uuid != risk_analysis_hex:
             raise InvalidRelationError(
                 "Initial evaluation does not belong to this risk analysis"
             )
-        if validated_ie.risk_analysis_version != request.risk_analysis_version:
+        if initial_payload.risk_analysis_version != request.risk_analysis_version:
             raise InvalidRelationError(
-                f"Initial evaluation references version {validated_ie.risk_analysis_version}, "
-                f"request specifies {request.risk_analysis_version}"
+                "Initial evaluation references a different risk-analysis version"
             )
 
-        # 4. Load exact RiskPolicy version from initial evaluation
         policy_loaded = load_risk_policy(
             self.repo,
-            validated_ie.risk_policy_uuid,
-            validated_ie.risk_policy_version,
+            initial_payload.risk_policy_uuid,
+            initial_payload.risk_policy_version,
         )
         policy = policy_loaded.policy
 
-        # 5. Validate residual severity and probability against policy
+        verification_service = ControlVerificationService(self.repo)
+        verification_responses = []
+        seen_controls: set[tuple[str, int]] = set()
+        for reference in request.control_verifications:
+            verification = verification_service.assert_eligible_for_residual(
+                reference.object_uuid,
+                reference.object_version,
+                risk_analysis_hex,
+                request.risk_analysis_version,
+                request.initial_evaluation_uuid,
+                request.initial_evaluation_version,
+                initial_payload.risk_policy_uuid,
+                initial_payload.risk_policy_version,
+            )
+            control_key = (
+                verification.payload.risk_control.object_uuid,
+                verification.payload.risk_control.object_version,
+            )
+            if control_key in seen_controls:
+                raise InvalidRelationError(
+                    "Multiple control verifications reference the same risk-control version"
+                )
+            seen_controls.add(control_key)
+            verification_responses.append(verification)
+
         if request.residual_severity not in policy.severity_scale:
             raise InvalidRelationError(
-                f"Severity '{request.residual_severity}' not in policy scale: {policy.severity_scale}"
+                f"Severity '{request.residual_severity}' not in policy scale"
             )
         if request.residual_probability not in policy.probability_scale:
             raise InvalidRelationError(
-                f"Probability '{request.residual_probability}' not in policy scale: {policy.probability_scale}"
+                f"Probability '{request.residual_probability}' not in policy scale"
             )
 
-        # 6. Calculate comparison using initial evaluation data (no defaults)
         comparison = compare_initial_and_residual_risk(
-            validated_ie.severity,
-            validated_ie.probability,
+            initial_payload.severity,
+            initial_payload.probability,
             request.residual_severity,
             request.residual_probability,
             policy,
         )
-
         residual_level = comparison["residual_risk"]["risk_level"]
         action_required = policy.get_required_action(residual_level)
         benefit_risk_required = (
@@ -109,15 +114,15 @@ class ResidualRiskEvaluationService:
             and not comparison["acceptable"]
         )
 
-        # 7. Build and validate payload
-        import uuid
-
-        eval_payload_dict = {
+        payload_dict = {
             "evaluation_id": f"rre-{uuid.uuid4().hex[:12]}",
             "risk_analysis_uuid": risk_analysis_hex,
             "risk_analysis_version": request.risk_analysis_version,
             "initial_evaluation_uuid": request.initial_evaluation_uuid,
             "initial_evaluation_version": request.initial_evaluation_version,
+            "control_verifications": [
+                reference.model_dump() for reference in request.control_verifications
+            ],
             "residual_severity": request.residual_severity,
             "residual_probability": request.residual_probability,
             "calculated_risk_level": residual_level,
@@ -131,61 +136,71 @@ class ResidualRiskEvaluationService:
             "reduced": comparison["reduced"],
             "regression_detected": comparison["regression_detected"],
             "benefit_risk_required": benefit_risk_required,
-            "risk_policy_uuid": validated_ie.risk_policy_uuid,
-            "risk_policy_version": validated_ie.risk_policy_version,
+            "risk_policy_uuid": initial_payload.risk_policy_uuid,
+            "risk_policy_version": initial_payload.risk_policy_version,
             "policy_revision": policy.version,
             "evaluator_user_id": request.evaluator_user_id,
             "rationale": request.rationale,
             "evaluated_at": datetime.now(timezone.utc).isoformat(),
         }
-
         try:
-            validated_payload = ResidualRiskEvaluationPayload(**eval_payload_dict)
+            payload = ResidualRiskEvaluationPayload(**payload_dict)
         except ValidationError as exc:
             raise InvalidPersistedPayloadError(
                 "Invalid residual evaluation payload"
             ) from exc
 
-        # 8. Create evaluation object and relations in one atomic transaction
         try:
-            eval_obj, _ = self.repo.create_object(
+            evaluation, _ = self.repo.create_object(
                 object_type="residual_risk_evaluation",
-                payload=validated_payload.model_dump(),
+                payload=payload.model_dump(),
                 owner_user_id=request.evaluator_user_id,
                 created_by=request.evaluator_user_id,
             )
+            version = evaluation.current_version
             self.repo.create_relation(
-                source_uuid=eval_obj.object_uuid,
-                source_version=eval_obj.current_version,
-                target_uuid=ra_loaded.object.object_uuid,
+                source_uuid=evaluation.object_uuid,
+                source_version=version,
+                target_uuid=risk_analysis.object.object_uuid,
                 target_version=request.risk_analysis_version,
                 relation_type="residual_of",
                 created_by=request.evaluator_user_id,
             )
             self.repo.create_relation(
-                source_uuid=eval_obj.object_uuid,
-                source_version=eval_obj.current_version,
-                target_uuid=ie_loaded.object.object_uuid,
+                source_uuid=evaluation.object_uuid,
+                source_version=version,
+                target_uuid=initial_evaluation.object.object_uuid,
                 target_version=request.initial_evaluation_version,
                 relation_type="derived_from_initial_evaluation",
                 created_by=request.evaluator_user_id,
             )
             self.repo.create_relation(
-                source_uuid=eval_obj.object_uuid,
-                source_version=eval_obj.current_version,
+                source_uuid=evaluation.object_uuid,
+                source_version=version,
                 target_uuid=policy_loaded.object.object_uuid,
-                target_version=validated_ie.risk_policy_version,
+                target_version=initial_payload.risk_policy_version,
                 relation_type="uses_risk_policy",
                 created_by=request.evaluator_user_id,
             )
+            for verification in verification_responses:
+                verification_obj = self.repo.get_by_uuid_hex(verification.object_uuid)
+                self.repo.create_relation(
+                    source_uuid=evaluation.object_uuid,
+                    source_version=version,
+                    target_uuid=verification_obj.object_uuid,
+                    target_version=verification.object_version,
+                    relation_type="derived_from",
+                    created_by=request.evaluator_user_id,
+                    properties={"role": "based_on_control_verification"},
+                )
             self.repo.session.commit()
         except Exception:
             self.repo.session.rollback()
             raise
 
         return ResidualRiskEvaluationResponse(
-            object_uuid=eval_obj.uuid_hex,
-            object_version=eval_obj.current_version,
-            lifecycle_state=eval_obj.lifecycle_state,
-            payload=validated_payload,
+            object_uuid=evaluation.uuid_hex,
+            object_version=version,
+            lifecycle_state=evaluation.lifecycle_state,
+            payload=payload,
         )
