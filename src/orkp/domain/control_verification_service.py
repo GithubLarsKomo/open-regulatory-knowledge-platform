@@ -10,9 +10,12 @@ from pydantic import ValidationError
 from orkp.db.repository import RegulatoryObjectRepository
 from orkp.domain.exceptions import (
     InvalidLifecycleStateError,
+    InvalidObjectIdentifierError,
     InvalidPersistedPayloadError,
     InvalidRelationError,
+    ObjectNotFoundError,
     RiskControlVerificationError,
+    SelfApprovalNotAllowedError,
 )
 from orkp.domain.risk_models import (
     ControlVerificationCreateRequest,
@@ -23,8 +26,16 @@ from orkp.domain.risk_models import (
 from orkp.domain.versioned_loader import load_versioned_object
 
 
+def _normalize_uuid(value: str) -> str:
+    """Normalize an external UUID and expose a domain-level validation error."""
+    try:
+        return UUID(value).hex
+    except (ValueError, AttributeError, TypeError) as exc:
+        raise InvalidObjectIdentifierError(f"Invalid UUID format: {value}") from exc
+
+
 class ControlVerificationService:
-    """Create and read immutable, version-pinned control verifications."""
+    """Create, transition and read version-pinned control verifications."""
 
     def __init__(self, repo: RegulatoryObjectRepository):
         self.repo = repo
@@ -34,7 +45,7 @@ class ControlVerificationService:
         risk_control_hex: str,
         request: ControlVerificationCreateRequest,
     ) -> ControlVerificationResponse:
-        risk_control_hex = UUID(risk_control_hex).hex
+        risk_control_hex = _normalize_uuid(risk_control_hex)
         if request.risk_control.object_uuid != risk_control_hex:
             raise InvalidRelationError(
                 "Path risk control UUID does not match request risk_control reference"
@@ -190,26 +201,72 @@ class ControlVerificationService:
 
         return self._response(verification.uuid_hex, verification_version)
 
-    def get_verification(self, verification_hex: str, version: int) -> ControlVerificationResponse:
-        return self._response(UUID(verification_hex).hex, version)
+    def transition_state(
+        self,
+        verification_hex: str,
+        new_state: str,
+        actor_user_id: str,
+        comments: str | None = None,
+    ) -> ControlVerificationResponse:
+        """Transition a verification and return its recalculated eligibility."""
+        normalized = _normalize_uuid(verification_hex)
+        obj = self.repo.get_by_uuid_hex(normalized)
+        if obj is None:
+            raise ObjectNotFoundError(f"Control verification {normalized} not found")
+        if obj.object_type != "control_verification":
+            raise InvalidRelationError("Object is not a control verification")
+        if new_state == "approved" and actor_user_id == obj.owner_user_id:
+            raise SelfApprovalNotAllowedError(
+                "Control verification must be approved by another user"
+            )
+        try:
+            self.repo.transition_state(
+                obj.object_uuid,
+                new_state,
+                actor_user_id,
+                comments=comments,
+            )
+            self.repo.session.commit()
+        except Exception:
+            self.repo.session.rollback()
+            raise
+        return self._response(normalized, obj.current_version)
 
-    def list_for_risk_control(self, risk_control_hex: str) -> list[ControlVerificationResponse]:
+    def get_verification(
+        self, verification_hex: str, version: int
+    ) -> ControlVerificationResponse:
+        return self._response(_normalize_uuid(verification_hex), version)
+
+    def list_for_risk_control(
+        self, risk_control_hex: str
+    ) -> list[ControlVerificationResponse]:
+        normalized = _normalize_uuid(risk_control_hex)
+        control_obj = self.repo.get_by_uuid_hex(normalized)
+        if control_obj is None:
+            raise ObjectNotFoundError(f"Risk control {normalized} not found")
         control = load_versioned_object(
             self.repo,
-            UUID(risk_control_hex).hex,
-            self.repo.get_by_uuid_hex(UUID(risk_control_hex).hex).current_version,
+            normalized,
+            control_obj.current_version,
             "risk_control",
         )
         responses = []
-        for relation in self.repo.list_active_relations_for_target(control.object.object_uuid):
+        for relation in self.repo.list_active_relations_for_target(
+            control.object.object_uuid
+        ):
             if relation.relation_type != "verifies_control":
                 continue
             responses.append(
-                self._response(UUID(bytes=relation.source_uuid).hex, relation.source_version)
+                self._response(
+                    UUID(bytes=relation.source_uuid).hex,
+                    relation.source_version,
+                )
             )
         return responses
 
-    def evaluate_eligibility(self, lifecycle_state: str, payload: ControlVerificationPayload) -> bool:
+    def evaluate_eligibility(
+        self, lifecycle_state: str, payload: ControlVerificationPayload
+    ) -> bool:
         return (
             lifecycle_state == "effective"
             and payload.conclusion in {"passed", "passed_with_limitations"}
@@ -219,7 +276,9 @@ class ControlVerificationService:
             and payload.effectiveness_result == "effective"
         )
 
-    def _response(self, verification_hex: str, version: int) -> ControlVerificationResponse:
+    def _response(
+        self, verification_hex: str, version: int
+    ) -> ControlVerificationResponse:
         loaded = load_versioned_object(
             self.repo,
             verification_hex,
@@ -261,13 +320,16 @@ class ControlVerificationService:
         payload = response.payload
         expected = (
             (payload.risk_analysis.object_uuid, payload.risk_analysis.object_version),
-            (payload.initial_evaluation.object_uuid, payload.initial_evaluation.object_version),
+            (
+                payload.initial_evaluation.object_uuid,
+                payload.initial_evaluation.object_version,
+            ),
             (payload.risk_policy.object_uuid, payload.risk_policy.object_version),
         )
         actual = (
-            (risk_analysis_hex, risk_analysis_version),
-            (initial_evaluation_hex, initial_evaluation_version),
-            (risk_policy_hex, risk_policy_version),
+            (_normalize_uuid(risk_analysis_hex), risk_analysis_version),
+            (_normalize_uuid(initial_evaluation_hex), initial_evaluation_version),
+            (_normalize_uuid(risk_policy_hex), risk_policy_version),
         )
         if expected != actual:
             raise InvalidRelationError(
