@@ -8,6 +8,9 @@ from pydantic import ValidationError
 from orkp.api.routers import _call_or_404
 from orkp.api.schemas import ErrorResponse
 from orkp.db.repository import RegulatoryObjectRepository
+from orkp.domain.control_verification_queries import (
+    list_control_verifications_for_risk_analysis,
+)
 from orkp.domain.control_verification_service import ControlVerificationService
 from orkp.domain.exceptions import InvalidPersistedPayloadError
 from orkp.domain.initial_risk_evaluation_service import InitialRiskEvaluationService
@@ -146,6 +149,21 @@ def create_risk_evaluation_router(
         return _call_or_404(
             lambda: ControlVerificationService(repo).list_for_risk_control(
                 risk_control_uuid
+            )
+        )
+
+    @router.get(
+        "/api/v1/risk-analyses/{risk_analysis_uuid}/control-verifications",
+        response_model=list[ControlVerificationResponse],
+        responses={404: {"model": ErrorResponse}, 422: {"model": ErrorResponse}},
+    )
+    async def list_risk_analysis_control_verifications(
+        risk_analysis_uuid: str,
+        repo: RegulatoryObjectRepository = Depends(get_repo),
+    ):
+        return _call_or_404(
+            lambda: list_control_verifications_for_risk_analysis(
+                repo, risk_analysis_uuid
             )
         )
 
