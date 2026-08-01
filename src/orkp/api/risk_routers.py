@@ -2,7 +2,7 @@
 
 from typing import Callable
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
 from pydantic import ValidationError
 
 from orkp.api.routers import _call_or_404
@@ -14,7 +14,6 @@ from orkp.domain.initial_risk_evaluation_service import InitialRiskEvaluationSer
 from orkp.domain.residual_risk_evaluation_service import ResidualRiskEvaluationService
 from orkp.domain.risk_models import (
     ControlVerificationCreateRequest,
-    ControlVerificationPayload,
     ControlVerificationResponse,
     InitialRiskEvaluationCreateRequest,
     InitialRiskEvaluationPayload,
@@ -35,7 +34,11 @@ def create_risk_evaluation_router(
         "/api/v1/risk-analyses/{risk_analysis_uuid}/initial-evaluations",
         response_model=InitialRiskEvaluationResponse,
         status_code=status.HTTP_201_CREATED,
-        responses={404: {"model": ErrorResponse}, 422: {"model": ErrorResponse}, 409: {"model": ErrorResponse}},
+        responses={
+            404: {"model": ErrorResponse},
+            409: {"model": ErrorResponse},
+            422: {"model": ErrorResponse},
+        },
     )
     async def create_initial_evaluation(
         risk_analysis_uuid: str,
@@ -52,7 +55,11 @@ def create_risk_evaluation_router(
         "/api/v1/risk-analyses/{risk_analysis_uuid}/residual-evaluations",
         response_model=ResidualRiskEvaluationResponse,
         status_code=status.HTTP_201_CREATED,
-        responses={404: {"model": ErrorResponse}, 422: {"model": ErrorResponse}, 409: {"model": ErrorResponse}},
+        responses={
+            404: {"model": ErrorResponse},
+            409: {"model": ErrorResponse},
+            422: {"model": ErrorResponse},
+        },
     )
     async def create_residual_evaluation(
         risk_analysis_uuid: str,
@@ -69,7 +76,11 @@ def create_risk_evaluation_router(
         "/api/v1/risk-controls/{risk_control_uuid}/verifications",
         response_model=ControlVerificationResponse,
         status_code=status.HTTP_201_CREATED,
-        responses={404: {"model": ErrorResponse}, 422: {"model": ErrorResponse}, 409: {"model": ErrorResponse}},
+        responses={
+            404: {"model": ErrorResponse},
+            409: {"model": ErrorResponse},
+            422: {"model": ErrorResponse},
+        },
     )
     async def create_control_verification(
         risk_control_uuid: str,
@@ -79,6 +90,31 @@ def create_risk_evaluation_router(
         return _call_or_404(
             lambda: ControlVerificationService(repo).create_verification(
                 risk_control_uuid, body
+            )
+        )
+
+    @router.post(
+        "/api/v1/control-verifications/{verification_uuid}/transitions/{new_state}",
+        response_model=ControlVerificationResponse,
+        responses={
+            404: {"model": ErrorResponse},
+            409: {"model": ErrorResponse},
+            422: {"model": ErrorResponse},
+        },
+    )
+    async def transition_control_verification(
+        verification_uuid: str,
+        new_state: str,
+        actor_user_id: str = Query(..., min_length=1),
+        comments: str | None = Query(None),
+        repo: RegulatoryObjectRepository = Depends(get_repo),
+    ):
+        return _call_or_404(
+            lambda: ControlVerificationService(repo).transition_state(
+                verification_uuid,
+                new_state,
+                actor_user_id,
+                comments,
             )
         )
 
