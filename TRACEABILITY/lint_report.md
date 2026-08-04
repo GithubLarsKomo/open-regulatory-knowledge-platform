@@ -1,6 +1,6 @@
 # Specification Linter Report
 
-- **Repository:** D:\Python\ORKP
+- **Repository:** .
 - **Files scanned:** 30
 - **Unique IDs defined:** 168
 - **Duplicates:** 0
