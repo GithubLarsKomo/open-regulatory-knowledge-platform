@@ -21,9 +21,7 @@ def _request() -> ResidualRiskEvaluationCreateRequest:
         risk_analysis_version=1,
         initial_evaluation_uuid=uuid.uuid4().hex,
         initial_evaluation_version=1,
-        control_verifications=[
-            {"object_uuid": uuid.uuid4().hex, "object_version": 1}
-        ],
+        control_verifications=[{"object_uuid": uuid.uuid4().hex, "object_version": 1}],
         residual_severity="minor",
         residual_probability="unlikely",
         evaluator_user_id="u1",
