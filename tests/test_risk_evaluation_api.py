@@ -33,7 +33,9 @@ def client():
     TestSession = sessionmaker(bind=engine)
 
     app = create_app(session_factory_override=TestSession)
-    return TestClient(app)
+    test_client = TestClient(app)
+    test_client.session_factory = TestSession
+    return test_client
 
 
 # ---------------------------------------------------------------------------
@@ -283,6 +285,79 @@ class TestInitialEvaluationAPI:
         assert resp.status_code == 422
 
 
+def _create_effective_control_verification(
+    client, ra_uuid, policy_uuid, initial_evaluation_uuid
+):
+    """Seed a valid effective verification for residual-risk API tests."""
+    from orkp.db.repository import RegulatoryObjectRepository
+    from orkp.domain.control_verification_service import ControlVerificationService
+    from orkp.domain.risk_models import ControlVerificationCreateRequest
+
+    session = client.session_factory()
+    try:
+        repo = RegulatoryObjectRepository(session)
+        risk_analysis = repo.get_by_uuid_hex(ra_uuid)
+        risk_control, _ = repo.create_object(
+            "risk_control",
+            {"control_id": "RC-001", "title": "Verified API test control"},
+            "u1",
+            "u1",
+        )
+        evidence, _ = repo.create_object(
+            "evidence",
+            {"evidence_id": "EV-001", "title": "Verification evidence"},
+            "u1",
+            "u1",
+        )
+        repo.transition_state(evidence.object_uuid, "in_review", "u1")
+        repo.transition_state(evidence.object_uuid, "approved", "u2")
+        repo.create_relation(
+            source_uuid=risk_analysis.object_uuid,
+            source_version=1,
+            target_uuid=risk_control.object_uuid,
+            target_version=1,
+            relation_type="controlled_by",
+            created_by="u1",
+        )
+
+        service = ControlVerificationService(repo)
+        response = service.create_verification(
+            risk_control.uuid_hex,
+            ControlVerificationCreateRequest(
+                risk_analysis={"object_uuid": ra_uuid, "object_version": 1},
+                risk_control={
+                    "object_uuid": risk_control.uuid_hex,
+                    "object_version": 1,
+                },
+                initial_evaluation={
+                    "object_uuid": initial_evaluation_uuid,
+                    "object_version": 1,
+                },
+                risk_policy={"object_uuid": policy_uuid, "object_version": 1},
+                evidence=[{"object_uuid": evidence.uuid_hex, "object_version": 1}],
+                verification_method="test",
+                verification_scope="Implementation and effectiveness",
+                implementation_verified=True,
+                effectiveness_verified=True,
+                no_new_uncontrolled_risks=True,
+                effectiveness_result="effective",
+                conclusion="passed",
+                verified_by_user_id="verifier",
+            ),
+        )
+        service.transition_state(response.object_uuid, "in_review", "verifier")
+        service.transition_state(response.object_uuid, "approved", "approver")
+        effective = service.transition_state(
+            response.object_uuid, "effective", "verifier"
+        )
+        return {
+            "object_uuid": effective.object_uuid,
+            "object_version": effective.object_version,
+        }
+    finally:
+        session.close()
+
+
 class TestResidualEvaluationAPI:
     """Tests for POST/GET residual-risk-evaluations via API."""
 
@@ -306,6 +381,9 @@ class TestResidualEvaluationAPI:
         ra_uuid = _create_risk_analysis(client)
         pol_uuid = _create_policy(client)
         ie = self._create_initial_evaluation(client, ra_uuid, pol_uuid)
+        verification = _create_effective_control_verification(
+            client, ra_uuid, pol_uuid, ie["object_uuid"]
+        )
 
         resp = client.post(
             f"/api/v1/risk-analyses/{ra_uuid}/residual-evaluations",
@@ -313,6 +391,7 @@ class TestResidualEvaluationAPI:
                 "risk_analysis_version": 1,
                 "initial_evaluation_uuid": ie["object_uuid"],
                 "initial_evaluation_version": 1,
+                "control_verifications": [verification],
                 "residual_severity": "minor",
                 "residual_probability": "unlikely",
                 "evaluator_user_id": "u1",
@@ -334,6 +413,9 @@ class TestResidualEvaluationAPI:
         ra_uuid = _create_risk_analysis(client)
         pol_uuid = _create_policy(client)
         ie = self._create_initial_evaluation(client, ra_uuid, pol_uuid)
+        verification = _create_effective_control_verification(
+            client, ra_uuid, pol_uuid, ie["object_uuid"]
+        )
 
         create_resp = client.post(
             f"/api/v1/risk-analyses/{ra_uuid}/residual-evaluations",
@@ -341,6 +423,7 @@ class TestResidualEvaluationAPI:
                 "risk_analysis_version": 1,
                 "initial_evaluation_uuid": ie["object_uuid"],
                 "initial_evaluation_version": 1,
+                "control_verifications": [verification],
                 "residual_severity": "minor",
                 "residual_probability": "unlikely",
                 "evaluator_user_id": "u1",
@@ -373,6 +456,9 @@ class TestResidualEvaluationAPI:
                 "risk_analysis_version": 1,
                 "initial_evaluation_uuid": uuid.uuid4().hex,
                 "initial_evaluation_version": 1,
+                "control_verifications": [
+                    {"object_uuid": uuid.uuid4().hex, "object_version": 1}
+                ],
                 "residual_severity": "minor",
                 "residual_probability": "unlikely",
                 "evaluator_user_id": "u1",
@@ -384,6 +470,9 @@ class TestResidualEvaluationAPI:
         ra_uuid = _create_risk_analysis(client)
         pol_uuid = _create_policy(client)
         ie = self._create_initial_evaluation(client, ra_uuid, pol_uuid)
+        verification = _create_effective_control_verification(
+            client, ra_uuid, pol_uuid, ie["object_uuid"]
+        )
 
         resp = client.post(
             f"/api/v1/risk-analyses/{ra_uuid}/residual-evaluations",
@@ -391,6 +480,7 @@ class TestResidualEvaluationAPI:
                 "risk_analysis_version": 999,
                 "initial_evaluation_uuid": ie["object_uuid"],
                 "initial_evaluation_version": 1,
+                "control_verifications": [verification],
                 "residual_severity": "minor",
                 "residual_probability": "unlikely",
                 "evaluator_user_id": "u1",
@@ -402,6 +492,9 @@ class TestResidualEvaluationAPI:
         ra_uuid = _create_risk_analysis(client)
         pol_uuid = _create_policy(client)
         ie = self._create_initial_evaluation(client, ra_uuid, pol_uuid)
+        verification = _create_effective_control_verification(
+            client, ra_uuid, pol_uuid, ie["object_uuid"]
+        )
 
         resp = client.post(
             f"/api/v1/risk-analyses/{ra_uuid}/residual-evaluations",
@@ -409,6 +502,7 @@ class TestResidualEvaluationAPI:
                 "risk_analysis_version": 1,
                 "initial_evaluation_uuid": ie["object_uuid"],
                 "initial_evaluation_version": 1,
+                "control_verifications": [verification],
                 "residual_severity": "nonexistent",
                 "residual_probability": "unlikely",
                 "evaluator_user_id": "u1",
@@ -421,6 +515,9 @@ class TestResidualEvaluationAPI:
         ra_uuid = _create_risk_analysis(client)
         pol_uuid = _create_policy(client)
         ie = self._create_initial_evaluation(client, ra_uuid, pol_uuid)
+        verification = _create_effective_control_verification(
+            client, ra_uuid, pol_uuid, ie["object_uuid"]
+        )
 
         # Residual is worse: moderate/possible → critical/probable
         resp = client.post(
@@ -429,6 +526,7 @@ class TestResidualEvaluationAPI:
                 "risk_analysis_version": 1,
                 "initial_evaluation_uuid": ie["object_uuid"],
                 "initial_evaluation_version": 1,
+                "control_verifications": [verification],
                 "residual_severity": "critical",
                 "residual_probability": "probable",
                 "evaluator_user_id": "u1",
