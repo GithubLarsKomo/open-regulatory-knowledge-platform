@@ -6,7 +6,6 @@ import json
 import sys
 import tempfile
 import unittest
-from datetime import date
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -412,7 +411,7 @@ class TestOutputFormat(unittest.TestCase):
         self.assertIn("TASK-C-0001", c)
         self.assertIn("Foundation.", c)
 
-    def test_dynamic_date(self):
+    def test_deterministic_generation_notice(self):
         f = [
             {
                 "task_id": "TASK-X-0001",
@@ -425,7 +424,7 @@ class TestOutputFormat(unittest.TestCase):
         p = self.tmpdir / "b.md"
         generate_markdown_backlog(f, [], p)
         c = p.read_text(encoding="utf-8")
-        self.assertIn(date.today().isoformat(), c)
+        self.assertIn("Generated deterministically from SPEC files.", c)
 
 
 if __name__ == "__main__":
