@@ -156,6 +156,7 @@ SEC-RBAC-0005,SECURITY/SPEC-RBAC.md,security,draft
 TASK-FOUNDATION-0001,IMPLEMENTATION/Epic-001-Foundation/Feature-001-Specification-Compiler/TASK-FOUNDATION-0001.md,task,draft
 TASK-FOUNDATION-0002,IMPLEMENTATION/Epic-001-Foundation/Feature-001-Specification-Compiler/TASK-FOUNDATION-0002.md,task,draft
 TASK-FOUNDATION-0003,IMPLEMENTATION/Epic-001-Foundation/Feature-001-Specification-Compiler/TASK-FOUNDATION-0003.md,task,draft
+TASK-REPORT-0001,TASK-REPORT-0001.md,task,draft
 TEST-VAL-0001,TESTING/SPEC-Validation.md,test,draft
 TEST-VAL-0002,TESTING/SPEC-Validation.md,test,draft
 TEST-VAL-0003,TESTING/SPEC-Validation.md,test,draft
