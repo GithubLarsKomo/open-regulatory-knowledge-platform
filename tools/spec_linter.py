@@ -163,7 +163,7 @@ def find_markdown_files(
             continue
         if (
             entry.name in GENERATED_FILES
-            or str(entry.relative_to(root)) in GENERATED_FILES
+            or entry.relative_to(root).as_posix() in GENERATED_FILES
         ):
             continue
         md_files.append(entry)
@@ -193,7 +193,7 @@ def lint_repository(
     references: Dict[str, List[Tuple[str, int]]] = defaultdict(list)
 
     for filepath in md_files:
-        rel_path = str(filepath.relative_to(root))
+        rel_path = filepath.relative_to(root).as_posix()
         is_def_file = is_definition_file(rel_path)
 
         try:
@@ -288,7 +288,7 @@ def generate_report(result: LintResult, repo_root: Path) -> str:
     lines = []
     lines.append("# Specification Linter Report")
     lines.append("")
-    lines.append(f"- **Repository:** {repo_root}")
+    lines.append("- **Repository:** .")
     lines.append(f"- **Files scanned:** {result.files_scanned}")
     lines.append(f"- **Unique IDs defined:** {len(result.definitions)}")
     lines.append(f"- **Duplicates:** {len(result.duplicates)}")
