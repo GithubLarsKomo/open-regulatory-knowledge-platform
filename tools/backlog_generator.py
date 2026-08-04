@@ -19,7 +19,6 @@ import json
 import re
 import sys
 from collections import defaultdict
-from datetime import date
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -82,7 +81,7 @@ def find_markdown_files(root: Path) -> List[Path]:
             continue
         if (
             entry.name in GENERATED_FILES
-            or str(entry.relative_to(root)) in GENERATED_FILES
+            or entry.relative_to(root).as_posix() in GENERATED_FILES
         ):
             continue
         # Only include SPEC.md, REQ-*.md, and SPEC-*.md
@@ -146,7 +145,7 @@ def collect_definitions(root: Path) -> Dict[str, List[str]]:
     definitions: Dict[str, List[str]] = defaultdict(list)
     md_files = find_markdown_files(root)
     for filepath in md_files:
-        rel_path = str(filepath.relative_to(root))
+        rel_path = filepath.relative_to(root).as_posix()
         if not is_definition_file(rel_path):
             continue
         ids = extract_requirement_ids(filepath)
@@ -251,10 +250,6 @@ def generate_backlog(root: Path) -> Tuple[List[Dict], List[Dict]]:
 # ---------------------------------------------------------------------------
 
 
-def today_str() -> str:
-    """Return today's date as ISO string (YYYY-MM-DD)."""
-    return date.today().isoformat()
-
 
 def generate_markdown_backlog(
     foundation_tasks: List[Dict], generated_tasks: List[Dict], output_path: Path
@@ -263,7 +258,7 @@ def generate_markdown_backlog(
     lines = []
     lines.append("# ORKP Task Backlog")
     lines.append("")
-    lines.append(f"Generated on {today_str()}")
+    lines.append("Generated deterministically from repository sources.")
     lines.append("")
     all_tasks = foundation_tasks + generated_tasks
     lines.append(f"- **Foundation tasks:** {len(foundation_tasks)}")
