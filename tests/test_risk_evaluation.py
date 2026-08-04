@@ -14,9 +14,11 @@ from orkp.domain.exceptions import (
     InvalidObjectIdentifierError,
 )
 from orkp.domain.risk_models import (
+    ControlVerificationCreateRequest,
     InitialRiskEvaluationCreateRequest,
     ResidualRiskEvaluationCreateRequest,
 )
+from orkp.domain.control_verification_service import ControlVerificationService
 from orkp.domain.initial_risk_evaluation_service import InitialRiskEvaluationService
 from orkp.domain.residual_risk_evaluation_service import ResidualRiskEvaluationService
 from orkp.domain.versioned_loader import load_versioned_object, load_risk_policy
@@ -171,6 +173,65 @@ def _create_initial_evaluation(repo, ra_hex=None, policy_hex=None, owner="u1"):
         evaluator_user_id=owner,
     )
     return svc.create_evaluation(ra_hex, request), ra_hex, policy_hex
+
+
+def _create_effective_control_verification(
+    repo, ra_hex, policy_hex, initial_evaluation_hex, owner="u1"
+):
+    """Create the mandatory effective verification for residual-risk tests."""
+    risk_analysis = repo.get_by_uuid_hex(ra_hex)
+    risk_control, _ = repo.create_object(
+        "risk_control",
+        {"control_id": "RC-001", "title": "Verified test control"},
+        owner,
+        owner,
+    )
+    evidence, _ = repo.create_object(
+        "evidence",
+        {"evidence_id": "EV-001", "title": "Verification evidence"},
+        owner,
+        owner,
+    )
+    repo.transition_state(evidence.object_uuid, "in_review", owner)
+    repo.transition_state(evidence.object_uuid, "approved", "u2")
+    repo.create_relation(
+        source_uuid=risk_analysis.object_uuid,
+        source_version=1,
+        target_uuid=risk_control.object_uuid,
+        target_version=1,
+        relation_type="controlled_by",
+        created_by=owner,
+    )
+
+    service = ControlVerificationService(repo)
+    response = service.create_verification(
+        risk_control.uuid_hex,
+        ControlVerificationCreateRequest(
+            risk_analysis={"object_uuid": ra_hex, "object_version": 1},
+            risk_control={"object_uuid": risk_control.uuid_hex, "object_version": 1},
+            initial_evaluation={
+                "object_uuid": initial_evaluation_hex,
+                "object_version": 1,
+            },
+            risk_policy={"object_uuid": policy_hex, "object_version": 1},
+            evidence=[{"object_uuid": evidence.uuid_hex, "object_version": 1}],
+            verification_method="test",
+            verification_scope="Implementation and effectiveness",
+            implementation_verified=True,
+            effectiveness_verified=True,
+            no_new_uncontrolled_risks=True,
+            effectiveness_result="effective",
+            conclusion="passed",
+            verified_by_user_id="verifier",
+        ),
+    )
+    service.transition_state(response.object_uuid, "in_review", "verifier")
+    service.transition_state(response.object_uuid, "approved", "approver")
+    effective = service.transition_state(response.object_uuid, "effective", "verifier")
+    return {
+        "object_uuid": effective.object_uuid,
+        "object_version": effective.object_version,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -433,6 +494,9 @@ class TestInitialRiskEvaluation:
         when loaded by ResidualRiskEvaluationService."""
         session, repo = repo_session
         ie_resp, ra_hex, pol_hex = _create_initial_evaluation(repo)
+        verification_ref = _create_effective_control_verification(
+            repo, ra_hex, pol_hex, ie_resp.object_uuid
+        )
         session.commit()
 
         # Corrupt the payload directly via SQL
@@ -461,6 +525,8 @@ class TestInitialRiskEvaluation:
                     residual_severity="minor",
                     residual_probability="unlikely",
                     evaluator_user_id="u1",
+
+                    control_verifications=[verification_ref],
                 ),
             )
 
@@ -474,6 +540,9 @@ class TestResidualRiskEvaluation:
     def test_valid_creation(self, repo_session):
         session, repo = repo_session
         ie_resp, ra_hex, pol_hex = _create_initial_evaluation(repo)
+        verification_ref = _create_effective_control_verification(
+            repo, ra_hex, pol_hex, ie_resp.object_uuid
+        )
         session.commit()
 
         svc = ResidualRiskEvaluationService(repo)
@@ -484,6 +553,8 @@ class TestResidualRiskEvaluation:
             residual_severity="minor",
             residual_probability="unlikely",
             evaluator_user_id="u1",
+
+            control_verifications=[verification_ref],
         )
         resp = svc.create_evaluation(ra_hex, req)
         assert resp.object_uuid is not None
@@ -495,6 +566,9 @@ class TestResidualRiskEvaluation:
     def test_wrong_ie_version(self, repo_session):
         session, repo = repo_session
         ie_resp, ra_hex, pol_hex = _create_initial_evaluation(repo)
+        verification_ref = _create_effective_control_verification(
+            repo, ra_hex, pol_hex, ie_resp.object_uuid
+        )
         session.commit()
         svc = ResidualRiskEvaluationService(repo)
         with pytest.raises(ObjectVersionNotFoundError):
@@ -507,12 +581,17 @@ class TestResidualRiskEvaluation:
                     residual_severity="minor",
                     residual_probability="unlikely",
                     evaluator_user_id="u1",
+
+                    control_verifications=[verification_ref],
                 ),
             )
 
     def test_wrong_ra_version(self, repo_session):
         session, repo = repo_session
         ie_resp, ra_hex, pol_hex = _create_initial_evaluation(repo)
+        verification_ref = _create_effective_control_verification(
+            repo, ra_hex, pol_hex, ie_resp.object_uuid
+        )
         session.commit()
         svc = ResidualRiskEvaluationService(repo)
         with pytest.raises(ObjectVersionNotFoundError):
@@ -525,12 +604,17 @@ class TestResidualRiskEvaluation:
                     residual_severity="minor",
                     residual_probability="unlikely",
                     evaluator_user_id="u1",
+
+                    control_verifications=[verification_ref],
                 ),
             )
 
     def test_ie_not_belonging_to_ra(self, repo_session):
         session, repo = repo_session
-        ie_resp, ra_hex, _ = _create_initial_evaluation(repo)
+        ie_resp, ra_hex, pol_hex = _create_initial_evaluation(repo)
+        verification_ref = _create_effective_control_verification(
+            repo, ra_hex, pol_hex, ie_resp.object_uuid
+        )
         ra2 = _create_risk_analysis(repo, "u2")
         session.commit()
         svc = ResidualRiskEvaluationService(repo)
@@ -544,12 +628,17 @@ class TestResidualRiskEvaluation:
                     residual_severity="minor",
                     residual_probability="unlikely",
                     evaluator_user_id="u1",
+
+                    control_verifications=[verification_ref],
                 ),
             )
 
     def test_regression_detected(self, repo_session):
         session, repo = repo_session
-        ie_resp, ra_hex, _ = _create_initial_evaluation(repo)
+        ie_resp, ra_hex, pol_hex = _create_initial_evaluation(repo)
+        verification_ref = _create_effective_control_verification(
+            repo, ra_hex, pol_hex, ie_resp.object_uuid
+        )
         session.commit()
         svc = ResidualRiskEvaluationService(repo)
         resp = svc.create_evaluation(
@@ -561,6 +650,8 @@ class TestResidualRiskEvaluation:
                 residual_severity="catastrophic",
                 residual_probability="probable",
                 evaluator_user_id="u1",
+
+                control_verifications=[verification_ref],
             ),
         )
         assert resp.payload.regression_detected is True
@@ -570,7 +661,10 @@ class TestResidualRiskEvaluation:
 
     def test_improvement_detected(self, repo_session):
         session, repo = repo_session
-        ie_resp, ra_hex, _ = _create_initial_evaluation(repo)
+        ie_resp, ra_hex, pol_hex = _create_initial_evaluation(repo)
+        verification_ref = _create_effective_control_verification(
+            repo, ra_hex, pol_hex, ie_resp.object_uuid
+        )
         session.commit()
         svc = ResidualRiskEvaluationService(repo)
         resp = svc.create_evaluation(
@@ -582,6 +676,8 @@ class TestResidualRiskEvaluation:
                 residual_severity="negligible",
                 residual_probability="improbable",
                 evaluator_user_id="u1",
+
+                control_verifications=[verification_ref],
             ),
         )
         assert resp.payload.reduced is True
@@ -590,7 +686,10 @@ class TestResidualRiskEvaluation:
 
     def test_benefit_risk_derived_from_policy(self, repo_session):
         session, repo = repo_session
-        ie_resp, ra_hex, _ = _create_initial_evaluation(repo)
+        ie_resp, ra_hex, pol_hex = _create_initial_evaluation(repo)
+        verification_ref = _create_effective_control_verification(
+            repo, ra_hex, pol_hex, ie_resp.object_uuid
+        )
         session.commit()
         svc = ResidualRiskEvaluationService(repo)
         # Unacceptable residual -> benefit_risk_required should be True
@@ -603,6 +702,8 @@ class TestResidualRiskEvaluation:
                 residual_severity="critical",
                 residual_probability="probable",
                 evaluator_user_id="u1",
+
+                control_verifications=[verification_ref],
             ),
         )
         assert resp.payload.regression_detected is True
