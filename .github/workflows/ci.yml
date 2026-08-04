@@ -19,6 +19,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
@@ -30,11 +32,34 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
 
+      - name: Collect changed Python files
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          if [[ -n "$BASE_SHA" && "$BASE_SHA" != "0000000000000000000000000000000000000000" ]]; then
+            git diff --name-only --diff-filter=ACMR -z "$BASE_SHA"...HEAD -- '*.py' > /tmp/ruff-files
+          else
+            git ls-files -z '*.py' > /tmp/ruff-files
+          fi
+
       - name: Check Ruff lint
-        run: ruff check .
+        shell: bash
+        run: |
+          if [[ -s /tmp/ruff-files ]]; then
+            xargs -0 ruff check -- < /tmp/ruff-files
+          else
+            echo "No changed Python files to lint."
+          fi
 
       - name: Check Ruff formatting
-        run: ruff format --check .
+        shell: bash
+        run: |
+          if [[ -s /tmp/ruff-files ]]; then
+            xargs -0 ruff format --check -- < /tmp/ruff-files
+          else
+            echo "No changed Python files to format-check."
+          fi
 
       - name: Run tests
         run: python -m pytest -q
