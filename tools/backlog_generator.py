@@ -19,7 +19,6 @@ import json
 import re
 import sys
 from collections import defaultdict
-from datetime import date
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -251,11 +250,6 @@ def generate_backlog(root: Path) -> Tuple[List[Dict], List[Dict]]:
 # ---------------------------------------------------------------------------
 
 
-def today_str() -> str:
-    """Return today's date as ISO string (YYYY-MM-DD)."""
-    return date.today().isoformat()
-
-
 def generate_markdown_backlog(
     foundation_tasks: List[Dict], generated_tasks: List[Dict], output_path: Path
 ) -> None:
@@ -263,7 +257,7 @@ def generate_markdown_backlog(
     lines = []
     lines.append("# ORKP Task Backlog")
     lines.append("")
-    lines.append(f"Generated on {today_str()}")
+    lines.append("Generated deterministically from SPEC files.")
     lines.append("")
     all_tasks = foundation_tasks + generated_tasks
     lines.append(f"- **Foundation tasks:** {len(foundation_tasks)}")
@@ -301,7 +295,7 @@ def generate_csv_backlog(
     """Generate a CSV backlog file."""
     all_tasks = foundation_tasks + generated_tasks
     with open(output_path, "w", newline="", encoding="utf-8") as f:
-        writer = csv.writer(f)
+        writer = csv.writer(f, lineterminator="\\n")
         writer.writerow(["task_id", "title", "requirement_ids", "epic", "phase"])
         for task in all_tasks:
             writer.writerow(
