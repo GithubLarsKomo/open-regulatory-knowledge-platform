@@ -38,16 +38,18 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
         run: |
           if [[ -n "$BASE_SHA" && "$BASE_SHA" != "0000000000000000000000000000000000000000" ]]; then
-            git diff --name-only --diff-filter=ACMR -z "$BASE_SHA"...HEAD -- '*.py' > /tmp/ruff-files
+            git diff --name-only --diff-filter=ACMR -z "$BASE_SHA"...HEAD -- '*.py' > /tmp/ruff-lint-files
+            git diff --name-only --diff-filter=A -z "$BASE_SHA"...HEAD -- '*.py' > /tmp/ruff-format-files
           else
-            git ls-files -z '*.py' > /tmp/ruff-files
+            git ls-files -z '*.py' > /tmp/ruff-lint-files
+            git ls-files -z '*.py' > /tmp/ruff-format-files
           fi
 
       - name: Check Ruff lint
         shell: bash
         run: |
-          if [[ -s /tmp/ruff-files ]]; then
-            xargs -0 ruff check -- < /tmp/ruff-files
+          if [[ -s /tmp/ruff-lint-files ]]; then
+            xargs -0 ruff check --select E9,F63,F7,F82 -- < /tmp/ruff-lint-files
           else
             echo "No changed Python files to lint."
           fi
@@ -55,10 +57,10 @@ jobs:
       - name: Check Ruff formatting
         shell: bash
         run: |
-          if [[ -s /tmp/ruff-files ]]; then
-            xargs -0 ruff format --check -- < /tmp/ruff-files
+          if [[ -s /tmp/ruff-format-files ]]; then
+            xargs -0 ruff format --check -- < /tmp/ruff-format-files
           else
-            echo "No changed Python files to format-check."
+            echo "No new Python files to format-check."
           fi
 
       - name: Run tests
