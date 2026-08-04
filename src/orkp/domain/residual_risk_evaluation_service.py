@@ -7,15 +7,15 @@ from pydantic import ValidationError
 
 from orkp.db.repository import RegulatoryObjectRepository
 from orkp.domain.control_verification_service import ControlVerificationService
-from orkp.domain.exceptions import InvalidRelationError, InvalidPersistedPayloadError
+from orkp.domain.exceptions import InvalidPersistedPayloadError, InvalidRelationError
+from orkp.domain.risk_evaluation import compare_initial_and_residual_risk
 from orkp.domain.risk_models import (
     InitialRiskEvaluationPayload,
     ResidualRiskEvaluationCreateRequest,
     ResidualRiskEvaluationPayload,
     ResidualRiskEvaluationResponse,
 )
-from orkp.domain.risk_evaluation import compare_initial_and_residual_risk
-from orkp.domain.versioned_loader import load_versioned_object, load_risk_policy
+from orkp.domain.versioned_loader import load_risk_policy, load_versioned_object
 
 
 class ResidualRiskEvaluationService:
@@ -29,13 +29,13 @@ class ResidualRiskEvaluationService:
         risk_analysis_hex: str,
         request: ResidualRiskEvaluationCreateRequest,
     ) -> ResidualRiskEvaluationResponse:
-        risk_analysis_hex = uuid.UUID(risk_analysis_hex).hex
         risk_analysis = load_versioned_object(
             self.repo,
             risk_analysis_hex,
             request.risk_analysis_version,
             "risk_analysis",
         )
+        risk_analysis_hex = risk_analysis.object.uuid_hex
         initial_evaluation = load_versioned_object(
             self.repo,
             request.initial_evaluation_uuid,
@@ -183,11 +183,10 @@ class ResidualRiskEvaluationService:
                 created_by=request.evaluator_user_id,
             )
             for verification in verification_responses:
-                verification_obj = self.repo.get_by_uuid_hex(verification.object_uuid)
                 self.repo.create_relation(
                     source_uuid=evaluation.object_uuid,
                     source_version=version,
-                    target_uuid=verification_obj.object_uuid,
+                    target_uuid=uuid.UUID(hex=verification.object_uuid).bytes,
                     target_version=verification.object_version,
                     relation_type="derived_from",
                     created_by=request.evaluator_user_id,
