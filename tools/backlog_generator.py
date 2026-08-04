@@ -296,7 +296,7 @@ def generate_csv_backlog(
     """Generate a CSV backlog file."""
     all_tasks = foundation_tasks + generated_tasks
     with open(output_path, "w", newline="", encoding="utf-8") as f:
-        writer = csv.writer(f)
+        writer = csv.writer(f, lineterminator="\n")
         writer.writerow(["task_id", "title", "requirement_ids", "epic", "phase"])
         for task in all_tasks:
             writer.writerow(
