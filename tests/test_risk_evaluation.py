@@ -1,30 +1,29 @@
 """Tests for versioned risk evaluation services."""
 
+from uuid import uuid4
+
 import pytest
 from sqlalchemy import create_engine, event as sa_event
 from sqlalchemy.orm import Session
 
 from orkp.db.models import Base
 from orkp.db.repository import RegulatoryObjectRepository
+from orkp.domain.control_verification_service import ControlVerificationService
 from orkp.domain.exceptions import (
+    InvalidLifecycleStateError,
+    InvalidObjectIdentifierError,
+    InvalidRelationError,
     ObjectTypeMismatchError,
     ObjectVersionNotFoundError,
-    InvalidLifecycleStateError,
-    InvalidRelationError,
-    InvalidObjectIdentifierError,
-)
-from orkp.domain.risk_models import (
-    InitialRiskEvaluationCreateRequest,
-    ResidualRiskEvaluationCreateRequest,
 )
 from orkp.domain.initial_risk_evaluation_service import InitialRiskEvaluationService
 from orkp.domain.residual_risk_evaluation_service import ResidualRiskEvaluationService
-from orkp.domain.versioned_loader import load_versioned_object, load_risk_policy
-
-
-# ---------------------------------------------------------------------------
-# Fixtures
-# ---------------------------------------------------------------------------
+from orkp.domain.risk_models import (
+    ControlVerificationCreateRequest,
+    InitialRiskEvaluationCreateRequest,
+    ResidualRiskEvaluationCreateRequest,
+)
+from orkp.domain.versioned_loader import load_risk_policy, load_versioned_object
 
 
 @pytest.fixture
@@ -44,12 +43,12 @@ def repo_session():
     repo = RegulatoryObjectRepository(session)
     yield session, repo
     session.close()
-    transaction.rollback()
+    if transaction.is_active:
+        transaction.rollback()
     connection.close()
 
 
 def _create_policy(repo, owner="u1", lifecycle_state="effective"):
-    """Create a persisted risk policy."""
     payload = {
         "policy_id": "POL-001",
         "name": "Test Policy",
@@ -136,7 +135,6 @@ def _create_policy(repo, owner="u1", lifecycle_state="effective"):
 
 
 def _create_risk_analysis(repo, owner="u1"):
-    """Create a risk analysis."""
     obj, _ = repo.create_object(
         "risk_analysis",
         {
@@ -152,16 +150,13 @@ def _create_risk_analysis(repo, owner="u1"):
 
 
 def _create_initial_evaluation(repo, ra_hex=None, policy_hex=None, owner="u1"):
-    """Create an initial evaluation via service."""
     if ra_hex is None:
         ra = _create_risk_analysis(repo, owner)
         ra_hex = ra.uuid_hex
     if policy_hex is None:
         pol = _create_policy(repo, owner)
         policy_hex = pol.uuid_hex
-    from orkp.domain.risk_models import InitialRiskEvaluationCreateRequest
 
-    svc = InitialRiskEvaluationService(repo)
     request = InitialRiskEvaluationCreateRequest(
         risk_analysis_version=1,
         risk_policy_uuid=policy_hex,
@@ -170,12 +165,84 @@ def _create_initial_evaluation(repo, ra_hex=None, policy_hex=None, owner="u1"):
         probability="possible",
         evaluator_user_id=owner,
     )
-    return svc.create_evaluation(ra_hex, request), ra_hex, policy_hex
+    response = InitialRiskEvaluationService(repo).create_evaluation(ra_hex, request)
+    return response, ra_hex, policy_hex
 
 
-# ---------------------------------------------------------------------------
-# Loader Tests
-# ---------------------------------------------------------------------------
+def _dummy_verification_ref():
+    """Satisfy request validation in tests that fail before verification lookup."""
+    return {"object_uuid": uuid4().hex, "object_version": 1}
+
+
+def _create_effective_control_verification(
+    repo,
+    initial_evaluation,
+    risk_analysis_hex,
+    policy_hex,
+    owner="u1",
+):
+    """Create the complete Epic 007 prerequisite for residual-risk tests."""
+    risk_analysis = repo.get_by_uuid_hex(risk_analysis_hex)
+    assert risk_analysis is not None
+
+    risk_control, _ = repo.create_object(
+        "risk_control",
+        {"control_id": f"RC-{uuid4().hex[:8]}", "description": "Test control"},
+        owner,
+        owner,
+    )
+    repo.create_relation(
+        source_uuid=risk_analysis.object_uuid,
+        source_version=1,
+        target_uuid=risk_control.object_uuid,
+        target_version=1,
+        relation_type="controlled_by",
+        created_by=owner,
+    )
+
+    evidence, _ = repo.create_object(
+        "evidence",
+        {"evidence_id": f"EV-{uuid4().hex[:8]}", "summary": "Verification evidence"},
+        owner,
+        owner,
+    )
+    repo.transition_state(evidence.object_uuid, "in_review", owner)
+    repo.transition_state(evidence.object_uuid, "approved", "u2")
+    repo.transition_state(evidence.object_uuid, "effective", owner)
+    repo.session.commit()
+
+    service = ControlVerificationService(repo)
+    verification = service.create_verification(
+        risk_control.uuid_hex,
+        ControlVerificationCreateRequest(
+            risk_analysis={"object_uuid": risk_analysis_hex, "object_version": 1},
+            risk_control={"object_uuid": risk_control.uuid_hex, "object_version": 1},
+            initial_evaluation={
+                "object_uuid": initial_evaluation.object_uuid,
+                "object_version": 1,
+            },
+            risk_policy={"object_uuid": policy_hex, "object_version": 1},
+            evidence=[{"object_uuid": evidence.uuid_hex, "object_version": 1}],
+            verification_method="test",
+            verification_scope="Implementation and effectiveness",
+            implementation_verified=True,
+            effectiveness_verified=True,
+            no_new_uncontrolled_risks=True,
+            effectiveness_result="effective",
+            conclusion="passed",
+            verified_by_user_id=owner,
+        ),
+    )
+    service.transition_state(verification.object_uuid, "in_review", owner)
+    service.transition_state(verification.object_uuid, "approved", "u2")
+    verification = service.transition_state(
+        verification.object_uuid, "effective", owner
+    )
+    assert verification.eligible_for_residual_evaluation is True
+    return {
+        "object_uuid": verification.object_uuid,
+        "object_version": verification.object_version,
+    }
 
 
 class TestLoader:
@@ -188,7 +255,7 @@ class TestLoader:
         assert loaded.version.version_no == 1
 
     def test_invalid_uuid(self, repo_session):
-        session, repo = repo_session
+        _, repo = repo_session
         with pytest.raises(InvalidObjectIdentifierError):
             load_versioned_object(repo, "not-a-uuid", 1, "risk_analysis")
 
@@ -258,18 +325,12 @@ class TestLoader:
             load_risk_policy(repo, pol.uuid_hex, 1)
 
 
-# ---------------------------------------------------------------------------
-# Initial Risk Evaluation Tests
-# ---------------------------------------------------------------------------
-
-
 class TestInitialRiskEvaluation:
     def test_valid_creation(self, repo_session):
         session, repo = repo_session
         ra = _create_risk_analysis(repo)
         pol = _create_policy(repo)
         session.commit()
-        svc = InitialRiskEvaluationService(repo)
         req = InitialRiskEvaluationCreateRequest(
             risk_analysis_version=1,
             risk_policy_uuid=pol.uuid_hex,
@@ -278,13 +339,12 @@ class TestInitialRiskEvaluation:
             probability="possible",
             evaluator_user_id="u1",
         )
-        resp = svc.create_evaluation(ra.uuid_hex, req)
+        resp = InitialRiskEvaluationService(repo).create_evaluation(ra.uuid_hex, req)
         assert resp.object_uuid is not None
         assert resp.object_version == 1
         assert resp.payload.risk_analysis_version == 1
         assert resp.payload.risk_policy_version == 1
         assert resp.payload.calculated_risk_level == "high"
-        assert resp.payload.acceptable is False
         assert resp.payload.acceptable is False
         assert resp.payload.action_required == "control_required"
 
@@ -294,8 +354,7 @@ class TestInitialRiskEvaluation:
         pol = _create_policy(repo)
         session.commit()
         with pytest.raises(ObjectVersionNotFoundError):
-            svc = InitialRiskEvaluationService(repo)
-            svc.create_evaluation(
+            InitialRiskEvaluationService(repo).create_evaluation(
                 ra.uuid_hex,
                 InitialRiskEvaluationCreateRequest(
                     risk_analysis_version=999,
@@ -312,8 +371,7 @@ class TestInitialRiskEvaluation:
         ra = _create_risk_analysis(repo)
         session.commit()
         with pytest.raises(ObjectTypeMismatchError):
-            svc = InitialRiskEvaluationService(repo)
-            svc.create_evaluation(
+            InitialRiskEvaluationService(repo).create_evaluation(
                 ra.uuid_hex,
                 InitialRiskEvaluationCreateRequest(
                     risk_analysis_version=1,
@@ -326,24 +384,20 @@ class TestInitialRiskEvaluation:
             )
 
     def test_invalid_severity(self, repo_session):
+        from pydantic import ValidationError
+
         session, repo = repo_session
         ra = _create_risk_analysis(repo)
         pol = _create_policy(repo)
         session.commit()
-        from pydantic import ValidationError
-
         with pytest.raises(ValidationError):
-            svc = InitialRiskEvaluationService(repo)
-            svc.create_evaluation(
-                ra.uuid_hex,
-                InitialRiskEvaluationCreateRequest(
-                    risk_analysis_version=1,
-                    risk_policy_uuid=pol.uuid_hex,
-                    risk_policy_version=1,
-                    severity="nonexistent",
-                    probability="possible",
-                    evaluator_user_id="u1",
-                ),
+            InitialRiskEvaluationCreateRequest(
+                risk_analysis_version=1,
+                risk_policy_uuid=pol.uuid_hex,
+                risk_policy_version=1,
+                severity="nonexistent",
+                probability="possible",
+                evaluator_user_id="u1",
             )
 
     def test_derived_fields_rejected(self, repo_session):
@@ -351,7 +405,6 @@ class TestInitialRiskEvaluation:
         ra = _create_risk_analysis(repo)
         pol = _create_policy(repo)
         session.commit()
-        svc = InitialRiskEvaluationService(repo)
         req = InitialRiskEvaluationCreateRequest(
             risk_analysis_version=1,
             risk_policy_uuid=pol.uuid_hex,
@@ -360,13 +413,11 @@ class TestInitialRiskEvaluation:
             probability="possible",
             evaluator_user_id="u1",
         )
-        resp = svc.create_evaluation(ra.uuid_hex, req)
+        resp = InitialRiskEvaluationService(repo).create_evaluation(ra.uuid_hex, req)
         assert resp.payload.risk_analysis_version == 1
         assert resp.payload.calculated_risk_level == "high"
-        # Client cannot set calculated_risk_level — it's derived
 
     def test_rollback_on_relation_failure(self, repo_session):
-        """Monkeypatch create_relation to simulate DB failure."""
         import unittest.mock as mock
 
         session, repo = repo_session
@@ -377,7 +428,6 @@ class TestInitialRiskEvaluation:
         with mock.patch.object(
             repo, "create_relation", side_effect=RuntimeError("DB failure")
         ):
-            svc = InitialRiskEvaluationService(repo)
             req = InitialRiskEvaluationCreateRequest(
                 risk_analysis_version=1,
                 risk_policy_uuid=pol.uuid_hex,
@@ -387,56 +437,43 @@ class TestInitialRiskEvaluation:
                 evaluator_user_id="u1",
             )
             with pytest.raises(RuntimeError):
-                svc.create_evaluation(ra.uuid_hex, req)
-        # Should be no object — transaction rolled back
-        objs = repo.list_objects("initial_risk_evaluation")
-        assert len(objs) == 0
+                InitialRiskEvaluationService(repo).create_evaluation(ra.uuid_hex, req)
+        assert repo.list_objects("initial_risk_evaluation") == []
 
     def test_version_pinning_multiple_versions(self, repo_session):
-        """Evaluation pins v1; RA gets v2 — evaluation still loads at v1."""
         session, repo = repo_session
         ra = _create_risk_analysis(repo)
         pol = _create_policy(repo)
         session.commit()
 
-        # Create evaluation at v1
-        svc = InitialRiskEvaluationService(repo)
-        req = InitialRiskEvaluationCreateRequest(
-            risk_analysis_version=1,
-            risk_policy_uuid=pol.uuid_hex,
-            risk_policy_version=1,
-            severity="moderate",
-            probability="possible",
-            evaluator_user_id="u1",
+        resp = InitialRiskEvaluationService(repo).create_evaluation(
+            ra.uuid_hex,
+            InitialRiskEvaluationCreateRequest(
+                risk_analysis_version=1,
+                risk_policy_uuid=pol.uuid_hex,
+                risk_policy_version=1,
+                severity="moderate",
+                probability="possible",
+                evaluator_user_id="u1",
+            ),
         )
-        resp1 = svc.create_evaluation(ra.uuid_hex, req)
-
-        # Create v2 of the risk analysis
         repo.create_version(ra.object_uuid, {"updated": True}, "u1")
         session.commit()
 
-        # RA now at v2
-        ra_reloaded = repo.get_by_uuid_hex(ra.uuid_hex)
-        assert ra_reloaded.current_version == 2
-
-        # Evaluation still loads at v1
-        import orkp.domain.versioned_loader as vl
-
-        loaded = vl.load_versioned_object(
-            repo, resp1.object_uuid, 1, "initial_risk_evaluation"
+        assert repo.get_by_uuid_hex(ra.uuid_hex).current_version == 2
+        loaded = load_versioned_object(
+            repo, resp.object_uuid, 1, "initial_risk_evaluation"
         )
         assert loaded.version.version_no == 1
         assert loaded.payload["risk_analysis_version"] == 1
 
     def test_negative_invalid_persisted_payload(self, repo_session):
-        """Corrupted initial evaluation payload raises InvalidPersistedPayloadError
-        when loaded by ResidualRiskEvaluationService."""
-        session, repo = repo_session
-        ie_resp, ra_hex, pol_hex = _create_initial_evaluation(repo)
-        session.commit()
-
-        # Corrupt the payload directly via SQL
         from orkp.db.models import ObjectVersion
+        from orkp.domain.exceptions import InvalidPersistedPayloadError
+
+        session, repo = repo_session
+        ie_resp, ra_hex, _ = _create_initial_evaluation(repo)
+        session.commit()
 
         obj = repo.get_by_uuid_hex(ie_resp.object_uuid)
         session.query(ObjectVersion).filter(
@@ -445,19 +482,14 @@ class TestInitialRiskEvaluation:
         ).update({"payload_json": {"bad": "data"}})
         session.commit()
 
-        from orkp.domain.exceptions import InvalidPersistedPayloadError
-        from orkp.domain.residual_risk_evaluation_service import (
-            ResidualRiskEvaluationService,
-        )
-
-        svc = ResidualRiskEvaluationService(repo)
         with pytest.raises(InvalidPersistedPayloadError):
-            svc.create_evaluation(
+            ResidualRiskEvaluationService(repo).create_evaluation(
                 ra_hex,
                 ResidualRiskEvaluationCreateRequest(
                     risk_analysis_version=1,
                     initial_evaluation_uuid=ie_resp.object_uuid,
                     initial_evaluation_version=1,
+                    control_verifications=[_dummy_verification_ref()],
                     residual_severity="minor",
                     residual_probability="unlikely",
                     evaluator_user_id="u1",
@@ -465,45 +497,44 @@ class TestInitialRiskEvaluation:
             )
 
 
-# ---------------------------------------------------------------------------
-# Residual Risk Evaluation Tests
-# ---------------------------------------------------------------------------
-
-
 class TestResidualRiskEvaluation:
     def test_valid_creation(self, repo_session):
         session, repo = repo_session
         ie_resp, ra_hex, pol_hex = _create_initial_evaluation(repo)
+        verification = _create_effective_control_verification(
+            repo, ie_resp, ra_hex, pol_hex
+        )
         session.commit()
 
-        svc = ResidualRiskEvaluationService(repo)
         req = ResidualRiskEvaluationCreateRequest(
             risk_analysis_version=1,
             initial_evaluation_uuid=ie_resp.object_uuid,
             initial_evaluation_version=1,
+            control_verifications=[verification],
             residual_severity="minor",
             residual_probability="unlikely",
             evaluator_user_id="u1",
         )
-        resp = svc.create_evaluation(ra_hex, req)
+        resp = ResidualRiskEvaluationService(repo).create_evaluation(ra_hex, req)
         assert resp.object_uuid is not None
         assert resp.payload.risk_analysis_version == 1
         assert resp.payload.initial_evaluation_version == 1
+        assert resp.payload.control_verifications[0].object_uuid == verification["object_uuid"]
         assert resp.payload.reduced is True
         assert resp.payload.regression_detected is False
 
     def test_wrong_ie_version(self, repo_session):
         session, repo = repo_session
-        ie_resp, ra_hex, pol_hex = _create_initial_evaluation(repo)
+        ie_resp, ra_hex, _ = _create_initial_evaluation(repo)
         session.commit()
-        svc = ResidualRiskEvaluationService(repo)
         with pytest.raises(ObjectVersionNotFoundError):
-            svc.create_evaluation(
+            ResidualRiskEvaluationService(repo).create_evaluation(
                 ra_hex,
                 ResidualRiskEvaluationCreateRequest(
                     risk_analysis_version=1,
                     initial_evaluation_uuid=ie_resp.object_uuid,
                     initial_evaluation_version=999,
+                    control_verifications=[_dummy_verification_ref()],
                     residual_severity="minor",
                     residual_probability="unlikely",
                     evaluator_user_id="u1",
@@ -512,16 +543,16 @@ class TestResidualRiskEvaluation:
 
     def test_wrong_ra_version(self, repo_session):
         session, repo = repo_session
-        ie_resp, ra_hex, pol_hex = _create_initial_evaluation(repo)
+        ie_resp, ra_hex, _ = _create_initial_evaluation(repo)
         session.commit()
-        svc = ResidualRiskEvaluationService(repo)
         with pytest.raises(ObjectVersionNotFoundError):
-            svc.create_evaluation(
+            ResidualRiskEvaluationService(repo).create_evaluation(
                 ra_hex,
                 ResidualRiskEvaluationCreateRequest(
                     risk_analysis_version=999,
                     initial_evaluation_uuid=ie_resp.object_uuid,
                     initial_evaluation_version=1,
+                    control_verifications=[_dummy_verification_ref()],
                     residual_severity="minor",
                     residual_probability="unlikely",
                     evaluator_user_id="u1",
@@ -530,76 +561,75 @@ class TestResidualRiskEvaluation:
 
     def test_ie_not_belonging_to_ra(self, repo_session):
         session, repo = repo_session
-        ie_resp, ra_hex, _ = _create_initial_evaluation(repo)
+        ie_resp, _, _ = _create_initial_evaluation(repo)
         ra2 = _create_risk_analysis(repo, "u2")
         session.commit()
-        svc = ResidualRiskEvaluationService(repo)
         with pytest.raises(InvalidRelationError):
-            svc.create_evaluation(
+            ResidualRiskEvaluationService(repo).create_evaluation(
                 ra2.uuid_hex,
                 ResidualRiskEvaluationCreateRequest(
                     risk_analysis_version=1,
                     initial_evaluation_uuid=ie_resp.object_uuid,
                     initial_evaluation_version=1,
+                    control_verifications=[_dummy_verification_ref()],
                     residual_severity="minor",
                     residual_probability="unlikely",
                     evaluator_user_id="u1",
                 ),
             )
 
-    def test_regression_detected(self, repo_session):
+    @pytest.mark.parametrize(
+        ("severity", "probability", "expected"),
+        [
+            ("catastrophic", "probable", {"regression": True, "reduced": False}),
+            ("negligible", "improbable", {"regression": False, "reduced": True}),
+        ],
+    )
+    def test_risk_change_detection(
+        self, repo_session, severity, probability, expected
+    ):
         session, repo = repo_session
-        ie_resp, ra_hex, _ = _create_initial_evaluation(repo)
-        session.commit()
-        svc = ResidualRiskEvaluationService(repo)
-        resp = svc.create_evaluation(
-            ra_hex,
-            ResidualRiskEvaluationCreateRequest(
-                risk_analysis_version=1,
-                initial_evaluation_uuid=ie_resp.object_uuid,
-                initial_evaluation_version=1,
-                residual_severity="catastrophic",
-                residual_probability="probable",
-                evaluator_user_id="u1",
-            ),
+        ie_resp, ra_hex, pol_hex = _create_initial_evaluation(repo)
+        verification = _create_effective_control_verification(
+            repo, ie_resp, ra_hex, pol_hex
         )
-        assert resp.payload.regression_detected is True
-        assert resp.payload.reduced is False
-        assert resp.payload.severity_worsened is True
-        assert resp.payload.benefit_risk_required is True
+        session.commit()
 
-    def test_improvement_detected(self, repo_session):
-        session, repo = repo_session
-        ie_resp, ra_hex, _ = _create_initial_evaluation(repo)
-        session.commit()
-        svc = ResidualRiskEvaluationService(repo)
-        resp = svc.create_evaluation(
+        resp = ResidualRiskEvaluationService(repo).create_evaluation(
             ra_hex,
             ResidualRiskEvaluationCreateRequest(
                 risk_analysis_version=1,
                 initial_evaluation_uuid=ie_resp.object_uuid,
                 initial_evaluation_version=1,
-                residual_severity="negligible",
-                residual_probability="improbable",
+                control_verifications=[verification],
+                residual_severity=severity,
+                residual_probability=probability,
                 evaluator_user_id="u1",
             ),
         )
-        assert resp.payload.reduced is True
-        assert resp.payload.regression_detected is False
-        assert resp.payload.action_required == "none"
+        assert resp.payload.regression_detected is expected["regression"]
+        assert resp.payload.reduced is expected["reduced"]
+        if severity == "catastrophic":
+            assert resp.payload.severity_worsened is True
+            assert resp.payload.benefit_risk_required is True
+        else:
+            assert resp.payload.action_required == "none"
 
     def test_benefit_risk_derived_from_policy(self, repo_session):
         session, repo = repo_session
-        ie_resp, ra_hex, _ = _create_initial_evaluation(repo)
+        ie_resp, ra_hex, pol_hex = _create_initial_evaluation(repo)
+        verification = _create_effective_control_verification(
+            repo, ie_resp, ra_hex, pol_hex
+        )
         session.commit()
-        svc = ResidualRiskEvaluationService(repo)
-        # Unacceptable residual -> benefit_risk_required should be True
-        resp = svc.create_evaluation(
+
+        resp = ResidualRiskEvaluationService(repo).create_evaluation(
             ra_hex,
             ResidualRiskEvaluationCreateRequest(
                 risk_analysis_version=1,
                 initial_evaluation_uuid=ie_resp.object_uuid,
                 initial_evaluation_version=1,
+                control_verifications=[verification],
                 residual_severity="critical",
                 residual_probability="probable",
                 evaluator_user_id="u1",
