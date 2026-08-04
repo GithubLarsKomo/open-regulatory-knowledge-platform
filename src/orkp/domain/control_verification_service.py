@@ -93,8 +93,7 @@ class ControlVerificationService:
             ) from exc
 
         if (
-            initial_payload.risk_analysis_uuid
-            != request.risk_analysis.object_uuid
+            initial_payload.risk_analysis_uuid != request.risk_analysis.object_uuid
             or initial_payload.risk_analysis_version
             != request.risk_analysis.object_version
         ):

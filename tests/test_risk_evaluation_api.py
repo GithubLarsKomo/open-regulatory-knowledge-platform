@@ -226,9 +226,7 @@ def _create_effective_control_verification(
                     "object_version": 1,
                 },
                 risk_policy={"object_uuid": policy_uuid, "object_version": 1},
-                evidence=[
-                    {"object_uuid": evidence.uuid_hex, "object_version": 1}
-                ],
+                evidence=[{"object_uuid": evidence.uuid_hex, "object_version": 1}],
                 verification_method="test",
                 verification_scope="Implementation and effectiveness",
                 implementation_verified=True,

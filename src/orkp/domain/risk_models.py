@@ -183,7 +183,9 @@ class ResidualRiskEvaluationPayload(BaseModel):
     rationale: Optional[str] = None
     evaluated_at: str
 
-    @field_validator("risk_analysis_uuid", "initial_evaluation_uuid", "risk_policy_uuid")
+    @field_validator(
+        "risk_analysis_uuid", "initial_evaluation_uuid", "risk_policy_uuid"
+    )
     @classmethod
     def validate_uuids(cls, value: str) -> str:
         return _uuid_hex(value)
@@ -235,7 +237,9 @@ class ResidualRiskEvaluationCreateRequest(BaseModel):
 
     @model_validator(mode="after")
     def reject_duplicate_verifications(self):
-        keys = {(ref.object_uuid, ref.object_version) for ref in self.control_verifications}
+        keys = {
+            (ref.object_uuid, ref.object_version) for ref in self.control_verifications
+        }
         if len(keys) != len(self.control_verifications):
             raise ValueError("control_verifications must not contain duplicates")
         return self
@@ -305,15 +309,21 @@ class ControlVerificationCreateRequest(BaseModel):
             self.limitations and self.limitations.strip()
         ):
             raise ValueError("passed_with_limitations requires limitations")
-        if self.conclusion == "failed" and all(
-            (
-                self.implementation_verified,
-                self.effectiveness_verified,
-                self.no_new_uncontrolled_risks,
-                self.effectiveness_result == "effective",
+        if (
+            self.conclusion == "failed"
+            and all(
+                (
+                    self.implementation_verified,
+                    self.effectiveness_verified,
+                    self.no_new_uncontrolled_risks,
+                    self.effectiveness_result == "effective",
+                )
             )
-        ) and not (self.deviations and self.deviations.strip()):
-            raise ValueError("failed verification requires a deviation or negative result")
+            and not (self.deviations and self.deviations.strip())
+        ):
+            raise ValueError(
+                "failed verification requires a deviation or negative result"
+            )
         keys = {(ref.object_uuid, ref.object_version) for ref in self.evidence}
         if len(keys) != len(self.evidence):
             raise ValueError("evidence must not contain duplicates")

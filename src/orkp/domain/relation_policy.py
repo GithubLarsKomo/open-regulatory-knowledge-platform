@@ -30,9 +30,7 @@ RELATION_SCHEMA: Dict[str, RelationRule] = {
     "creates_situation": RelationRule(
         frozenset({"sequence_of_events"}), frozenset({"hazardous_situation"})
     ),
-    "may_cause": RelationRule(
-        frozenset({"hazardous_situation"}), frozenset({"harm"})
-    ),
+    "may_cause": RelationRule(frozenset({"hazardous_situation"}), frozenset({"harm"})),
     "estimated_for": RelationRule(
         frozenset({"risk_analysis"}), frozenset({"hazardous_situation"})
     ),
@@ -83,9 +81,7 @@ RELATION_SCHEMA: Dict[str, RelationRule] = {
         frozenset({"product"}), frozenset({"organization"})
     ),
     "approved_by": RelationRule(frozenset({"risk_analysis"}), frozenset({"user"})),
-    "marketed_in": RelationRule(
-        frozenset({"product"}), frozenset({"jurisdiction"})
-    ),
+    "marketed_in": RelationRule(frozenset({"product"}), frozenset({"jurisdiction"})),
     "references": RelationRule(frozenset({"claim"}), frozenset({"standard"})),
     "derived_from": RelationRule(
         frozenset({"claim", "control_verification", "residual_risk_evaluation"}),

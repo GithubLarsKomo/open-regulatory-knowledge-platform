@@ -40,7 +40,10 @@ def list_control_verifications_for_risk_analysis(
     ):
         if relation.relation_type != "derived_from":
             continue
-        if not relation.properties or relation.properties.get("role") != "verifies_control_for":
+        if (
+            not relation.properties
+            or relation.properties.get("role") != "verifies_control_for"
+        ):
             continue
         key = (relation.source_uuid, relation.source_version)
         if key in seen:

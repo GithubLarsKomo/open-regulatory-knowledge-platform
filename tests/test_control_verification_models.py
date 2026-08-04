@@ -65,9 +65,7 @@ def test_rejects_client_derived_fields():
 
 def test_passed_requires_all_positive_flags():
     with pytest.raises(ValidationError):
-        ControlVerificationCreateRequest(
-            **valid_request(effectiveness_verified=False)
-        )
+        ControlVerificationCreateRequest(**valid_request(effectiveness_verified=False))
 
 
 def test_passed_requires_effective_result():
@@ -87,9 +85,7 @@ def test_passed_with_limitations_requires_limitations():
 def test_rejects_duplicate_evidence():
     evidence = ref()
     with pytest.raises(ValidationError):
-        ControlVerificationCreateRequest(
-            **valid_request(evidence=[evidence, evidence])
-        )
+        ControlVerificationCreateRequest(**valid_request(evidence=[evidence, evidence]))
 
 
 def test_versioned_reference_requires_uuid_and_positive_version():

@@ -387,7 +387,6 @@ class TestInitialRiskEvaluation:
         from pydantic import ValidationError
 
         session, repo = repo_session
-        ra = _create_risk_analysis(repo)
         pol = _create_policy(repo)
         session.commit()
         with pytest.raises(ValidationError):
@@ -519,7 +518,10 @@ class TestResidualRiskEvaluation:
         assert resp.object_uuid is not None
         assert resp.payload.risk_analysis_version == 1
         assert resp.payload.initial_evaluation_version == 1
-        assert resp.payload.control_verifications[0].object_uuid == verification["object_uuid"]
+        assert (
+            resp.payload.control_verifications[0].object_uuid
+            == verification["object_uuid"]
+        )
         assert resp.payload.reduced is True
         assert resp.payload.regression_detected is False
 
@@ -585,9 +587,7 @@ class TestResidualRiskEvaluation:
             ("negligible", "improbable", {"regression": False, "reduced": True}),
         ],
     )
-    def test_risk_change_detection(
-        self, repo_session, severity, probability, expected
-    ):
+    def test_risk_change_detection(self, repo_session, severity, probability, expected):
         session, repo = repo_session
         ie_resp, ra_hex, pol_hex = _create_initial_evaluation(repo)
         verification = _create_effective_control_verification(
