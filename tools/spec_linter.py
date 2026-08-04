@@ -252,7 +252,7 @@ def lint_repository(
 def generate_csv(result: LintResult, output_path: Path, repo_root: Path) -> None:
     """Generate a traceability CSV from lint results."""
     with open(output_path, "w", newline="", encoding="utf-8") as f:
-        writer = csv.writer(f)
+        writer = csv.writer(f, lineterminator="\\n")
         writer.writerow(CSV_COLUMNS)
 
         seen: Set[str] = set()
@@ -288,7 +288,7 @@ def generate_report(result: LintResult, repo_root: Path) -> str:
     lines = []
     lines.append("# Specification Linter Report")
     lines.append("")
-    lines.append(f"- **Repository:** {repo_root}")
+    lines.append("- **Repository:** .")
     lines.append(f"- **Files scanned:** {result.files_scanned}")
     lines.append(f"- **Unique IDs defined:** {len(result.definitions)}")
     lines.append(f"- **Duplicates:** {len(result.duplicates)}")
