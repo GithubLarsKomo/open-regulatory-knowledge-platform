@@ -62,7 +62,7 @@ class PostMarketInformationPayload(PostMarketInformationCreateRequest):
 
 
 class RiskImpactAssessmentDraftPayload(BaseModel):
-    """Automatically created pending impact assessment for safety information."""
+    """Version-pinned pending or completed Risk Impact Assessment payload."""
 
     model_config = ConfigDict(extra="forbid")
     assessment_id: str = Field(..., min_length=1)
@@ -75,12 +75,36 @@ class RiskImpactAssessmentDraftPayload(BaseModel):
     assessed_at: Optional[str] = None
 
     @model_validator(mode="after")
-    def validate_pending_state(self):
+    def validate_decision_state(self):
         if self.outcome == "pending":
-            if self.rationale is not None or self.assessor_user_id is not None:
-                raise ValueError("pending assessment must not contain a completed decision")
+            if any(
+                value is not None
+                for value in (self.rationale, self.assessor_user_id, self.assessed_at)
+            ):
+                raise ValueError(
+                    "pending assessment must not contain a completed decision"
+                )
             if not self.requires_risk_review:
                 raise ValueError("pending assessment must require risk review")
+            return self
+
+        if (
+            not self.rationale
+            or not self.rationale.strip()
+            or not self.assessor_user_id
+            or not self.assessor_user_id.strip()
+            or not self.assessed_at
+            or not self.assessed_at.strip()
+        ):
+            raise ValueError(
+                "completed assessment requires rationale, assessor_user_id and assessed_at"
+            )
+
+        expected_review = self.outcome != "no_change"
+        if self.requires_risk_review != expected_review:
+            raise ValueError(
+                "requires_risk_review must be false only for no_change outcomes"
+            )
         return self
 
 
