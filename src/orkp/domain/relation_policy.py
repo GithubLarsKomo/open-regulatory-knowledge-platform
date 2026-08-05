@@ -93,8 +93,22 @@ RELATION_SCHEMA: Dict[str, RelationRule] = {
     "marketed_in": RelationRule(frozenset({"product"}), frozenset({"jurisdiction"})),
     "references": RelationRule(frozenset({"claim"}), frozenset({"standard"})),
     "derived_from": RelationRule(
-        frozenset({"claim", "control_verification", "residual_risk_evaluation"}),
-        frozenset({"study", "risk_analysis", "control_verification"}),
+        frozenset(
+            {
+                "claim",
+                "control_verification",
+                "residual_risk_evaluation",
+                "risk_impact_assessment",
+            }
+        ),
+        frozenset(
+            {
+                "study",
+                "risk_analysis",
+                "control_verification",
+                "post_market_information",
+            }
+        ),
     ),
     "generated_from": RelationRule(frozenset({"report"}), frozenset({"claim"})),
     "included_in": RelationRule(frozenset({"section"}), frozenset({"report"})),
@@ -104,13 +118,6 @@ RELATION_SCHEMA: Dict[str, RelationRule] = {
     ),
     "impacts_risk": RelationRule(
         frozenset({"post_market_information"}), frozenset({"risk_analysis"})
-    ),
-    "assesses_information": RelationRule(
-        frozenset({"risk_impact_assessment"}),
-        frozenset({"post_market_information"}),
-    ),
-    "assesses_risk": RelationRule(
-        frozenset({"risk_impact_assessment"}), frozenset({"risk_analysis"})
     ),
     "requires_review": RelationRule(
         frozenset({"finding"}), frozenset({"risk_analysis"})
