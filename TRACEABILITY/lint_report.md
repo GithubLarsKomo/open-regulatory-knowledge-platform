@@ -1,8 +1,8 @@
 # Specification Linter Report
 
 - **Repository:** .
-- **Files scanned:** 30
-- **Unique IDs defined:** 168
+- **Files scanned:** 31
+- **Unique IDs defined:** 169
 - **Duplicates:** 0
 - **Invalid format:** 0
 - **Undefined references:** 0
@@ -23,6 +23,6 @@
 | REP | 5 |
 | REQ | 111 |
 | SEC | 5 |
-| TASK | 3 |
+| TASK | 4 |
 | TEST | 5 |
 | WF | 6 |

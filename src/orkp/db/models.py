@@ -386,6 +386,10 @@ class Baseline(Base):
         back_populates="baseline_ref",
     )
 
+    @property
+    def uuid_hex(self) -> str:
+        return _bin_to_str(self.baseline_uuid)
+
     def __repr__(self) -> str:
         return f"<Baseline(uuid={_bin_to_str(self.baseline_uuid)}, name={self.name})>"
 
