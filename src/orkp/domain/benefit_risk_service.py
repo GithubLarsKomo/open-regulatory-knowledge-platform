@@ -44,7 +44,10 @@ class BenefitRiskAnalysisService:
             raise InvalidRelationError(
                 "Path residual-risk UUID does not match request reference"
             )
-        if residual.object.current_version != request.residual_evaluation.object_version:
+        if (
+            residual.object.current_version
+            != request.residual_evaluation.object_version
+        ):
             raise InvalidRelationError(
                 "Benefit-Risk Analysis must reference the current residual-risk version"
             )
@@ -104,7 +107,9 @@ class BenefitRiskAnalysisService:
             request.risk_policy.object_version,
         )
 
-        relations = self.repo.list_active_relations_for_source(residual.object.object_uuid)
+        relations = self.repo.list_active_relations_for_source(
+            residual.object.object_uuid
+        )
         has_risk_relation = any(
             relation.relation_type == "residual_of"
             and relation.source_version == request.residual_evaluation.object_version
@@ -236,7 +241,5 @@ class BenefitRiskAnalysisService:
             ) from exc
         obj = self.repo.get_by_uuid_hex(normalized)
         if obj is None:
-            raise ObjectNotFoundError(
-                f"Benefit-Risk Analysis {normalized} not found"
-            )
+            raise ObjectNotFoundError(f"Benefit-Risk Analysis {normalized} not found")
         return obj.current_version
