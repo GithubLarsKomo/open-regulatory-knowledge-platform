@@ -54,6 +54,7 @@ RELATION_SCHEMA: Dict[str, RelationRule] = {
                 "residual_risk_evaluation",
                 "control_verification",
                 "benefit_risk",
+                "overall_residual_risk",
             }
         ),
         frozenset({"risk_policy"}),
@@ -76,6 +77,13 @@ RELATION_SCHEMA: Dict[str, RelationRule] = {
     ),
     "overall_risk_for": RelationRule(
         frozenset({"overall_residual_risk"}), frozenset({"product"})
+    ),
+    "aggregates_residual_risk": RelationRule(
+        frozenset({"overall_residual_risk"}),
+        frozenset({"residual_risk_evaluation"}),
+    ),
+    "considers_benefit_risk": RelationRule(
+        frozenset({"overall_residual_risk"}), frozenset({"benefit_risk"})
     ),
     "governed_by": RelationRule(frozenset({"product"}), frozenset({"regulation"})),
     "manufactured_by": RelationRule(
