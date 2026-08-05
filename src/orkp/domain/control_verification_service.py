@@ -268,7 +268,9 @@ class ControlVerificationService:
                     relation.source_version,
                 )
             )
-        responses.sort(key=lambda response: (response.object_uuid, response.object_version))
+        responses.sort(
+            key=lambda response: (response.object_uuid, response.object_version)
+        )
         return responses
 
     def evaluate_eligibility(
