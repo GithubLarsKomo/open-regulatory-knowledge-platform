@@ -241,7 +241,7 @@ class TestLifecycleTransitions:
         create_resp = client.post(
             "/api/v1/objects",
             json={
-                "object_type": "claim",
+                "object_type": "risk_policy",
                 "payload": {},
                 "owner_user_id": "u1",
             },
