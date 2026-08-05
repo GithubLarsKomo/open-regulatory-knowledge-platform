@@ -55,6 +55,7 @@ _GOVERNED_GENERIC_TRANSITIONS = {
     "risk_analysis": {"approved"},
     "control_verification": {"approved", "effective"},
     "benefit_risk": {"approved"},
+    "overall_residual_risk": {"approved"},
 }
 
 # ---------------------------------------------------------------------------
