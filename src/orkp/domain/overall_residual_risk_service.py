@@ -43,7 +43,9 @@ class OverallResidualRiskService:
             "product",
         )
         if product.object.uuid_hex != request.product.object_uuid:
-            raise InvalidRelationError("Path Product UUID does not match request reference")
+            raise InvalidRelationError(
+                "Path Product UUID does not match request reference"
+            )
         if product.object.current_version != request.product.object_version:
             raise InvalidRelationError(
                 "Overall Residual Risk must reference the current Product version"
@@ -180,7 +182,9 @@ class OverallResidualRiskService:
         except Exception:
             self.repo.session.rollback()
             raise
-        return self.get_evaluation(loaded.object.uuid_hex, loaded.object.current_version)
+        return self.get_evaluation(
+            loaded.object.uuid_hex, loaded.object.current_version
+        )
 
     def get_evaluation(
         self,
@@ -450,7 +454,9 @@ class OverallResidualRiskService:
     ) -> list[dict]:
         references = []
         policy_uuid = UUID(hex=residual_payload.risk_policy_uuid).bytes
-        for relation in self.repo.list_active_relations_for_target(residual.object_uuid):
+        for relation in self.repo.list_active_relations_for_target(
+            residual.object_uuid
+        ):
             if (
                 relation.relation_type != "benefit_risk_for"
                 or relation.target_version != residual_version
