@@ -105,6 +105,13 @@ RELATION_SCHEMA: Dict[str, RelationRule] = {
     "impacts_risk": RelationRule(
         frozenset({"post_market_information"}), frozenset({"risk_analysis"})
     ),
+    "assesses_information": RelationRule(
+        frozenset({"risk_impact_assessment"}),
+        frozenset({"post_market_information"}),
+    ),
+    "assesses_risk": RelationRule(
+        frozenset({"risk_impact_assessment"}), frozenset({"risk_analysis"})
+    ),
     "requires_review": RelationRule(
         frozenset({"finding"}), frozenset({"risk_analysis"})
     ),
