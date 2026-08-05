@@ -252,6 +252,7 @@ class ControlVerificationCreateRequest(BaseModel):
     initial_evaluation: VersionedObjectReference
     risk_policy: VersionedObjectReference
     evidence: List[VersionedObjectReference] = Field(..., min_length=1)
+    supersedes: Optional[VersionedObjectReference] = None
     verification_method: str
     verification_scope: str = Field(..., min_length=1)
     implementation_verified: bool
