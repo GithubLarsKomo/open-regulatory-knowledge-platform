@@ -249,18 +249,26 @@ class ControlVerificationService:
             control_obj.current_version,
             "risk_control",
         )
-        responses = []
+        responses: list[ControlVerificationResponse] = []
+        seen: set[tuple[bytes, int]] = set()
         for relation in self.repo.list_active_relations_for_target(
             control.object.object_uuid
         ):
             if relation.relation_type != "verifies_control":
                 continue
+            if relation.target_version != control.version.version_no:
+                continue
+            key = (relation.source_uuid, relation.source_version)
+            if key in seen:
+                continue
+            seen.add(key)
             responses.append(
                 self._response(
                     UUID(bytes=relation.source_uuid).hex,
                     relation.source_version,
                 )
             )
+        responses.sort(key=lambda response: (response.object_uuid, response.object_version))
         return responses
 
     def evaluate_eligibility(
