@@ -192,14 +192,12 @@ def test_mismatched_risk_context_is_rejected(repo):
         "owner",
         "owner",
     )
-    request = _request(risk_analysis, risk_policy, residual).model_copy(
-        update={
-            "risk_analysis": {
-                "object_uuid": other_risk.uuid_hex,
-                "object_version": 1,
-            }
-        }
-    )
+    request_data = _request(risk_analysis, risk_policy, residual).model_dump()
+    request_data["risk_analysis"] = {
+        "object_uuid": other_risk.uuid_hex,
+        "object_version": 1,
+    }
+    request = BenefitRiskAnalysisCreateRequest(**request_data)
 
     with pytest.raises(InvalidRelationError):
         BenefitRiskAnalysisService(repo).create_analysis(residual.uuid_hex, request)
