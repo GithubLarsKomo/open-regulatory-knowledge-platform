@@ -72,9 +72,7 @@ def _add_chain(
 
 def _chain_codes(result):
     return [
-        issue
-        for issue in result["blocking_issues"]
-        if issue.startswith("[RISK-CHAIN-")
+        issue for issue in result["blocking_issues"] if issue.startswith("[RISK-CHAIN-")
     ]
 
 
