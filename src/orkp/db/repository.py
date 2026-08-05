@@ -204,10 +204,11 @@ class RegulatoryObjectRepository:
         return obj
 
     def _check_immutable(self, obj: RegulatoryObject) -> None:
-        """Raise if the object is in an immutable state."""
-        if obj.lifecycle_state == "approved":
+        """Raise once an object has crossed the approval boundary."""
+        if obj.lifecycle_state in {"approved", "effective", "obsolete"}:
             raise ImmutableVersionError(
-                f"Object {_bin_to_str(obj.object_uuid)} is approved and cannot be modified"
+                f"Object {_bin_to_str(obj.object_uuid)} is {obj.lifecycle_state} "
+                "and cannot be modified"
             )
 
     def _check_not_deleted(self, obj: RegulatoryObject) -> None:
@@ -246,7 +247,7 @@ class RegulatoryObjectRepository:
 
         Raises:
             ObjectNotFoundError: object not found
-            ImmutableVersionError: object is approved
+            ImmutableVersionError: object is approved, effective, or obsolete
             OptimisticLockError: stale lock version
         """
         obj = self._get_mutable_or_raise(object_uuid)
