@@ -97,9 +97,7 @@ def _request(context, owner: str, supersedes=None):
             "object_uuid": context["risk_policy"].uuid_hex,
             "object_version": 1,
         },
-        evidence=[
-            {"object_uuid": context["evidence"].uuid_hex, "object_version": 1}
-        ],
+        evidence=[{"object_uuid": context["evidence"].uuid_hex, "object_version": 1}],
         supersedes=supersedes,
         verification_method="test",
         verification_scope="Implementation and effectiveness",
@@ -162,9 +160,10 @@ def test_supersession_obsoletes_prior_only_when_successor_becomes_effective():
 
         prior_object = repo.get_by_uuid_hex(prior.object_uuid)
         assert prior_object.lifecycle_state == "obsolete"
-        assert service.get_verification(
+        prior_response = service.get_verification(
             prior.object_uuid, prior.object_version
-        ).eligible_for_residual_evaluation is False
+        )
+        assert prior_response.eligible_for_residual_evaluation is False
         assert successor.eligible_for_residual_evaluation is True
 
 
