@@ -370,8 +370,7 @@ class RiskService:
                 == residual_payload.risk_analysis_uuid
                 and payload.risk_analysis.object_version
                 == residual_payload.risk_analysis_version
-                and payload.risk_policy.object_uuid
-                == residual_payload.risk_policy_uuid
+                and payload.risk_policy.object_uuid == residual_payload.risk_policy_uuid
                 and payload.risk_policy.object_version
                 == residual_payload.risk_policy_version
                 and payload.conclusion == "favorable"
