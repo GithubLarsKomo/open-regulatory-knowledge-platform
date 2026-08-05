@@ -29,6 +29,7 @@ from orkp.domain.risk_evaluation import (
     compare_initial_and_residual_risk,
 )
 from orkp.domain.risk_models import ResidualRiskEvaluationPayload
+from orkp.domain.risk_traceability import evaluate_hazard_traceability
 
 
 class RiskService:
@@ -157,11 +158,6 @@ class RiskService:
             if relation.source_version == o.current_version
         ]
 
-        hazard_relations = [
-            relation
-            for relation in current_outgoing
-            if relation.relation_type == "has_hazard"
-        ]
         product_relations = [
             relation
             for relation in current_outgoing
@@ -173,45 +169,9 @@ class RiskService:
             if relation.relation_type == "controlled_by"
         ]
 
-        has_hazard = bool(hazard_relations)
+        traceability = evaluate_hazard_traceability(self.repo, o, current_outgoing)
         has_product = bool(product_relations)
         has_controls = bool(control_relations)
-
-        # Traverse the exact version-pinned hazard chain.
-        has_sequence = has_situation = has_harm = False
-        for hazard_relation in hazard_relations:
-            hazard_outgoing = self.repo.list_active_relations_for_source(
-                hazard_relation.target_uuid
-            )
-            for sequence_relation in hazard_outgoing:
-                if (
-                    sequence_relation.relation_type != "followed_by"
-                    or sequence_relation.source_version
-                    != hazard_relation.target_version
-                ):
-                    continue
-                has_sequence = True
-                sequence_outgoing = self.repo.list_active_relations_for_source(
-                    sequence_relation.target_uuid
-                )
-                for situation_relation in sequence_outgoing:
-                    if (
-                        situation_relation.relation_type != "creates_situation"
-                        or situation_relation.source_version
-                        != sequence_relation.target_version
-                    ):
-                        continue
-                    has_situation = True
-                    situation_outgoing = self.repo.list_active_relations_for_source(
-                        situation_relation.target_uuid
-                    )
-                    if any(
-                        harm_relation.relation_type == "may_cause"
-                        and harm_relation.source_version
-                        == situation_relation.target_version
-                        for harm_relation in situation_outgoing
-                    ):
-                        has_harm = True
 
         controls_verified = all(
             self._control_relation_is_verified(o, relation)
@@ -225,17 +185,18 @@ class RiskService:
         ) = self._current_residual_disposition(o, incoming)
 
         return evaluate_risk_completeness(
-            ra_hex,
-            has_hazard,
-            has_sequence,
-            has_situation,
-            has_harm,
-            has_product,
-            has_controls,
-            controls_verified,
-            has_residual,
-            residual_acceptable,
-            benefit_risk_approved,
+            risk_analysis_uuid=ra_hex,
+            has_hazard=traceability.has_hazard,
+            has_sequence=traceability.has_sequence,
+            has_situation=traceability.has_situation,
+            has_harm=traceability.has_harm,
+            has_estimation=traceability.has_estimation,
+            has_product=has_product,
+            has_controls=has_controls,
+            controls_verified=controls_verified,
+            residual_evaluated=has_residual,
+            residual_acceptable=residual_acceptable,
+            benefit_risk_approved=benefit_risk_approved,
         )
 
     def _control_relation_is_verified(self, risk_analysis, control_relation) -> bool:
