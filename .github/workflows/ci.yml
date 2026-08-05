@@ -39,7 +39,7 @@ jobs:
         run: |
           if [[ -n "$BASE_SHA" && "$BASE_SHA" != "0000000000000000000000000000000000000000" ]]; then
             git diff --name-only --diff-filter=ACMR -z "$BASE_SHA"...HEAD -- '*.py' > /tmp/ruff-lint-files
-            git diff --name-only --diff-filter=A -z "$BASE_SHA"...HEAD -- '*.py' > /tmp/ruff-format-files
+            git diff --name-only --diff-filter=ACMR -z "$BASE_SHA"...HEAD -- '*.py' > /tmp/ruff-format-files
           else
             git ls-files -z '*.py' > /tmp/ruff-lint-files
             git ls-files -z '*.py' > /tmp/ruff-format-files
@@ -60,7 +60,7 @@ jobs:
           if [[ -s /tmp/ruff-format-files ]]; then
             xargs -0 ruff format --check -- < /tmp/ruff-format-files
           else
-            echo "No new Python files to format-check."
+            echo "No changed Python files to format-check."
           fi
 
       - name: Run tests
