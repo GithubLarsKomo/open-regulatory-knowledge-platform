@@ -30,6 +30,7 @@ from orkp.domain.risk_models import (
     ResidualRiskEvaluationPayload,
     ResidualRiskEvaluationResponse,
 )
+from orkp.domain.risk_service import RiskService
 from orkp.domain.versioned_loader import load_versioned_object
 
 
@@ -37,6 +38,67 @@ def create_risk_evaluation_router(
     get_repo: Callable[[], RegulatoryObjectRepository],
 ) -> APIRouter:
     router = APIRouter(tags=["Risk Evaluations"])
+
+    @router.post(
+        "/api/v1/risk-analyses/{risk_analysis_uuid}/submit",
+        response_model=dict,
+        responses={404: {"model": ErrorResponse}, 409: {"model": ErrorResponse}},
+    )
+    async def submit_risk_analysis(
+        risk_analysis_uuid: str,
+        actor_user_id: str = Query(..., min_length=1),
+        repo: RegulatoryObjectRepository = Depends(get_repo),
+    ):
+        _call_or_404(
+            lambda: RiskService(repo).submit_for_review(
+                risk_analysis_uuid, actor_user_id
+            )
+        )
+        return {"status": "submitted_for_review", "uuid": risk_analysis_uuid}
+
+    @router.post(
+        "/api/v1/risk-analyses/{risk_analysis_uuid}/approve",
+        response_model=dict,
+        responses={
+            403: {"model": ErrorResponse},
+            404: {"model": ErrorResponse},
+            409: {"model": ErrorResponse},
+            422: {"model": ErrorResponse},
+        },
+    )
+    async def approve_risk_analysis(
+        risk_analysis_uuid: str,
+        actor_user_id: str = Query(..., min_length=1),
+        comments: str | None = Query(None),
+        repo: RegulatoryObjectRepository = Depends(get_repo),
+    ):
+        _call_or_404(
+            lambda: RiskService(repo).approve_risk(
+                risk_analysis_uuid,
+                actor_user_id,
+                actor_user_id,
+                comments,
+            )
+        )
+        return {"status": "approved", "uuid": risk_analysis_uuid}
+
+    @router.post(
+        "/api/v1/risk-analyses/{risk_analysis_uuid}/reject",
+        response_model=dict,
+        responses={404: {"model": ErrorResponse}, 409: {"model": ErrorResponse}},
+    )
+    async def reject_risk_analysis(
+        risk_analysis_uuid: str,
+        actor_user_id: str = Query(..., min_length=1),
+        comments: str = Query(..., min_length=1),
+        repo: RegulatoryObjectRepository = Depends(get_repo),
+    ):
+        _call_or_404(
+            lambda: RiskService(repo).reject_risk(
+                risk_analysis_uuid, actor_user_id, comments
+            )
+        )
+        return {"status": "rejected", "uuid": risk_analysis_uuid}
 
     @router.post(
         "/api/v1/risk-analyses/{risk_analysis_uuid}/initial-evaluations",
