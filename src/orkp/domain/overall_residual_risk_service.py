@@ -168,6 +168,7 @@ class OverallResidualRiskService:
             )
         if new_state == "approved":
             self._assert_current_context(payload)
+            self._assert_snapshot_relations(loaded.object, payload)
         try:
             self.repo.transition_state(
                 loaded.object.object_uuid,
@@ -233,6 +234,57 @@ class OverallResidualRiskService:
                 "create a new evaluation before approval"
             )
 
+    def _assert_snapshot_relations(
+        self,
+        evaluation,
+        payload: OverallResidualRiskPayload,
+    ) -> None:
+        source_version = evaluation.current_version
+        self._require_exact_relation(
+            evaluation.object_uuid,
+            source_version,
+            "overall_risk_for",
+            UUID(hex=payload.product.object_uuid).bytes,
+            payload.product.object_version,
+            "Overall Residual Risk lacks its exact Product relation",
+        )
+
+        seen_policies: set[tuple[str, int]] = set()
+        for entry in payload.entries:
+            self._require_exact_relation(
+                evaluation.object_uuid,
+                source_version,
+                "aggregates_residual_risk",
+                UUID(hex=entry.residual_evaluation.object_uuid).bytes,
+                entry.residual_evaluation.object_version,
+                "Overall Residual Risk lacks an exact Residual Risk relation",
+            )
+
+            policy_key = (
+                entry.risk_policy.object_uuid,
+                entry.risk_policy.object_version,
+            )
+            if policy_key not in seen_policies:
+                self._require_exact_relation(
+                    evaluation.object_uuid,
+                    source_version,
+                    "uses_risk_policy",
+                    UUID(hex=entry.risk_policy.object_uuid).bytes,
+                    entry.risk_policy.object_version,
+                    "Overall Residual Risk lacks an exact Risk Policy relation",
+                )
+                seen_policies.add(policy_key)
+
+            for benefit_reference in entry.benefit_risk_analyses:
+                self._require_exact_relation(
+                    evaluation.object_uuid,
+                    source_version,
+                    "considers_benefit_risk",
+                    UUID(hex=benefit_reference.object_uuid).bytes,
+                    benefit_reference.object_version,
+                    "Overall Residual Risk lacks an exact Benefit-Risk relation",
+                )
+
     def _build_entries(self, risks: list) -> list[OverallResidualRiskEntry]:
         entries = [self._build_entry(risk) for risk in risks]
         entries.sort(
@@ -246,9 +298,7 @@ class OverallResidualRiskService:
     def _collect_current_product_risks(self, product) -> list:
         found = {}
 
-        for relation in self.repo.list_active_relations_for_source(
-            product.object_uuid
-        ):
+        for relation in self.repo.list_active_relations_for_source(product.object_uuid):
             if (
                 relation.relation_type != "has_risk"
                 or relation.source_version != product.current_version
@@ -260,9 +310,7 @@ class OverallResidualRiskService:
                 relation.target_version,
             )
 
-        for relation in self.repo.list_active_relations_for_target(
-            product.object_uuid
-        ):
+        for relation in self.repo.list_active_relations_for_target(product.object_uuid):
             if (
                 relation.relation_type != "applies_to_product"
                 or relation.target_version != product.current_version
@@ -306,6 +354,15 @@ class OverallResidualRiskService:
             raise InvalidPersistedPayloadError(
                 f"Risk Policy {residual_payload.risk_policy_uuid} payload is invalid"
             ) from exc
+
+        self._require_exact_relation(
+            residual.object_uuid,
+            residual.current_version,
+            "uses_risk_policy",
+            policy.object.object_uuid,
+            residual_payload.risk_policy_version,
+            "Residual Risk Evaluation lacks its exact Risk Policy provenance relation",
+        )
 
         benefit_references = []
         if not residual_payload.acceptable:
@@ -392,9 +449,8 @@ class OverallResidualRiskService:
         residual_payload: ResidualRiskEvaluationPayload,
     ) -> list[dict]:
         references = []
-        for relation in self.repo.list_active_relations_for_target(
-            residual.object_uuid
-        ):
+        policy_uuid = UUID(hex=residual_payload.risk_policy_uuid).bytes
+        for relation in self.repo.list_active_relations_for_target(residual.object_uuid):
             if (
                 relation.relation_type != "benefit_risk_for"
                 or relation.target_version != residual_version
@@ -429,6 +485,13 @@ class OverallResidualRiskService:
                 or payload.risk_policy.object_version
                 != residual_payload.risk_policy_version
                 or payload.conclusion != "favorable"
+                or not self._has_exact_relation(
+                    benefit.object_uuid,
+                    relation.source_version,
+                    "uses_risk_policy",
+                    policy_uuid,
+                    residual_payload.risk_policy_version,
+                )
             ):
                 continue
             references.append(
@@ -444,6 +507,40 @@ class OverallResidualRiskService:
             )
         )
         return references
+
+    def _has_exact_relation(
+        self,
+        source_uuid: bytes,
+        source_version: int,
+        relation_type: str,
+        target_uuid: bytes,
+        target_version: int,
+    ) -> bool:
+        return any(
+            relation.relation_type == relation_type
+            and relation.source_version == source_version
+            and relation.target_uuid == target_uuid
+            and relation.target_version == target_version
+            for relation in self.repo.list_active_relations_for_source(source_uuid)
+        )
+
+    def _require_exact_relation(
+        self,
+        source_uuid: bytes,
+        source_version: int,
+        relation_type: str,
+        target_uuid: bytes,
+        target_version: int,
+        message: str,
+    ) -> None:
+        if not self._has_exact_relation(
+            source_uuid,
+            source_version,
+            relation_type,
+            target_uuid,
+            target_version,
+        ):
+            raise InvalidRelationError(message)
 
     def _current_version(self, evaluation_hex: str) -> int:
         try:
