@@ -1,4 +1,4 @@
-"""Risk Evaluation and Control Verification API router for ORKP."""
+"""Risk Evaluation, Control Verification and Benefit-Risk API router for ORKP."""
 
 from typing import Callable
 
@@ -8,6 +8,11 @@ from pydantic import ValidationError
 from orkp.api.routers import _call_or_404
 from orkp.api.schemas import ErrorResponse
 from orkp.db.repository import RegulatoryObjectRepository
+from orkp.domain.benefit_risk_models import (
+    BenefitRiskAnalysisCreateRequest,
+    BenefitRiskAnalysisResponse,
+)
+from orkp.domain.benefit_risk_service import BenefitRiskAnalysisService
 from orkp.domain.control_verification_queries import (
     list_control_verifications_for_risk_analysis,
 )
@@ -72,6 +77,69 @@ def create_risk_evaluation_router(
         return _call_or_404(
             lambda: ResidualRiskEvaluationService(repo).create_evaluation(
                 risk_analysis_uuid, body
+            )
+        )
+
+    @router.post(
+        "/api/v1/residual-risk-evaluations/{evaluation_uuid}/benefit-risk-analyses",
+        response_model=BenefitRiskAnalysisResponse,
+        status_code=status.HTTP_201_CREATED,
+        responses={
+            404: {"model": ErrorResponse},
+            409: {"model": ErrorResponse},
+            422: {"model": ErrorResponse},
+        },
+    )
+    async def create_benefit_risk_analysis(
+        evaluation_uuid: str,
+        body: BenefitRiskAnalysisCreateRequest,
+        repo: RegulatoryObjectRepository = Depends(get_repo),
+    ):
+        return _call_or_404(
+            lambda: BenefitRiskAnalysisService(repo).create_analysis(
+                evaluation_uuid, body
+            )
+        )
+
+    @router.post(
+        "/api/v1/benefit-risk-analyses/{analysis_uuid}/transitions/{new_state}",
+        response_model=BenefitRiskAnalysisResponse,
+        responses={
+            403: {"model": ErrorResponse},
+            404: {"model": ErrorResponse},
+            409: {"model": ErrorResponse},
+            422: {"model": ErrorResponse},
+        },
+    )
+    async def transition_benefit_risk_analysis(
+        analysis_uuid: str,
+        new_state: str,
+        actor_user_id: str = Query(..., min_length=1),
+        comments: str | None = Query(None),
+        repo: RegulatoryObjectRepository = Depends(get_repo),
+    ):
+        return _call_or_404(
+            lambda: BenefitRiskAnalysisService(repo).transition_state(
+                analysis_uuid,
+                new_state,
+                actor_user_id,
+                comments,
+            )
+        )
+
+    @router.get(
+        "/api/v1/benefit-risk-analyses/{analysis_uuid}/versions/{version}",
+        response_model=BenefitRiskAnalysisResponse,
+        responses={404: {"model": ErrorResponse}, 422: {"model": ErrorResponse}},
+    )
+    async def get_benefit_risk_analysis(
+        analysis_uuid: str,
+        version: int,
+        repo: RegulatoryObjectRepository = Depends(get_repo),
+    ):
+        return _call_or_404(
+            lambda: BenefitRiskAnalysisService(repo).get_analysis(
+                analysis_uuid, version
             )
         )
 
