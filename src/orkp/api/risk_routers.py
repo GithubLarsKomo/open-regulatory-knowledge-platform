@@ -19,6 +19,11 @@ from orkp.domain.control_verification_queries import (
 from orkp.domain.control_verification_service import ControlVerificationService
 from orkp.domain.exceptions import InvalidPersistedPayloadError
 from orkp.domain.initial_risk_evaluation_service import InitialRiskEvaluationService
+from orkp.domain.overall_residual_risk_models import (
+    OverallResidualRiskCreateRequest,
+    OverallResidualRiskResponse,
+)
+from orkp.domain.overall_residual_risk_service import OverallResidualRiskService
 from orkp.domain.residual_risk_evaluation_service import ResidualRiskEvaluationService
 from orkp.domain.risk_models import (
     ControlVerificationCreateRequest,
@@ -99,6 +104,69 @@ def create_risk_evaluation_router(
             )
         )
         return {"status": "rejected", "uuid": risk_analysis_uuid}
+
+    @router.post(
+        "/api/v1/products/{product_uuid}/overall-residual-risk-evaluations",
+        response_model=OverallResidualRiskResponse,
+        status_code=status.HTTP_201_CREATED,
+        responses={
+            404: {"model": ErrorResponse},
+            409: {"model": ErrorResponse},
+            422: {"model": ErrorResponse},
+        },
+    )
+    async def create_overall_residual_risk_evaluation(
+        product_uuid: str,
+        body: OverallResidualRiskCreateRequest,
+        repo: RegulatoryObjectRepository = Depends(get_repo),
+    ):
+        return _call_or_404(
+            lambda: OverallResidualRiskService(repo).create_evaluation(
+                product_uuid, body
+            )
+        )
+
+    @router.post(
+        "/api/v1/overall-residual-risk-evaluations/{evaluation_uuid}/transitions/{new_state}",
+        response_model=OverallResidualRiskResponse,
+        responses={
+            403: {"model": ErrorResponse},
+            404: {"model": ErrorResponse},
+            409: {"model": ErrorResponse},
+            422: {"model": ErrorResponse},
+        },
+    )
+    async def transition_overall_residual_risk_evaluation(
+        evaluation_uuid: str,
+        new_state: str,
+        actor_user_id: str = Query(..., min_length=1),
+        comments: str | None = Query(None),
+        repo: RegulatoryObjectRepository = Depends(get_repo),
+    ):
+        return _call_or_404(
+            lambda: OverallResidualRiskService(repo).transition_state(
+                evaluation_uuid,
+                new_state,
+                actor_user_id,
+                comments,
+            )
+        )
+
+    @router.get(
+        "/api/v1/overall-residual-risk-evaluations/{evaluation_uuid}/versions/{version}",
+        response_model=OverallResidualRiskResponse,
+        responses={404: {"model": ErrorResponse}, 422: {"model": ErrorResponse}},
+    )
+    async def get_overall_residual_risk_evaluation(
+        evaluation_uuid: str,
+        version: int,
+        repo: RegulatoryObjectRepository = Depends(get_repo),
+    ):
+        return _call_or_404(
+            lambda: OverallResidualRiskService(repo).get_evaluation(
+                evaluation_uuid, version
+            )
+        )
 
     @router.post(
         "/api/v1/risk-analyses/{risk_analysis_uuid}/initial-evaluations",
