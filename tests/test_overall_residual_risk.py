@@ -104,47 +104,35 @@ def _benefit_payload(risk, policy, residual, *, conclusion="favorable"):
     }
 
 
-def _seed_context(
+def _create_approved_risk_with_residual(
     repo,
+    product,
+    policy,
     *,
-    acceptable=True,
-    with_benefit=False,
-    both_link_directions=False,
+    suffix: str,
+    acceptable: bool = True,
+    has_risk_link: bool = True,
+    applies_to_product_link: bool = False,
 ):
-    product, _ = repo.create_object(
-        "product",
-        {"product_id": "P-ORR", "name": "Overall Risk Product"},
-        "product-owner",
-        "product-owner",
-    )
     risk, _ = repo.create_object(
         "risk_analysis",
-        {"risk_id": "R-ORR", "title": "Overall risk source"},
+        {"risk_id": f"R-{suffix}", "title": f"Risk {suffix}"},
         "risk-owner",
         "risk-owner",
     )
     repo.transition_state(risk.object_uuid, "in_review", "risk-owner")
     repo.transition_state(risk.object_uuid, "approved", "risk-approver")
 
-    policy, _ = repo.create_object(
-        "risk_policy",
-        _policy_payload(),
-        "policy-owner",
-        "policy-owner",
-    )
-    repo.transition_state(policy.object_uuid, "in_review", "policy-owner")
-    repo.transition_state(policy.object_uuid, "approved", "policy-approver")
-    repo.transition_state(policy.object_uuid, "effective", "policy-owner")
-
-    repo.create_relation(
-        source_uuid=product.object_uuid,
-        source_version=product.current_version,
-        target_uuid=risk.object_uuid,
-        target_version=risk.current_version,
-        relation_type="has_risk",
-        created_by="product-owner",
-    )
-    if both_link_directions:
+    if has_risk_link:
+        repo.create_relation(
+            source_uuid=product.object_uuid,
+            source_version=product.current_version,
+            target_uuid=risk.object_uuid,
+            target_version=risk.current_version,
+            relation_type="has_risk",
+            created_by="product-owner",
+        )
+    if applies_to_product_link:
         repo.create_relation(
             source_uuid=risk.object_uuid,
             source_version=risk.current_version,
@@ -168,6 +156,50 @@ def _seed_context(
         relation_type="residual_of",
         created_by="risk-evaluator",
     )
+    repo.create_relation(
+        source_uuid=residual.object_uuid,
+        source_version=residual.current_version,
+        target_uuid=policy.object_uuid,
+        target_version=policy.current_version,
+        relation_type="uses_risk_policy",
+        created_by="risk-evaluator",
+    )
+    return risk, residual
+
+
+def _seed_context(
+    repo,
+    *,
+    acceptable=True,
+    with_benefit=False,
+    has_risk_link=True,
+    applies_to_product_link=False,
+):
+    product, _ = repo.create_object(
+        "product",
+        {"product_id": "P-ORR", "name": "Overall Risk Product"},
+        "product-owner",
+        "product-owner",
+    )
+    policy, _ = repo.create_object(
+        "risk_policy",
+        _policy_payload(),
+        "policy-owner",
+        "policy-owner",
+    )
+    repo.transition_state(policy.object_uuid, "in_review", "policy-owner")
+    repo.transition_state(policy.object_uuid, "approved", "policy-approver")
+    repo.transition_state(policy.object_uuid, "effective", "policy-owner")
+
+    risk, residual = _create_approved_risk_with_residual(
+        repo,
+        product,
+        policy,
+        suffix="ORR",
+        acceptable=acceptable,
+        has_risk_link=has_risk_link,
+        applies_to_product_link=applies_to_product_link,
+    )
 
     benefit = None
     if with_benefit:
@@ -183,6 +215,14 @@ def _seed_context(
             target_uuid=residual.object_uuid,
             target_version=residual.current_version,
             relation_type="benefit_risk_for",
+            created_by="benefit-reviewer",
+        )
+        repo.create_relation(
+            source_uuid=benefit.object_uuid,
+            source_version=benefit.current_version,
+            target_uuid=policy.object_uuid,
+            target_version=policy.current_version,
+            relation_type="uses_risk_policy",
             created_by="benefit-reviewer",
         )
         repo.transition_state(benefit.object_uuid, "in_review", "benefit-reviewer")
@@ -259,7 +299,11 @@ def test_product_without_approved_risks_is_rejected(repo):
 
 
 def test_both_product_risk_link_directions_are_deduplicated(repo):
-    product, risk, _, _, _ = _seed_context(repo, both_link_directions=True)
+    product, risk, _, _, _ = _seed_context(
+        repo,
+        has_risk_link=True,
+        applies_to_product_link=True,
+    )
 
     response = OverallResidualRiskService(repo).create_evaluation(
         product.uuid_hex,
@@ -268,6 +312,41 @@ def test_both_product_risk_link_directions_are_deduplicated(repo):
 
     assert len(response.payload.entries) == 1
     assert response.payload.entries[0].risk_analysis.object_uuid == risk.uuid_hex
+
+
+def test_applies_to_product_direction_is_supported_without_has_risk(repo):
+    product, risk, _, _, _ = _seed_context(
+        repo,
+        has_risk_link=False,
+        applies_to_product_link=True,
+    )
+
+    response = OverallResidualRiskService(repo).create_evaluation(
+        product.uuid_hex,
+        _request(product),
+    )
+
+    assert len(response.payload.entries) == 1
+    assert response.payload.entries[0].risk_analysis.object_uuid == risk.uuid_hex
+
+
+def test_all_current_approved_product_risks_are_included(repo):
+    product, first_risk, policy, _, _ = _seed_context(repo)
+    second_risk, _ = _create_approved_risk_with_residual(
+        repo,
+        product,
+        policy,
+        suffix="SECOND",
+    )
+    repo.session.commit()
+
+    response = OverallResidualRiskService(repo).create_evaluation(
+        product.uuid_hex,
+        _request(product),
+    )
+
+    included = {entry.risk_analysis.object_uuid for entry in response.payload.entries}
+    assert included == {first_risk.uuid_hex, second_risk.uuid_hex}
 
 
 def test_stale_product_risk_relation_is_not_aggregated(repo):
@@ -336,6 +415,14 @@ def test_multiple_current_residual_evaluations_are_rejected(repo):
         relation_type="residual_of",
         created_by="other-evaluator",
     )
+    repo.create_relation(
+        source_uuid=second.object_uuid,
+        source_version=second.current_version,
+        target_uuid=policy.object_uuid,
+        target_version=policy.current_version,
+        relation_type="uses_risk_policy",
+        created_by="other-evaluator",
+    )
     repo.session.commit()
 
     with pytest.raises(InvalidRelationError):
@@ -356,6 +443,30 @@ def test_creator_cannot_approve_own_overall_residual_risk(repo):
 
     with pytest.raises(SelfApprovalNotAllowedError):
         service.transition_state(response.object_uuid, "approved", "overall-reviewer")
+
+
+def test_approval_rejects_product_risk_context_change_after_review(repo):
+    product, _, policy, _, _ = _seed_context(repo)
+    service = OverallResidualRiskService(repo)
+    response = service.create_evaluation(
+        product.uuid_hex,
+        _request(product, evaluator="overall-reviewer"),
+    )
+    service.transition_state(response.object_uuid, "in_review", "overall-reviewer")
+
+    _create_approved_risk_with_residual(
+        repo,
+        product,
+        policy,
+        suffix="LATE",
+    )
+    repo.session.commit()
+
+    with pytest.raises(InvalidRelationError):
+        service.transition_state(response.object_uuid, "approved", "overall-approver")
+
+    stored = repo.get_by_uuid_hex(response.object_uuid)
+    assert stored.lifecycle_state == "in_review"
 
 
 def test_independent_approver_can_approve_overall_residual_risk(repo):
