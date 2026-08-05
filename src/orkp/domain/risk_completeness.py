@@ -1,5 +1,4 @@
-"""
-Risk completeness and approval gate for ORKP.
+"""Risk completeness and approval gate for ORKP.
 
 A Risk Analysis may only be approved when all traceability requirements
 from Hazard to verification are met.
@@ -90,49 +89,26 @@ def evaluate_risk_completeness(
             elif obj_name == "residual_evaluation":
                 unacceptable_residual.append("Residual risk not evaluated")
 
-    # If residual is evaluated but unacceptable — require benefit-risk
-    if residual_evaluated and not residual_acceptable:
-        if benefit_risk_approved:
-            warnings.append(
-                "[RISK-BENEFIT-001] Residual risk unacceptable but Benefit-Risk analysis approved"
-            )
-            score += 1
-        else:
-            issues.append(
-                "[RISK-BENEFIT-001] Unacceptable residual risk requires approved Benefit-Risk analysis"
-            )
-            unacceptable_residual.append(
-                "No approved Benefit-Risk analysis for unacceptable residual risk"
-            )
-    elif not residual_evaluated:
-        # Already handled above
-        pass
-
+    # Residual disposition is a distinct approval gate. An unacceptable
+    # residual risk is complete only when an approved favorable Benefit-Risk
+    # Analysis exists.
     total_checks += 1
-    if residual_acceptable or (not residual_acceptable and benefit_risk_approved):
-        pass
+    if residual_evaluated and residual_acceptable:
+        score += 1
+    elif residual_evaluated and benefit_risk_approved:
+        score += 1
+        warnings.append(
+            "[RISK-BENEFIT-001] Residual risk unacceptable but Benefit-Risk analysis approved"
+        )
+    elif residual_evaluated:
+        issues.append(
+            "[RISK-BENEFIT-001] Unacceptable residual risk requires approved Benefit-Risk analysis"
+        )
+        unacceptable_residual.append(
+            "No approved Benefit-Risk analysis for unacceptable residual risk"
+        )
 
-    score = int((score / max(total_checks, 1)) * 100) if total_checks > 0 else 0
-
-    if residual_evaluated and not residual_acceptable:
-        if benefit_risk_approved:
-            warnings.append(
-                "Residual risk unacceptable but Benefit-Risk analysis approved"
-            )
-            score += 1
-        else:
-            issues.append(
-                "Unacceptable residual risk requires approved Benefit-Risk analysis"
-            )
-            unacceptable_residual.append(
-                "No approved Benefit-Risk analysis for unacceptable residual risk"
-            )
-
-    total_checks += 1
-    if residual_acceptable or (not residual_acceptable and benefit_risk_approved):
-        pass
-
-    score = int((score / max(total_checks, 1)) * 100) if total_checks > 0 else 0
+    score = int((score / max(total_checks, 1)) * 100)
 
     return {
         "risk_analysis_uuid": risk_analysis_uuid,
