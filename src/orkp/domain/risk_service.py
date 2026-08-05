@@ -9,19 +9,26 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
+from pydantic import ValidationError
+
 from orkp.db.models import RegulatoryObject, _bin_to_str
 from orkp.db.repository import RegulatoryObjectRepository
+from orkp.domain.benefit_risk_models import BenefitRiskAnalysisPayload
+from orkp.domain.control_verification_service import ControlVerificationService
 from orkp.domain.exceptions import (
-    ObjectNotFoundError,
+    InvalidPersistedPayloadError,
     InvalidRelationError,
+    ObjectNotFoundError,
+    ORKPError,
     RiskCompletenessError,
     SelfApprovalNotAllowedError,
 )
+from orkp.domain.risk_completeness import evaluate_risk_completeness
 from orkp.domain.risk_evaluation import (
     calculate_risk_level,
     compare_initial_and_residual_risk,
 )
-from orkp.domain.risk_completeness import evaluate_risk_completeness
+from orkp.domain.risk_models import ResidualRiskEvaluationPayload
 
 
 class RiskService:
@@ -134,7 +141,7 @@ class RiskService:
         )
 
     # ------------------------------------------------------------------
-    # Completeness traversal — uses canonical direction model
+    # Completeness traversal — current object versions only
     # ------------------------------------------------------------------
 
     def evaluate_risk_completeness(self, ra_hex: str) -> Dict[str, Any]:
@@ -144,81 +151,78 @@ class RiskService:
 
         outgoing = self.repo.list_active_relations_for_source(o.object_uuid)
         incoming = self.repo.list_active_relations_for_target(o.object_uuid)
+        current_outgoing = [
+            relation
+            for relation in outgoing
+            if relation.source_version == o.current_version
+        ]
 
-        has_hazard = any(r.relation_type == "has_hazard" for r in outgoing)
-        has_product = any(r.relation_type == "applies_to_product" for r in outgoing)
-        has_controls = any(r.relation_type == "controlled_by" for r in outgoing)
+        hazard_relations = [
+            relation
+            for relation in current_outgoing
+            if relation.relation_type == "has_hazard"
+        ]
+        product_relations = [
+            relation
+            for relation in current_outgoing
+            if relation.relation_type in {"applies_to_product", "applies_to_device"}
+        ]
+        control_relations = [
+            relation
+            for relation in current_outgoing
+            if relation.relation_type == "controlled_by"
+        ]
 
-        # Traverse hazard chain via outgoing: has_hazard -> followed_by -> creates_situation -> may_cause
+        has_hazard = bool(hazard_relations)
+        has_product = bool(product_relations)
+        has_controls = bool(control_relations)
+
+        # Traverse the exact version-pinned hazard chain.
         has_sequence = has_situation = has_harm = False
-        for r in outgoing:
-            if r.relation_type == "has_hazard":
-                hr = self.repo.list_active_relations_for_source(r.target_uuid)
-                for h in hr:
-                    if h.relation_type == "followed_by":
-                        has_sequence = True
-                        sr = self.repo.list_active_relations_for_source(h.target_uuid)
-                        for s in sr:
-                            if s.relation_type == "creates_situation":
-                                has_situation = True
-                                sir = self.repo.list_active_relations_for_source(
-                                    s.target_uuid
-                                )
-                                for si in sir:
-                                    if si.relation_type == "may_cause":
-                                        has_harm = True
+        for hazard_relation in hazard_relations:
+            hazard_outgoing = self.repo.list_active_relations_for_source(
+                hazard_relation.target_uuid
+            )
+            for sequence_relation in hazard_outgoing:
+                if (
+                    sequence_relation.relation_type != "followed_by"
+                    or sequence_relation.source_version
+                    != hazard_relation.target_version
+                ):
+                    continue
+                has_sequence = True
+                sequence_outgoing = self.repo.list_active_relations_for_source(
+                    sequence_relation.target_uuid
+                )
+                for situation_relation in sequence_outgoing:
+                    if (
+                        situation_relation.relation_type != "creates_situation"
+                        or situation_relation.source_version
+                        != sequence_relation.target_version
+                    ):
+                        continue
+                    has_situation = True
+                    situation_outgoing = self.repo.list_active_relations_for_source(
+                        situation_relation.target_uuid
+                    )
+                    if any(
+                        harm_relation.relation_type == "may_cause"
+                        and harm_relation.source_version
+                        == situation_relation.target_version
+                        for harm_relation in situation_outgoing
+                    ):
+                        has_harm = True
 
-        # Controls verification: controlled_by (outgoing) -> verifies_control (incoming for RiskControl)
-        controls_verified = True
-        for r in outgoing:
-            if r.relation_type == "controlled_by":
-                ctrl = self.repo.get_by_uuid(r.target_uuid)
-                if ctrl:
-                    cv = self.repo.get_version(ctrl.object_uuid, ctrl.current_version)
-                    cp = cv.payload_json if cv else {}
-                    if cp.get("verification_required", True):
-                        # verifies_control comes IN to RiskControl, so check incoming
-                        ctrl_incoming = self.repo.list_active_relations_for_target(
-                            ctrl.object_uuid
-                        )
-                        has_ev = any(
-                            rr.relation_type == "verifies_control"
-                            for rr in ctrl_incoming
-                        )
-                        if not has_ev:
-                            controls_verified = False
+        controls_verified = all(
+            self._control_relation_is_verified(o, relation)
+            for relation in control_relations
+        )
 
-        # Residual: residual_of comes IN to RiskAnalysis
-        has_residual = any(r.relation_type == "residual_of" for r in incoming)
-        residual_acceptable = False  # Never default to acceptable
-        benefit_risk_approved = False
-        if has_residual:
-            for r in incoming:
-                if r.relation_type == "residual_of":
-                    res = self.repo.get_by_uuid(r.source_uuid)
-                    if res:
-                        rv = self.repo.get_version(res.object_uuid, res.current_version)
-                        rp = rv.payload_json if rv else {}
-                        acc = rp.get("acceptability", "")
-                        residual_acceptable = (
-                            acc == "acceptable"
-                            or acc == "as_low_as_reasonably_practicable"
-                        )
-                        # benefit_risk_for comes IN to ResidualRisk
-                        br_incoming = self.repo.list_active_relations_for_target(
-                            res.object_uuid
-                        )
-                        for br in br_incoming:
-                            if br.relation_type == "benefit_risk_for":
-                                ba = self.repo.get_by_uuid(br.source_uuid)
-                                if ba and ba.lifecycle_state == "approved":
-                                    bv = self.repo.get_version(
-                                        ba.object_uuid, ba.current_version
-                                    )
-                                    bp = bv.payload_json if bv else {}
-                                    benefit_risk_approved = (
-                                        bp.get("conclusion") == "favorable"
-                                    )
+        (
+            has_residual,
+            residual_acceptable,
+            benefit_risk_approved,
+        ) = self._current_residual_disposition(o, incoming)
 
         return evaluate_risk_completeness(
             ra_hex,
@@ -233,6 +237,147 @@ class RiskService:
             residual_acceptable,
             benefit_risk_approved,
         )
+
+    def _control_relation_is_verified(self, risk_analysis, control_relation) -> bool:
+        """Require an eligible verification for the exact risk/control versions."""
+        control = self.repo.get_by_uuid(control_relation.target_uuid)
+        if control is None or control.object_type != "risk_control":
+            return False
+        control_version = self.repo.get_version(
+            control.object_uuid, control_relation.target_version
+        )
+        if control_version is None:
+            return False
+        control_payload = control_version.payload_json or {}
+        if not control_payload.get("verification_required", True):
+            return True
+
+        verification_service = ControlVerificationService(self.repo)
+        incoming = self.repo.list_active_relations_for_target(control.object_uuid)
+        for relation in incoming:
+            if (
+                relation.relation_type != "verifies_control"
+                or relation.target_version != control_relation.target_version
+            ):
+                continue
+            source = self.repo.get_by_uuid(relation.source_uuid)
+            if (
+                source is None
+                or source.object_type != "control_verification"
+                or source.current_version != relation.source_version
+            ):
+                continue
+            try:
+                verification = verification_service.get_verification(
+                    source.uuid_hex, relation.source_version
+                )
+            except ORKPError:
+                continue
+            if not verification.eligible_for_residual_evaluation:
+                continue
+            payload = verification.payload
+            if (
+                payload.risk_analysis.object_uuid == risk_analysis.uuid_hex
+                and payload.risk_analysis.object_version
+                == risk_analysis.current_version
+                and payload.risk_control.object_uuid == control.uuid_hex
+                and payload.risk_control.object_version
+                == control_relation.target_version
+            ):
+                return True
+        return False
+
+    def _current_residual_disposition(self, risk_analysis, incoming_relations):
+        """Return disposition for the newest exact residual relation of this RA."""
+        residual_relations = [
+            relation
+            for relation in incoming_relations
+            if relation.relation_type == "residual_of"
+            and relation.target_version == risk_analysis.current_version
+        ]
+        for relation in residual_relations:
+            residual = self.repo.get_by_uuid(relation.source_uuid)
+            if (
+                residual is None
+                or residual.object_type != "residual_risk_evaluation"
+                or residual.current_version != relation.source_version
+            ):
+                continue
+            residual_version = self.repo.get_version(
+                residual.object_uuid, relation.source_version
+            )
+            if residual_version is None:
+                continue
+            try:
+                payload = ResidualRiskEvaluationPayload(
+                    **(residual_version.payload_json or {})
+                )
+            except ValidationError as exc:
+                raise InvalidPersistedPayloadError(
+                    "Stored residual risk evaluation payload is invalid"
+                ) from exc
+            if (
+                payload.risk_analysis_uuid != risk_analysis.uuid_hex
+                or payload.risk_analysis_version != risk_analysis.current_version
+            ):
+                raise InvalidRelationError(
+                    "Residual risk relation and payload reference different risk-analysis versions"
+                )
+            benefit_risk_approved = False
+            if not payload.acceptable:
+                benefit_risk_approved = self._has_favorable_benefit_risk(
+                    residual,
+                    relation.source_version,
+                    payload,
+                )
+            return True, payload.acceptable, benefit_risk_approved
+        return False, False, False
+
+    def _has_favorable_benefit_risk(
+        self,
+        residual,
+        residual_version: int,
+        residual_payload: ResidualRiskEvaluationPayload,
+    ) -> bool:
+        incoming = self.repo.list_active_relations_for_target(residual.object_uuid)
+        for relation in incoming:
+            if (
+                relation.relation_type != "benefit_risk_for"
+                or relation.target_version != residual_version
+            ):
+                continue
+            analysis = self.repo.get_by_uuid(relation.source_uuid)
+            if (
+                analysis is None
+                or analysis.object_type != "benefit_risk"
+                or analysis.lifecycle_state not in {"approved", "effective"}
+                or analysis.current_version != relation.source_version
+            ):
+                continue
+            version = self.repo.get_version(
+                analysis.object_uuid, relation.source_version
+            )
+            if version is None:
+                continue
+            try:
+                payload = BenefitRiskAnalysisPayload(**(version.payload_json or {}))
+            except ValidationError:
+                continue
+            if (
+                payload.residual_evaluation.object_uuid == residual.uuid_hex
+                and payload.residual_evaluation.object_version == residual_version
+                and payload.risk_analysis.object_uuid
+                == residual_payload.risk_analysis_uuid
+                and payload.risk_analysis.object_version
+                == residual_payload.risk_analysis_version
+                and payload.risk_policy.object_uuid
+                == residual_payload.risk_policy_uuid
+                and payload.risk_policy.object_version
+                == residual_payload.risk_policy_version
+                and payload.conclusion == "favorable"
+            ):
+                return True
+        return False
 
     def submit_for_review(self, ra_hex: str, actor: str) -> None:
         o = self.repo.get_by_uuid_hex(ra_hex)
