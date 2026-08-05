@@ -43,6 +43,10 @@ RiskAnalysis --applies_to_product--> Product
 OverallResidualRisk --overall_risk_for--> Product
 OverallResidualRisk --aggregates_residual_risk--> ResidualRiskEvaluation
 OverallResidualRisk --considers_benefit_risk--> BenefitRiskAnalysis
+PostMarketInformation --impacts_risk--> RiskAnalysis
+RiskAnalysis --informed_by--> PostMarketInformation
+RiskImpactAssessment --derived_from(role=impact_assessment_source)--> PostMarketInformation
+RiskImpactAssessment --derived_from(role=assessed_risk)--> RiskAnalysis
 ```
 
 ## Domain Boundaries
@@ -51,6 +55,8 @@ OverallResidualRisk --considers_benefit_risk--> BenefitRiskAnalysis
 - Risk Control: separate object, linked to one or more Risk Analyses
 - Benefit-Risk Analysis: separate approved object for policy-gated progression
 - Overall Residual Risk: product-level evaluation across all approved Risk Analyses
+- Post-Market Information: versioned safety information linked to the exact Risk Analysis version it may affect
+- Risk Impact Assessment: separate reviewable object created for new post-market safety information; it records the human impact decision without mutating the source information
 
 ## Terminology
 
@@ -64,6 +70,8 @@ OverallResidualRisk --considers_benefit_risk--> BenefitRiskAnalysis
 - Residual Risk: risk remaining after controls
 - Benefit-Risk Analysis: comparison of residual risk against clinical benefit
 - Overall Residual Risk: aggregate conclusion for a device
+- Post-Market Information: production or post-production information that may alter the current risk understanding
+- Risk Impact Assessment: explicit human determination of whether new information changes or requires review of the risk record
 
 ## Domain Model
 
@@ -93,6 +101,15 @@ OverallResidualRisk --considers_benefit_risk--> BenefitRiskAnalysis
 - entries: deterministic version-pinned source dispositions for every current approved/effective Product Risk Analysis
 - each entry pins the Risk Analysis, its current Residual Risk Evaluation, the applied Risk Policy, residual acceptability and any required favorable Benefit-Risk Analysis
 - overall acceptability is an explicit human judgment; the system validates completeness and provenance but does not decide acceptability automatically
+
+### PostMarketInformationPayload
+- information_id, exact Risk Analysis reference, source_type, title, description, observed_at, received_at, reported_by_user_id, optional external_reference
+- supported sources include complaint, vigilance, PMPF, literature, trend, field safety and other post-production information
+
+### RiskImpactAssessmentPayload
+- assessment_id, exact Risk Analysis reference, exact Post-Market Information reference, outcome, rationale, requires_risk_review, assessor_user_id, assessed_at
+- newly triggered assessments start as `pending` and always require risk review until a human assessor completes the impact decision
+- only an explicit human `no_change` outcome may set `requires_risk_review=false`; all safety-relevant outcomes continue to require review
 
 ## Requirements
 
@@ -177,27 +194,32 @@ AI may draft risk rationales but shall never decide acceptability.
 - Claim Service — references claims in risk analysis
 - Evidence Service — links verification evidence to risk controls
 - Performance Service — links performance data to benefit-risk analysis
+- Post-Market Risk Service — records safety information and creates mandatory Risk Impact Assessment drafts
 - Report Service — generates Risk Management Report sections
 
 ## Data Model
 
-See `src/orkp/domain/risk_models.py` for strict Pydantic payload models and `src/orkp/domain/overall_residual_risk_models.py` for the product-level Overall Residual Risk aggregate.
+See `src/orkp/domain/risk_models.py` for strict Pydantic payload models, `src/orkp/domain/overall_residual_risk_models.py` for the product-level Overall Residual Risk aggregate, and `src/orkp/domain/post_market_models.py` for post-market safety information and Risk Impact Assessment models.
 
 ## Workflow
 
 Risk lifecycle: draft → in_review → approved → effective → obsolete
 Initial risk → controls → residual risk → evaluation → benefit-risk if needed → approval
+New post-market safety information → exact Risk link → automatic pending Risk Impact Assessment → human impact decision → independent review/approval
 
 ## Security
 
 - Risk Author must not approve own analyses
 - Risk Approver role required for final approval
 - Control Owner must not be sole verification approver
+- Risk Impact assessor must not approve their own impact assessment
+- Generic lifecycle endpoints must not bypass domain-specific Risk Impact Assessment review gates
 
 ## AI Support
 
 - AI may draft risk justifications (draft only)
 - AI shall never decide risk acceptability
+- New safety information shall not be automatically classified as `no_change`; that disposition requires a human assessor
 
 ## Acceptance Criteria
 
@@ -208,6 +230,8 @@ Initial risk → controls → residual risk → evaluation → benefit-risk if n
 - Benefit-Risk Analysis is required for unacceptable residual risk.
 - Overall Residual Risk aggregates all approved analyses.
 - Risk approval requires complete traceability.
+- Post-market information is version-pinned to affected risks and automatically triggers a pending Risk Impact Assessment.
+- A Risk Impact Assessment requires a human impact decision and independent approval.
 
 ## Open Questions
 
