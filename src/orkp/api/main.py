@@ -45,6 +45,18 @@ from orkp.api.routers import (
 )
 from orkp.api.risk_routers import create_risk_evaluation_router
 
+
+# Sensitive transitions are owned by domain services so their completeness,
+# four-eyes and side-effect rules cannot be bypassed through the generic API.
+_GOVERNED_GENERIC_TRANSITIONS = {
+    "product": {"approved"},
+    "claim": {"approved"},
+    "evidence": {"approved"},
+    "risk_analysis": {"approved"},
+    "control_verification": {"approved", "effective"},
+    "benefit_risk": {"approved"},
+}
+
 # ---------------------------------------------------------------------------
 # App factory
 # ---------------------------------------------------------------------------
@@ -310,6 +322,16 @@ def create_app(session_factory_override=None) -> FastAPI:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Object {object_uuid} not found",
+            )
+
+        governed_states = _GOVERNED_GENERIC_TRANSITIONS.get(obj.object_type, set())
+        if body.new_state in governed_states:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    f"Transition to '{body.new_state}' for object type "
+                    f"'{obj.object_type}' must use its domain-specific workflow"
+                ),
             )
 
         try:
