@@ -69,7 +69,9 @@ class OverallResidualRiskPayload(OverallResidualRiskCreateRequest):
             for entry in self.entries
         }
         if len(keys) != len(self.entries):
-            raise ValueError("entries must not contain duplicate risk-analysis versions")
+            raise ValueError(
+                "entries must not contain duplicate risk-analysis versions"
+            )
         return self
 
 
