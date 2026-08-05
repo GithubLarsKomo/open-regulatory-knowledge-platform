@@ -1,6 +1,6 @@
 """Strict models for version-pinned Benefit-Risk Analysis."""
 
-from pydantic import ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from orkp.domain.risk_models import BenefitRiskPayload, VersionedObjectReference
 
@@ -21,9 +21,11 @@ class BenefitRiskAnalysisPayload(BenefitRiskAnalysisCreateRequest):
     evaluated_at: str
 
 
-class BenefitRiskAnalysisResponse(BenefitRiskAnalysisPayload):
-    """Placeholder to prevent accidental use as an object envelope."""
+class BenefitRiskAnalysisResponse(BaseModel):
+    """Version-pinned Benefit-Risk Analysis object envelope."""
 
-
-class BenefitRiskObjectResponse(BenefitRiskAnalysisCreateRequest):
-    """Placeholder retained for schema compatibility."""
+    model_config = ConfigDict(extra="forbid")
+    object_uuid: str
+    object_version: int
+    lifecycle_state: str
+    payload: BenefitRiskAnalysisPayload
