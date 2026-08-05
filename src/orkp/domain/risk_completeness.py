@@ -14,6 +14,7 @@ def evaluate_risk_completeness(
     has_sequence: bool,
     has_situation: bool,
     has_harm: bool,
+    has_estimation: bool,
     has_product: bool,
     has_controls: bool,
     controls_verified: bool,
@@ -35,21 +36,43 @@ def evaluate_risk_completeness(
     score = 0
     total_checks = 0
 
+    relation_names = {
+        "hazard": "has_hazard",
+        "sequence_of_events": "followed_by",
+        "hazardous_situation": "creates_situation",
+        "harm": "may_cause",
+        "risk_estimation_relation": "estimated_for",
+        "product_relation": "applies_to_product_or_device",
+        "risk_controls": "controlled_by",
+    }
+    relation_only = {"risk_estimation_relation", "product_relation"}
+
     checks = [
-        (has_hazard, "No hazard linked", "hazard", "RISK-CHAIN-HAZARD-001"),
+        (has_hazard, "No current hazard linked", "hazard", "RISK-CHAIN-HAZARD-001"),
         (
             has_sequence,
-            "No sequence of events linked",
+            "Not every linked hazard has a current sequence of events",
             "sequence_of_events",
             "RISK-CHAIN-SEQUENCE-001",
         ),
         (
             has_situation,
-            "No hazardous situation linked",
+            "Not every current sequence reaches a hazardous situation",
             "hazardous_situation",
             "RISK-CHAIN-SITUATION-001",
         ),
-        (has_harm, "No harm linked", "harm", "RISK-CHAIN-HARM-001"),
+        (
+            has_harm,
+            "Not every current hazardous situation is linked to harm",
+            "harm",
+            "RISK-CHAIN-HARM-001",
+        ),
+        (
+            has_estimation,
+            "Not every current hazardous situation is estimated by the Risk Analysis",
+            "risk_estimation_relation",
+            "RISK-CHAIN-ESTIMATION-001",
+        ),
         (
             has_product,
             "No product/device relation",
@@ -82,7 +105,14 @@ def evaluate_risk_completeness(
             score += 1
         else:
             issues.append(f"[{rule_code}] {issue}")
-            if obj_name not in ("verification", "residual_evaluation"):
+            relation_name = relation_names.get(obj_name)
+            if relation_name is not None:
+                missing_relations.append(relation_name)
+            if obj_name not in (
+                "verification",
+                "residual_evaluation",
+                *relation_only,
+            ):
                 missing_objects.append(obj_name)
             elif obj_name == "verification":
                 unverified_controls.append("Controls lack approved verification")
