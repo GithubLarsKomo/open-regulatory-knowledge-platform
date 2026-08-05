@@ -1,6 +1,5 @@
 """Test fixtures and configuration for ORKP database tests."""
 
-
 import pytest
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import Session
