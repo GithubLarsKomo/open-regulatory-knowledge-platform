@@ -13,7 +13,7 @@ def list_control_verifications_for_risk_analysis(
     repo: RegulatoryObjectRepository,
     risk_analysis_hex: str,
 ) -> list[ControlVerificationResponse]:
-    """Return active verifications linked to a risk analysis, version-pinned."""
+    """Return active verifications linked to the current risk-analysis version."""
     try:
         normalized = UUID(risk_analysis_hex).hex
     except (ValueError, TypeError, AttributeError) as exc:
@@ -40,6 +40,8 @@ def list_control_verifications_for_risk_analysis(
     ):
         if relation.relation_type != "derived_from":
             continue
+        if relation.target_version != risk_analysis.version.version_no:
+            continue
         if (
             not relation.properties
             or relation.properties.get("role") != "verifies_control_for"
@@ -56,4 +58,5 @@ def list_control_verifications_for_risk_analysis(
             )
         )
 
+    responses.sort(key=lambda response: (response.object_uuid, response.object_version))
     return responses
