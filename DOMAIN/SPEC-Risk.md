@@ -33,13 +33,16 @@ The domain covers:
 Risks are stored as `RegulatoryObject` with `object_type='risk_analysis'` and related types for hazards, harms and controls. Risk chains link these objects via `ObjectRelation` with explicit version pinning.
 
 ```
-Hazard --originates_from--> SequenceOfEvents
+Hazard --followed_by--> SequenceOfEvents
 SequenceOfEvents --creates_situation--> HazardousSituation
 HazardousSituation --may_cause--> Harm
-RiskAnalysis --estimated_by--> HazardousSituation
+RiskAnalysis --estimated_for--> HazardousSituation
 RiskAnalysis --controlled_by--> RiskControl
-Evidence --control_verified_by--> RiskControl
+ControlVerification --verifies_control--> RiskControl
 RiskAnalysis --applies_to_product--> Product
+OverallResidualRisk --overall_risk_for--> Product
+OverallResidualRisk --aggregates_residual_risk--> ResidualRiskEvaluation
+OverallResidualRisk --considers_benefit_risk--> BenefitRiskAnalysis
 ```
 
 ## Domain Boundaries
@@ -84,6 +87,12 @@ RiskAnalysis --applies_to_product--> Product
 
 ### BenefitRiskPayload
 - analysis_id, benefits, residual_risks, rationale, conclusion
+
+### OverallResidualRiskPayload
+- evaluation_id, product, acceptable, rationale, evaluator_user_id, considerations, evaluated_at
+- entries: deterministic version-pinned source dispositions for every current approved/effective Product Risk Analysis
+- each entry pins the Risk Analysis, its current Residual Risk Evaluation, the applied Risk Policy, residual acceptability and any required favorable Benefit-Risk Analysis
+- overall acceptability is an explicit human judgment; the system validates completeness and provenance but does not decide acceptability automatically
 
 ## Requirements
 
@@ -172,7 +181,7 @@ AI may draft risk rationales but shall never decide acceptability.
 
 ## Data Model
 
-See `src/orkp/domain/risk_models.py` for strict Pydantic payload models.
+See `src/orkp/domain/risk_models.py` for strict Pydantic payload models and `src/orkp/domain/overall_residual_risk_models.py` for the product-level Overall Residual Risk aggregate.
 
 ## Workflow
 
