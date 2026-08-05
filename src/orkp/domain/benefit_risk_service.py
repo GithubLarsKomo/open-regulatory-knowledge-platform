@@ -1,6 +1,7 @@
 """Version-pinned Benefit-Risk Analysis service."""
 
 from datetime import datetime, timezone
+from uuid import UUID, uuid4
 
 from pydantic import ValidationError
 
@@ -11,6 +12,7 @@ from orkp.domain.benefit_risk_models import (
     BenefitRiskAnalysisResponse,
 )
 from orkp.domain.exceptions import (
+    InvalidObjectIdentifierError,
     InvalidPersistedPayloadError,
     InvalidRelationError,
     ObjectNotFoundError,
@@ -52,7 +54,8 @@ class BenefitRiskAnalysisService:
 
         if residual_payload.acceptable or not residual_payload.benefit_risk_required:
             raise RiskEvaluationError(
-                "Benefit-Risk Analysis requires an unacceptable residual risk that is policy-gated for benefit-risk analysis"
+                "Benefit-Risk Analysis requires an unacceptable residual risk "
+                "that is policy-gated for benefit-risk analysis"
             )
 
         expected_risk = (
@@ -103,7 +106,8 @@ class BenefitRiskAnalysisService:
         )
         if not has_risk_relation:
             raise InvalidRelationError(
-                "Residual risk evaluation lacks the expected version-pinned risk-analysis relation"
+                "Residual risk evaluation lacks the expected version-pinned "
+                "risk-analysis relation"
             )
 
         has_policy_relation = any(
@@ -115,11 +119,13 @@ class BenefitRiskAnalysisService:
         )
         if not has_policy_relation:
             raise InvalidRelationError(
-                "Residual risk evaluation lacks the expected version-pinned risk-policy relation"
+                "Residual risk evaluation lacks the expected version-pinned "
+                "risk-policy relation"
             )
 
         payload = BenefitRiskAnalysisPayload(
             **request.model_dump(),
+            analysis_id=f"bra-{uuid4().hex[:12]}",
             evaluated_at=datetime.now(timezone.utc).isoformat(),
         )
 
@@ -214,7 +220,15 @@ class BenefitRiskAnalysisService:
         )
 
     def _current_version(self, analysis_hex: str) -> int:
-        obj = self.repo.get_by_uuid_hex(analysis_hex)
+        try:
+            normalized = UUID(analysis_hex).hex
+        except (ValueError, AttributeError, TypeError) as exc:
+            raise InvalidObjectIdentifierError(
+                f"Invalid UUID format: {analysis_hex}"
+            ) from exc
+        obj = self.repo.get_by_uuid_hex(normalized)
         if obj is None:
-            raise ObjectNotFoundError(f"Benefit-Risk Analysis {analysis_hex} not found")
+            raise ObjectNotFoundError(
+                f"Benefit-Risk Analysis {normalized} not found"
+            )
         return obj.current_version
