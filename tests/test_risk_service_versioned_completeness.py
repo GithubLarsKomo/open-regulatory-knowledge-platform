@@ -96,8 +96,13 @@ def test_modern_acceptable_residual_is_recognized(repo):
 
     result = RiskService(repo).evaluate_risk_completeness(risk.uuid_hex)
 
-    assert not any("RISK-EVAL-RESIDUAL-MISSING-001" in issue for issue in result["blocking_issues"])
-    assert not any("RISK-BENEFIT-001" in issue for issue in result["blocking_issues"])
+    assert not any(
+        "RISK-EVAL-RESIDUAL-MISSING-001" in issue
+        for issue in result["blocking_issues"]
+    )
+    assert not any(
+        "RISK-BENEFIT-001" in issue for issue in result["blocking_issues"]
+    )
 
 
 def test_unacceptable_residual_has_exactly_one_benefit_risk_blocker(repo):
@@ -168,7 +173,9 @@ def test_approved_favorable_benefit_risk_clears_residual_blocker(repo):
 
     result = RiskService(repo).evaluate_risk_completeness(risk.uuid_hex)
 
-    assert not any("RISK-BENEFIT-001" in issue for issue in result["blocking_issues"])
+    assert not any(
+        "RISK-BENEFIT-001" in issue for issue in result["blocking_issues"]
+    )
     assert any("RISK-BENEFIT-001" in warning for warning in result["warnings"])
 
 
