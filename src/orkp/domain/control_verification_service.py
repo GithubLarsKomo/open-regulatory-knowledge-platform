@@ -305,7 +305,9 @@ class ControlVerificationService:
                 if relation.relation_type == "supersedes"
                 and relation.source_version == obj.current_version
             ]
-            if supersedes_relations and not self.evaluate_eligibility("effective", payload):
+            if supersedes_relations and not self.evaluate_eligibility(
+                "effective", payload
+            ):
                 raise RiskControlVerificationError(
                     "A superseding verification must be eligible before becoming effective"
                 )
