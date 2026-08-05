@@ -137,11 +137,66 @@ class ControlVerificationService:
                 )
             evidence_objects.append((evidence_ref, evidence))
 
+        superseded_verification = None
+        if request.supersedes is not None:
+            superseded_verification = load_versioned_object(
+                self.repo,
+                request.supersedes.object_uuid,
+                request.supersedes.object_version,
+                "control_verification",
+            )
+            if (
+                superseded_verification.object.current_version
+                != request.supersedes.object_version
+            ):
+                raise InvalidRelationError(
+                    "Only the current control-verification version can be superseded"
+                )
+            if superseded_verification.object.lifecycle_state != "effective":
+                raise InvalidLifecycleStateError(
+                    "Only an effective control verification can be superseded"
+                )
+            try:
+                superseded_payload = ControlVerificationPayload(
+                    **superseded_verification.payload
+                )
+            except ValidationError as exc:
+                raise InvalidPersistedPayloadError(
+                    "Stored superseded control verification payload is invalid"
+                ) from exc
+            if (
+                superseded_payload.risk_control.object_uuid
+                != request.risk_control.object_uuid
+                or superseded_payload.risk_analysis.object_uuid
+                != request.risk_analysis.object_uuid
+            ):
+                raise InvalidRelationError(
+                    "Superseded verification must belong to the same risk control and risk analysis"
+                )
+            existing_successors = [
+                relation
+                for relation in self.repo.list_active_relations_for_target(
+                    superseded_verification.object.object_uuid
+                )
+                if relation.relation_type == "supersedes"
+                and relation.target_version == request.supersedes.object_version
+            ]
+            if existing_successors:
+                raise InvalidRelationError(
+                    "Control verification already has an active successor"
+                )
+
         payload = ControlVerificationPayload(
             **request.model_dump(),
             verification_id=f"cv-{uuid4().hex[:12]}",
             verified_at=datetime.now(timezone.utc).isoformat(),
         )
+        if request.supersedes is not None and not self.evaluate_eligibility(
+            "effective", payload
+        ):
+            raise RiskControlVerificationError(
+                "A superseding verification must be eligible when made effective"
+            )
 
         try:
             verification, _ = self.repo.create_object(
@@ -184,6 +239,15 @@ class ControlVerificationService:
                 relation_type="uses_risk_policy",
                 created_by=request.verified_by_user_id,
             )
+            if superseded_verification is not None:
+                self.repo.create_relation(
+                    source_uuid=verification.object_uuid,
+                    source_version=verification_version,
+                    target_uuid=superseded_verification.object.object_uuid,
+                    target_version=request.supersedes.object_version,
+                    relation_type="supersedes",
+                    created_by=request.verified_by_user_id,
+                )
             for evidence_ref, evidence in evidence_objects:
                 self.repo.create_relation(
                     source_uuid=evidence.object.object_uuid,
@@ -218,6 +282,49 @@ class ControlVerificationService:
             raise SelfApprovalNotAllowedError(
                 "Control verification must be approved by another user"
             )
+
+        superseded_objects = []
+        if new_state == "effective":
+            loaded = load_versioned_object(
+                self.repo,
+                normalized,
+                obj.current_version,
+                "control_verification",
+            )
+            try:
+                payload = ControlVerificationPayload(**loaded.payload)
+            except ValidationError as exc:
+                raise InvalidPersistedPayloadError(
+                    "Stored control verification payload is invalid"
+                ) from exc
+            supersedes_relations = [
+                relation
+                for relation in self.repo.list_active_relations_for_source(
+                    obj.object_uuid
+                )
+                if relation.relation_type == "supersedes"
+                and relation.source_version == obj.current_version
+            ]
+            if supersedes_relations and not self.evaluate_eligibility("effective", payload):
+                raise RiskControlVerificationError(
+                    "A superseding verification must be eligible before becoming effective"
+                )
+            for relation in supersedes_relations:
+                target = self.repo.get_by_uuid_including_deleted(relation.target_uuid)
+                if target is None or target.object_type != "control_verification":
+                    raise InvalidRelationError(
+                        "Supersedes relation targets an invalid control verification"
+                    )
+                if target.current_version != relation.target_version:
+                    raise InvalidRelationError(
+                        "Supersedes relation no longer targets the current verification version"
+                    )
+                if target.lifecycle_state not in {"effective", "obsolete"}:
+                    raise InvalidLifecycleStateError(
+                        "Superseded control verification must be effective or obsolete"
+                    )
+                superseded_objects.append(target)
+
         try:
             self.repo.transition_state(
                 obj.object_uuid,
@@ -225,6 +332,15 @@ class ControlVerificationService:
                 actor_user_id,
                 comments=comments,
             )
+            if new_state == "effective":
+                for target in superseded_objects:
+                    if target.lifecycle_state == "effective":
+                        self.repo.transition_state(
+                            target.object_uuid,
+                            "obsolete",
+                            actor_user_id,
+                            comments=f"Superseded by control verification {normalized}",
+                        )
             self.repo.session.commit()
         except Exception:
             self.repo.session.rollback()
