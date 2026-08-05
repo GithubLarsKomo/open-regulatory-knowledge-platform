@@ -104,6 +104,8 @@ RELATION_TYPES = (
     "derived_from_initial_evaluation",
     "benefit_risk_for",
     "overall_risk_for",
+    "aggregates_residual_risk",
+    "considers_benefit_risk",
     "applies_to_product",
     "applies_to_device",
     "informed_by",
