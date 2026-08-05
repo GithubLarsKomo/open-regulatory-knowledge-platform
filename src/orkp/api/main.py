@@ -44,6 +44,7 @@ from orkp.api.routers import (
     create_evidence_router,
 )
 from orkp.api.risk_routers import create_risk_evaluation_router
+from orkp.api.post_market_router import create_post_market_router
 
 
 # Sensitive transitions are owned by domain services so their completeness,
@@ -56,6 +57,7 @@ _GOVERNED_GENERIC_TRANSITIONS = {
     "control_verification": {"approved", "effective"},
     "benefit_risk": {"approved"},
     "overall_residual_risk": {"approved"},
+    "risk_impact_assessment": {"in_review", "approved"},
 }
 
 # ---------------------------------------------------------------------------
@@ -432,6 +434,7 @@ def create_app(session_factory_override=None) -> FastAPI:
     app.include_router(create_claim_router(get_repo))
     app.include_router(create_evidence_router(get_repo))
     app.include_router(create_risk_evaluation_router(get_repo))
+    app.include_router(create_post_market_router(get_repo))
 
     return app
 
