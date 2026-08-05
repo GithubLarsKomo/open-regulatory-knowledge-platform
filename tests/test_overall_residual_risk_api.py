@@ -132,6 +132,14 @@ def _seed_context(client):
             relation_type="residual_of",
             created_by="risk-evaluator",
         )
+        repo.create_relation(
+            source_uuid=residual.object_uuid,
+            source_version=1,
+            target_uuid=policy.object_uuid,
+            target_version=1,
+            relation_type="uses_risk_policy",
+            created_by="risk-evaluator",
+        )
         session.commit()
         return product.uuid_hex
 
