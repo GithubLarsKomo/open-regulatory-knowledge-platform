@@ -73,9 +73,7 @@ def _context(repo, *, acceptable=False, benefit_risk_required=True):
         "risk_analysis_version": 1,
         "initial_evaluation_uuid": uuid4().hex,
         "initial_evaluation_version": 1,
-        "control_verifications": [
-            {"object_uuid": uuid4().hex, "object_version": 1}
-        ],
+        "control_verifications": [{"object_uuid": uuid4().hex, "object_version": 1}],
         "residual_severity": "critical",
         "residual_probability": "possible",
         "calculated_risk_level": "high",
@@ -156,7 +154,9 @@ def test_create_benefit_risk_analysis_persists_version_pinned_relations(repo):
     assert response.lifecycle_state == "draft"
     assert response.object_version == 1
     assert response.payload.analysis_id.startswith("bra-")
-    relations = repo.list_active_relations_for_source(bytes.fromhex(response.object_uuid))
+    relations = repo.list_active_relations_for_source(
+        bytes.fromhex(response.object_uuid)
+    )
     assert any(
         relation.relation_type == "benefit_risk_for"
         and relation.target_uuid == residual.object_uuid
