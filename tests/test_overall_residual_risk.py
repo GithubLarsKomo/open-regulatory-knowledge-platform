@@ -391,7 +391,9 @@ def test_favorable_benefit_risk_is_pinned_and_related(repo):
     assert [reference.object_uuid for reference in entry.benefit_risk_analyses] == [
         benefit.uuid_hex
     ]
-    relations = repo.list_active_relations_for_source(bytes.fromhex(response.object_uuid))
+    relations = repo.list_active_relations_for_source(
+        bytes.fromhex(response.object_uuid)
+    )
     assert any(
         relation.relation_type == "considers_benefit_risk"
         and relation.target_uuid == benefit.object_uuid
