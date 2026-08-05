@@ -53,6 +53,7 @@ RELATION_SCHEMA: Dict[str, RelationRule] = {
                 "initial_risk_evaluation",
                 "residual_risk_evaluation",
                 "control_verification",
+                "benefit_risk",
             }
         ),
         frozenset({"risk_policy"}),
