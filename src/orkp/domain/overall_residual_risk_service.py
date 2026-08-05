@@ -56,14 +56,7 @@ class OverallResidualRiskService:
                 "Risk Analysis linked to the Product"
             )
 
-        entries = [self._build_entry(risk) for risk in risks]
-        entries.sort(
-            key=lambda entry: (
-                entry.risk_analysis.object_uuid,
-                entry.risk_analysis.object_version,
-            )
-        )
-
+        entries = self._build_entries(risks)
         payload = OverallResidualRiskPayload(
             **request.model_dump(),
             evaluation_id=f"orr-{uuid4().hex[:12]}",
@@ -168,10 +161,13 @@ class OverallResidualRiskService:
             current_version,
             "overall_residual_risk",
         )
+        payload = self._parse_payload(loaded.payload)
         if new_state == "approved" and actor_user_id == loaded.object.owner_user_id:
             raise SelfApprovalNotAllowedError(
                 "Overall Residual Risk evaluation must be approved by another user"
             )
+        if new_state == "approved":
+            self._assert_current_context(payload)
         try:
             self.repo.transition_state(
                 loaded.object.object_uuid,
@@ -196,18 +192,56 @@ class OverallResidualRiskService:
             version,
             "overall_residual_risk",
         )
-        try:
-            payload = OverallResidualRiskPayload(**loaded.payload)
-        except ValidationError as exc:
-            raise InvalidPersistedPayloadError(
-                "Stored Overall Residual Risk payload is invalid"
-            ) from exc
+        payload = self._parse_payload(loaded.payload)
         return OverallResidualRiskResponse(
             object_uuid=loaded.object.uuid_hex,
             object_version=version,
             lifecycle_state=loaded.object.lifecycle_state,
             payload=payload,
         )
+
+    def _parse_payload(self, payload_data: dict) -> OverallResidualRiskPayload:
+        try:
+            return OverallResidualRiskPayload(**payload_data)
+        except ValidationError as exc:
+            raise InvalidPersistedPayloadError(
+                "Stored Overall Residual Risk payload is invalid"
+            ) from exc
+
+    def _assert_current_context(self, payload: OverallResidualRiskPayload) -> None:
+        product = load_versioned_object(
+            self.repo,
+            payload.product.object_uuid,
+            payload.product.object_version,
+            "product",
+        )
+        if product.object.current_version != payload.product.object_version:
+            raise InvalidRelationError(
+                "Product version changed after Overall Residual Risk evaluation"
+            )
+        risks = self._collect_current_product_risks(product.object)
+        if not risks:
+            raise RiskEvaluationError(
+                "Product no longer has current approved/effective Risk Analyses"
+            )
+        current_entries = self._build_entries(risks)
+        if [entry.model_dump() for entry in current_entries] != [
+            entry.model_dump() for entry in payload.entries
+        ]:
+            raise InvalidRelationError(
+                "Overall Residual Risk source context changed after evaluation; "
+                "create a new evaluation before approval"
+            )
+
+    def _build_entries(self, risks: list) -> list[OverallResidualRiskEntry]:
+        entries = [self._build_entry(risk) for risk in risks]
+        entries.sort(
+            key=lambda entry: (
+                entry.risk_analysis.object_uuid,
+                entry.risk_analysis.object_version,
+            )
+        )
+        return entries
 
     def _collect_current_product_risks(self, product) -> list:
         found = {}
@@ -403,7 +437,12 @@ class OverallResidualRiskService:
                     "object_version": relation.source_version,
                 }
             )
-        references.sort(key=lambda reference: (reference["object_uuid"], reference["object_version"]))
+        references.sort(
+            key=lambda reference: (
+                reference["object_uuid"],
+                reference["object_version"],
+            )
+        )
         return references
 
     def _current_version(self, evaluation_hex: str) -> int:
