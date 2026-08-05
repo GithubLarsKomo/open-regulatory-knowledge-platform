@@ -250,7 +250,6 @@ def generate_backlog(root: Path) -> Tuple[List[Dict], List[Dict]]:
 # ---------------------------------------------------------------------------
 
 
-
 def generate_markdown_backlog(
     foundation_tasks: List[Dict], generated_tasks: List[Dict], output_path: Path
 ) -> None:
