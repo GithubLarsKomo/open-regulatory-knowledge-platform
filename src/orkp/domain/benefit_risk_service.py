@@ -44,6 +44,10 @@ class BenefitRiskAnalysisService:
             raise InvalidRelationError(
                 "Path residual-risk UUID does not match request reference"
             )
+        if residual.object.current_version != request.residual_evaluation.object_version:
+            raise InvalidRelationError(
+                "Benefit-Risk Analysis must reference the current residual-risk version"
+            )
 
         try:
             residual_payload = ResidualRiskEvaluationPayload(**residual.payload)
@@ -90,6 +94,10 @@ class BenefitRiskAnalysisService:
             request.risk_analysis.object_version,
             "risk_analysis",
         )
+        if risk_analysis.object.current_version != request.risk_analysis.object_version:
+            raise InvalidRelationError(
+                "Benefit-Risk Analysis must reference the current risk-analysis version"
+            )
         risk_policy = load_risk_policy(
             self.repo,
             request.risk_policy.object_uuid,
