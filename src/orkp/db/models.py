@@ -96,6 +96,7 @@ RELATION_TYPES = (
     "may_cause",
     "estimated_for",
     "controlled_by",
+    "implements_requirement",
     "verifies_control",
     "supports_verification",
     "evaluates_initial_risk_of",
