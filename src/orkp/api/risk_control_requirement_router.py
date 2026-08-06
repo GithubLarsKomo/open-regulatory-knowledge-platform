@@ -1,9 +1,10 @@
-"""REST API for Risk Control to Requirement traceability."""
+"""REST API for Risk Control traceability and adjacent Risk-domain extensions."""
 
 from typing import Callable
 
 from fastapi import APIRouter, Depends, Query, status
 
+from orkp.api.risk_report_router import create_risk_report_router
 from orkp.api.routers import _call_or_404
 from orkp.api.schemas import ErrorResponse
 from orkp.db.repository import RegulatoryObjectRepository
@@ -41,4 +42,7 @@ def create_risk_control_requirement_router(
             )
         )
 
+    # main.py already mounts this small Risk-domain extension router. Include the
+    # Risk Report subrouter here to avoid another large application-factory edit.
+    router.include_router(create_risk_report_router(get_repo))
     return router
