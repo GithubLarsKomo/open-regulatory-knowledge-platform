@@ -38,6 +38,7 @@ SequenceOfEvents --creates_situation--> HazardousSituation
 HazardousSituation --may_cause--> Harm
 RiskAnalysis --estimated_for--> HazardousSituation
 RiskAnalysis --controlled_by--> RiskControl
+RiskControl --implements_requirement--> Requirement
 ControlVerification --verifies_control--> RiskControl
 RiskAnalysis --applies_to_product--> Product
 OverallResidualRisk --overall_risk_for--> Product
@@ -52,7 +53,7 @@ RiskImpactAssessment --derived_from(role=assessed_risk)--> RiskAnalysis
 ## Domain Boundaries
 
 - Risk Analysis: the central aggregate that combines hazard → harm chains
-- Risk Control: separate object, linked to one or more Risk Analyses
+- Risk Control: separate object, linked to one or more Risk Analyses and, where applicable, exact Requirement versions
 - Benefit-Risk Analysis: separate approved object for policy-gated progression
 - Overall Residual Risk: product-level evaluation across all approved Risk Analyses
 - Post-Market Information: versioned safety information linked to the exact Risk Analysis version it may affect
@@ -92,6 +93,7 @@ RiskImpactAssessment --derived_from(role=assessed_risk)--> RiskAnalysis
 
 ### RiskControlPayload
 - control_id, title, description, control_option, implementation_status, owner, due_date, verification_required
+- where applicable, a Risk Control links to the exact current Requirement version through `implements_requirement`; the relation is traceability metadata and is not a universal Risk approval prerequisite
 
 ### BenefitRiskPayload
 - analysis_id, benefits, residual_risks, rationale, conclusion
@@ -195,6 +197,7 @@ AI may draft risk rationales but shall never decide acceptability.
 - Evidence Service — links verification evidence to risk controls
 - Performance Service — links performance data to benefit-risk analysis
 - Post-Market Risk Service — records safety information and creates mandatory Risk Impact Assessment drafts
+- Risk Control Requirement Service — links Risk Controls to exact Requirement versions where applicable
 - Report Service — generates Risk Management Report sections
 
 ## Data Model
@@ -205,6 +208,7 @@ See `src/orkp/domain/risk_models.py` for strict Pydantic payload models, `src/or
 
 Risk lifecycle: draft → in_review → approved → effective → obsolete
 Initial risk → controls → residual risk → evaluation → benefit-risk if needed → approval
+Risk Control → optional exact Requirement traceability link
 New post-market safety information → exact Risk link → automatic pending Risk Impact Assessment → human impact decision → independent review/approval
 
 ## Security
@@ -226,6 +230,7 @@ New post-market safety information → exact Risk link → automatic pending Ris
 - Full hazard → harm chain can be created and linked.
 - Initial risk can be evaluated using configurable policy.
 - Controls can be linked to risks and verification evidence.
+- Risk Controls can be linked to exact Requirement versions where applicable.
 - Residual risk is evaluated separately.
 - Benefit-Risk Analysis is required for unacceptable residual risk.
 - Overall Residual Risk aggregates all approved analyses.
