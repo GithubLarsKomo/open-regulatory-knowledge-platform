@@ -73,6 +73,7 @@ RiskImpactAssessment --derived_from(role=assessed_risk)--> RiskAnalysis
 - Overall Residual Risk: aggregate conclusion for a device
 - Post-Market Information: production or post-production information that may alter the current risk understanding
 - Risk Impact Assessment: explicit human determination of whether new information changes or requires review of the risk record
+- Risk Review Finding: machine-readable review result with a stable rule code, stable severity, message and blocking disposition
 
 ## Domain Model
 
@@ -112,6 +113,14 @@ RiskImpactAssessment --derived_from(role=assessed_risk)--> RiskAnalysis
 - assessment_id, exact Risk Analysis reference, exact Post-Market Information reference, outcome, rationale, requires_risk_review, assessor_user_id, assessed_at
 - newly triggered assessments start as `pending` and always require risk review until a human assessor completes the impact decision
 - only an explicit human `no_change` outcome may set `requires_risk_review=false`; all safety-relevant outcomes continue to require review
+
+### RiskReviewFinding
+- `rule_code`: stable machine-readable identifier such as `RISK-CHAIN-HARM-001`
+- `severity`: canonical `error` or `warning`
+- `message`: human-readable explanation
+- `blocking`: explicit boolean approval disposition
+- `findings` is the authoritative structured review output; legacy `blocking_issues` and `warnings` string lists remain available for compatibility
+- `RISK-BENEFIT-001` is reserved for the blocking missing-Benefit-Risk condition; the favorable approved disposition uses distinct warning code `RISK-BENEFIT-ACCEPTED-001`
 
 ## Requirements
 
@@ -202,7 +211,7 @@ AI may draft risk rationales but shall never decide acceptability.
 
 ## Data Model
 
-See `src/orkp/domain/risk_models.py` for strict Pydantic payload models, `src/orkp/domain/overall_residual_risk_models.py` for the product-level Overall Residual Risk aggregate, and `src/orkp/domain/post_market_models.py` for post-market safety information and Risk Impact Assessment models.
+See `src/orkp/domain/risk_models.py` for strict Pydantic payload models, `src/orkp/domain/overall_residual_risk_models.py` for the product-level Overall Residual Risk aggregate, `src/orkp/domain/post_market_models.py` for post-market safety information and Risk Impact Assessment models, and `src/orkp/domain/risk_findings.py` for the canonical Risk review rule/severity catalog.
 
 ## Workflow
 
@@ -235,6 +244,7 @@ New post-market safety information → exact Risk link → automatic pending Ris
 - Benefit-Risk Analysis is required for unacceptable residual risk.
 - Overall Residual Risk aggregates all approved analyses.
 - Risk approval requires complete traceability.
+- Risk review output exposes stable machine-readable rule codes and severities without removing legacy display lists.
 - Post-market information is version-pinned to affected risks and automatically triggers a pending Risk Impact Assessment.
 - A Risk Impact Assessment requires a human impact decision and independent approval.
 
