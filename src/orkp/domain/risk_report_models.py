@@ -85,5 +85,6 @@ class RiskReportGenerationResponse(BaseModel):
     artifact_uuid: str
     baseline_uuid: str
     checksum_sha256: str
+    canonical_json: str
     format: str = "json"
     report: RiskReportPayload
