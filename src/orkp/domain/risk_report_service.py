@@ -143,6 +143,7 @@ class RiskReportService:
         request: RiskReportBaselineCreateRequest,
     ) -> list[tuple[bytes, int]]:
         seen: set[tuple[bytes, int]] = set()
+        seen_objects: set[bytes] = set()
         object_versions: list[tuple[bytes, int]] = []
         approved_risk_roots = 0
 
@@ -160,7 +161,12 @@ class RiskReportService:
                 raise BaselineValidationError(
                     "Risk Report Baseline contains a duplicate object/version reference"
                 )
+            if object_uuid in seen_objects:
+                raise BaselineValidationError(
+                    "Risk Report Baseline must contain exactly one version per object"
+                )
             seen.add(key)
+            seen_objects.add(object_uuid)
 
             obj = self.repo.get_by_uuid_hex(normalized)
             if obj is None:
