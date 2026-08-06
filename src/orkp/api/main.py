@@ -45,6 +45,9 @@ from orkp.api.routers import (
 )
 from orkp.api.risk_routers import create_risk_evaluation_router
 from orkp.api.post_market_router import create_post_market_router
+from orkp.api.risk_control_requirement_router import (
+    create_risk_control_requirement_router,
+)
 
 
 # Sensitive transitions are owned by domain services so their completeness,
@@ -435,6 +438,7 @@ def create_app(session_factory_override=None) -> FastAPI:
     app.include_router(create_evidence_router(get_repo))
     app.include_router(create_risk_evaluation_router(get_repo))
     app.include_router(create_post_market_router(get_repo))
+    app.include_router(create_risk_control_requirement_router(get_repo))
 
     return app
 
