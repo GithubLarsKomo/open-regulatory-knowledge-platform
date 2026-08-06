@@ -253,7 +253,9 @@ def test_approval_is_blocked_if_risk_version_changed_after_assessment(repo):
     repo.session.commit()
 
     with pytest.raises(InvalidRelationError):
-        service.transition_assessment(completed.object_uuid, "approved", "risk-approver")
+        service.transition_assessment(
+            completed.object_uuid, "approved", "risk-approver"
+        )
 
 
 def test_approval_requires_current_assessment_provenance(repo):
