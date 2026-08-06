@@ -275,9 +275,7 @@ class PostMarketRiskService:
             ) from exc
         obj = self.repo.get_by_uuid_hex(normalized)
         if obj is None:
-            raise ObjectNotFoundError(
-                f"Risk Impact Assessment {normalized} not found"
-            )
+            raise ObjectNotFoundError(f"Risk Impact Assessment {normalized} not found")
         return load_versioned_object(
             self.repo,
             normalized,
