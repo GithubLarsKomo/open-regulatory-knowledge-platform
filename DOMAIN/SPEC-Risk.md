@@ -58,6 +58,8 @@ RiskImpactAssessment --derived_from(role=assessed_risk)--> RiskAnalysis
 - Overall Residual Risk: product-level evaluation across all approved Risk Analyses
 - Post-Market Information: versioned safety information linked to the exact Risk Analysis version it may affect
 - Risk Impact Assessment: separate reviewable object created for new post-market safety information; it records the human impact decision without mutating the source information
+- Risk Report Baseline: immutable Core Baseline anchored by at least one current approved/effective Risk Analysis and containing exact supporting object-version snapshots
+- Risk Report Manifest: deterministic canonical JSON generated only from the frozen Baseline snapshots; DOCX/PDF rendering remains in the separate Report Generation domain
 
 ## Terminology
 
@@ -74,6 +76,7 @@ RiskImpactAssessment --derived_from(role=assessed_risk)--> RiskAnalysis
 - Post-Market Information: production or post-production information that may alter the current risk understanding
 - Risk Impact Assessment: explicit human determination of whether new information changes or requires review of the risk record
 - Risk Review Finding: machine-readable review result with a stable rule code, stable severity, message and blocking disposition
+- Risk Report Baseline: frozen collection of exact object versions used as the sole source for reproducible Risk report generation
 
 ## Domain Model
 
@@ -121,6 +124,18 @@ RiskImpactAssessment --derived_from(role=assessed_risk)--> RiskAnalysis
 - `blocking`: explicit boolean approval disposition
 - `findings` is the authoritative structured review output; legacy `blocking_issues` and `warnings` string lists remain available for compatibility
 - `RISK-BENEFIT-001` is reserved for the blocking missing-Benefit-Risk condition; the favorable approved disposition uses distinct warning code `RISK-BENEFIT-ACCEPTED-001`
+
+### RiskReportBaseline
+- created from an explicit set of exact object-version references
+- requires at least one current `risk_analysis` whose lifecycle is `approved` or `effective` and whose referenced ObjectVersion is approved
+- freezes supporting object payloads into immutable `BaselineItem.snapshot_json`; supporting objects are not universally required to have their own approval lifecycle because Risk approval currently governs the aggregate Risk Analysis
+- duplicate object/version references are rejected
+
+### RiskReportPayload
+- deterministic schema version, baseline identity/metadata and sorted frozen item snapshots
+- generation reads `Baseline` and `BaselineItem` only; current RegulatoryObject/ObjectVersion payloads are not consulted after freeze
+- canonical JSON uses deterministic key/item ordering and produces SHA-256 recorded in `GeneratedArtifact`
+- repeated generation from the same baseline yields the same canonical JSON and checksum even when source-object lifecycle or mutable supporting versions later change
 
 ## Requirements
 
@@ -207,11 +222,12 @@ AI may draft risk rationales but shall never decide acceptability.
 - Performance Service — links performance data to benefit-risk analysis
 - Post-Market Risk Service — records safety information and creates mandatory Risk Impact Assessment drafts
 - Risk Control Requirement Service — links Risk Controls to exact Requirement versions where applicable
-- Report Service — generates Risk Management Report sections
+- Risk Report Service — freezes exact object versions and generates deterministic baseline-only report manifests with checksums
+- Report Service — renders report manifests into document formats in the separate Report Generation domain
 
 ## Data Model
 
-See `src/orkp/domain/risk_models.py` for strict Pydantic payload models, `src/orkp/domain/overall_residual_risk_models.py` for the product-level Overall Residual Risk aggregate, `src/orkp/domain/post_market_models.py` for post-market safety information and Risk Impact Assessment models, and `src/orkp/domain/risk_findings.py` for the canonical Risk review rule/severity catalog.
+See `src/orkp/domain/risk_models.py` for strict Pydantic payload models, `src/orkp/domain/overall_residual_risk_models.py` for the product-level Overall Residual Risk aggregate, `src/orkp/domain/post_market_models.py` for post-market safety information and Risk Impact Assessment models, `src/orkp/domain/risk_findings.py` for the canonical Risk review rule/severity catalog, and `src/orkp/domain/risk_report_models.py` for reproducible Risk report baseline/manifest contracts.
 
 ## Workflow
 
@@ -219,6 +235,7 @@ Risk lifecycle: draft → in_review → approved → effective → obsolete
 Initial risk → controls → residual risk → evaluation → benefit-risk if needed → approval
 Risk Control → optional exact Requirement traceability link
 New post-market safety information → exact Risk link → automatic pending Risk Impact Assessment → human impact decision → independent review/approval
+Approved/effective Risk Analysis + exact supporting object versions → freeze Risk Report Baseline → canonical baseline-only JSON manifest → SHA-256 + GeneratedArtifact → downstream document rendering
 
 ## Security
 
@@ -233,6 +250,7 @@ New post-market safety information → exact Risk link → automatic pending Ris
 - AI may draft risk justifications (draft only)
 - AI shall never decide risk acceptability
 - New safety information shall not be automatically classified as `no_change`; that disposition requires a human assessor
+- Risk report reproducibility is derived from frozen baseline snapshots and deterministic rendering, not from AI-generated state
 
 ## Acceptance Criteria
 
@@ -247,6 +265,8 @@ New post-market safety information → exact Risk link → automatic pending Ris
 - Risk review output exposes stable machine-readable rule codes and severities without removing legacy display lists.
 - Post-market information is version-pinned to affected risks and automatically triggers a pending Risk Impact Assessment.
 - A Risk Impact Assessment requires a human impact decision and independent approval.
+- Risk Report Baselines require approved/effective Risk Analysis roots and freeze exact supporting object versions.
+- Re-generating a Risk report from the same baseline produces identical canonical JSON and SHA-256 independent of later source changes.
 
 ## Open Questions
 
