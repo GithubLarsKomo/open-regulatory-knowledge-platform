@@ -7,6 +7,8 @@ from Hazard to verification are met.
 from datetime import datetime, timezone
 from typing import Any, Dict, List
 
+from orkp.domain.risk_findings import RiskFinding, make_risk_finding
+
 
 def evaluate_risk_completeness(
     risk_analysis_uuid: str,
@@ -24,11 +26,13 @@ def evaluate_risk_completeness(
 ) -> Dict[str, Any]:
     """Evaluate whether a Risk Analysis is complete enough for approval.
 
-    Never defaults missing evaluation to acceptable.
-    Returns RiskCompletenessAssessment with detailed blocking issues.
+    Never defaults missing evaluation to acceptable. ``findings`` is the
+    authoritative machine-readable review output; legacy issue/warning strings
+    remain available for compatibility.
     """
     issues: List[str] = []
     warnings: List[str] = []
+    findings: List[RiskFinding] = []
     missing_objects: List[str] = []
     missing_relations: List[str] = []
     unverified_controls: List[str] = []
@@ -104,6 +108,7 @@ def evaluate_risk_completeness(
         if passed:
             score += 1
         else:
+            findings.append(make_risk_finding(rule_code, issue))
             issues.append(f"[{rule_code}] {issue}")
             relation_name = relation_names.get(obj_name)
             if relation_name is not None:
@@ -127,13 +132,14 @@ def evaluate_risk_completeness(
         score += 1
     elif residual_evaluated and benefit_risk_approved:
         score += 1
-        warnings.append(
-            "[RISK-BENEFIT-001] Residual risk unacceptable but Benefit-Risk analysis approved"
-        )
+        message = "Residual risk unacceptable but Benefit-Risk analysis approved"
+        findings.append(make_risk_finding("RISK-BENEFIT-ACCEPTED-001", message))
+        # Preserve the historical display string; structured findings are authoritative.
+        warnings.append(f"[RISK-BENEFIT-001] {message}")
     elif residual_evaluated:
-        issues.append(
-            "[RISK-BENEFIT-001] Unacceptable residual risk requires approved Benefit-Risk analysis"
-        )
+        message = "Unacceptable residual risk requires approved Benefit-Risk analysis"
+        findings.append(make_risk_finding("RISK-BENEFIT-001", message))
+        issues.append(f"[RISK-BENEFIT-001] {message}")
         unacceptable_residual.append(
             "No approved Benefit-Risk analysis for unacceptable residual risk"
         )
@@ -144,6 +150,7 @@ def evaluate_risk_completeness(
         "risk_analysis_uuid": risk_analysis_uuid,
         "complete": len(issues) == 0,
         "score": score,
+        "findings": findings,
         "blocking_issues": issues,
         "warnings": warnings,
         "missing_objects": missing_objects,
