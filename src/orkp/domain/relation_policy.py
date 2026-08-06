@@ -37,6 +37,9 @@ RELATION_SCHEMA: Dict[str, RelationRule] = {
     "controlled_by": RelationRule(
         frozenset({"risk_analysis"}), frozenset({"risk_control"})
     ),
+    "implements_requirement": RelationRule(
+        frozenset({"risk_control"}), frozenset({"requirement"})
+    ),
     "verifies_control": RelationRule(
         frozenset({"evidence", "control_verification"}),
         frozenset({"risk_control"}),
