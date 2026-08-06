@@ -47,5 +47,8 @@ def test_baseline_rejects_multiple_versions_of_same_supporting_object():
             created_by_user_id="report-author",
         )
 
-        with pytest.raises(BaselineValidationError, match="exactly one version per object"):
+        with pytest.raises(
+            BaselineValidationError,
+            match="exactly one version per object",
+        ):
             RiskReportService(repo).create_baseline(request)
