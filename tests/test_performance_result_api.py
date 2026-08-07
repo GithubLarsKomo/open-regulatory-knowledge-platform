@@ -85,17 +85,14 @@ def test_api_creates_result_and_exposes_it_as_claim_evidence(client):
         {"object_uuid": claim_uuid, "object_version": 1}
     ]
 
-    loaded = client.get(
-        f"/api/v1/performance-results/{body['object_uuid']}/versions/1"
-    )
+    loaded = client.get(f"/api/v1/performance-results/{body['object_uuid']}/versions/1")
     assert loaded.status_code == 200
     assert loaded.json() == body
 
     claim_evidence = client.get(f"/api/v1/claims/{claim_uuid}/evidence")
     assert claim_evidence.status_code == 200
     assert any(
-        item["evidence_uuid"] == body["object_uuid"]
-        for item in claim_evidence.json()
+        item["evidence_uuid"] == body["object_uuid"] for item in claim_evidence.json()
     )
 
 
