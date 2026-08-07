@@ -42,7 +42,9 @@ class PerformanceResultCreateRequest(BaseModel):
     result_value: str = Field(..., min_length=1)
     unit: str | None = None
     statistical_method: str | None = None
-    statistical_sources: list[PerformanceStatisticalSource] = Field(default_factory=list)
+    statistical_sources: list[PerformanceStatisticalSource] = Field(
+        default_factory=list
+    )
     interpretation: str | None = None
     quality_rating: str = "medium"
     owner_user_id: str = Field(..., min_length=1)

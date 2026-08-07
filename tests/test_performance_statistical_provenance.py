@@ -97,8 +97,12 @@ def test_duplicate_statistical_sources_are_rejected(repo):
     study, claim = _study_and_claim(repo)
     source = _source(repo, "internal_document", "Raw dataset")
 
-    with pytest.raises(ValidationError, match="statistical_sources must not contain duplicates"):
-        _request(study, claim, [_ref(source, "source_data"), _ref(source, "source_data")])
+    with pytest.raises(
+        ValidationError, match="statistical_sources must not contain duplicates"
+    ):
+        _request(
+            study, claim, [_ref(source, "source_data"), _ref(source, "source_data")]
+        )
 
 
 def test_source_data_persists_exact_provenance_relation(repo):
@@ -139,7 +143,9 @@ def test_validated_report_requires_report_evidence_type(repo):
     study, claim = _study_and_claim(repo)
     source = _approve(repo, _source(repo, "internal_document", "Approved document"))
 
-    with pytest.raises(InvalidRelationError, match="internal_report or external_report"):
+    with pytest.raises(
+        InvalidRelationError, match="internal_report or external_report"
+    ):
         PerformanceResultService(repo).create_result(
             study.object_uuid,
             _request(study, claim, [_ref(source, "validated_report")]),
@@ -190,7 +196,9 @@ def test_stale_statistical_source_version_is_rejected(repo):
     )
     repo.session.commit()
 
-    with pytest.raises(InvalidRelationError, match="current statistical source versions"):
+    with pytest.raises(
+        InvalidRelationError, match="current statistical source versions"
+    ):
         PerformanceResultService(repo).create_result(study.object_uuid, request)
 
 

@@ -78,7 +78,10 @@ class PerformanceResultService:
                 source_reference.evidence.object_version,
                 "evidence",
             )
-            if source.object.current_version != source_reference.evidence.object_version:
+            if (
+                source.object.current_version
+                != source_reference.evidence.object_version
+            ):
                 raise InvalidRelationError(
                     "Performance Result must reference current statistical source versions"
                 )
