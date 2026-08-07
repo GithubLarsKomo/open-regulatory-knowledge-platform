@@ -40,12 +40,16 @@ def _approve(repo, obj):
 
 
 def _product(repo, approved=True):
-    product = _create_object(repo, "product", {"product_id": "P-PER", "name": "PER Product"})
+    product = _create_object(
+        repo, "product", {"product_id": "P-PER", "name": "PER Product"}
+    )
     return _approve(repo, product) if approved else product
 
 
 def _claim(repo, identifier: str, approved=True):
-    claim = _create_object(repo, "claim", {"claim_id": identifier, "wording": identifier})
+    claim = _create_object(
+        repo, "claim", {"claim_id": identifier, "wording": identifier}
+    )
     return _approve(repo, claim) if approved else claim
 
 
@@ -54,7 +58,10 @@ def _study(repo, product, study_type: str):
         study_id=f"ST-{study_type}",
         study_type=study_type,
         title=f"{study_type} study",
-        product={"object_uuid": product.uuid_hex, "object_version": product.current_version},
+        product={
+            "object_uuid": product.uuid_hex,
+            "object_version": product.current_version,
+        },
         study_status="completed",
         owner_user_id="study-owner",
     )
@@ -90,7 +97,9 @@ def _result(repo, study, claim, source=None):
             "object_uuid": study.object_uuid,
             "object_version": study.object_version,
         },
-        claims=[{"object_uuid": claim.uuid_hex, "object_version": claim.current_version}],
+        claims=[
+            {"object_uuid": claim.uuid_hex, "object_version": claim.current_version}
+        ],
         parameter="performance parameter",
         result_value="98.5",
         quality_rating="high",
@@ -126,7 +135,9 @@ def test_per_baseline_requires_approved_product(repo):
     result = _result(repo, study, claim)
 
     with pytest.raises(Exception, match="state 'draft'"):
-        PerformanceReportService(repo).create_baseline(_baseline_request(product, result))
+        PerformanceReportService(repo).create_baseline(
+            _baseline_request(product, result)
+        )
 
 
 def test_per_baseline_requires_approved_performance_result(repo):
@@ -144,7 +155,9 @@ def test_per_baseline_requires_approved_performance_result(repo):
     result = PerformanceResultService(repo).create_result(study.object_uuid, request)
 
     with pytest.raises(Exception, match="state 'draft'"):
-        PerformanceReportService(repo).create_baseline(_baseline_request(product, result))
+        PerformanceReportService(repo).create_baseline(
+            _baseline_request(product, result)
+        )
 
 
 def test_per_baseline_requires_current_approved_claim(repo):
@@ -154,7 +167,9 @@ def test_per_baseline_requires_current_approved_claim(repo):
     result = _result(repo, study, claim)
 
     with pytest.raises(Exception, match="state 'draft'"):
-        PerformanceReportService(repo).create_baseline(_baseline_request(product, result))
+        PerformanceReportService(repo).create_baseline(
+            _baseline_request(product, result)
+        )
 
 
 def test_per_baseline_freezes_transitive_study_claim_and_statistical_source(repo):
@@ -275,7 +290,9 @@ def test_per_generation_checksum_artifact_and_audit_event(repo):
     events = list(
         repo.session.execute(
             select(EventLog).where(EventLog.event_type == "artifact_generated")
-        ).scalars().all()
+        )
+        .scalars()
+        .all()
     )
     assert len(events) == 1
     assert events[0].aggregate_uuid == UUID(baseline.baseline_uuid).bytes
