@@ -24,7 +24,9 @@ def api_context():
     )
     Base.metadata.create_all(engine)
     session_factory = sessionmaker(bind=engine)
-    return TestClient(create_app(session_factory_override=session_factory)), session_factory
+    return TestClient(
+        create_app(session_factory_override=session_factory)
+    ), session_factory
 
 
 def _approve(repo, obj):
@@ -114,9 +116,10 @@ def test_api_creates_reads_and_generates_per_sections(api_context):
     assert [section["section_type"] for section in body["report"]["sections"]] == [
         "clinical_performance"
     ]
-    assert body["report"]["sections"][0]["items"][0]["performance_result"][
-        "object_uuid"
-    ] == result_uuid
+    assert (
+        body["report"]["sections"][0]["items"][0]["performance_result"]["object_uuid"]
+        == result_uuid
+    )
 
 
 def test_api_rejects_draft_performance_result_in_baseline(api_context):
@@ -133,5 +136,5 @@ def test_api_rejects_draft_performance_result_in_baseline(api_context):
         },
     )
 
-    assert response.status_code == 422
+    assert response.status_code == 409
     assert "state 'draft'" in response.json()["detail"]
