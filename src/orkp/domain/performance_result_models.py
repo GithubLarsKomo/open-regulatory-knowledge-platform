@@ -11,6 +11,23 @@ PERFORMANCE_EVIDENCE_TYPES = {
     "clinical": "clinical_study",
     "scientific_validity": "scientific_validity",
 }
+PERFORMANCE_STATISTICAL_SOURCE_KINDS = {"source_data", "validated_report"}
+
+
+class PerformanceStatisticalSource(BaseModel):
+    """Exact provenance source for a statistical Performance Result."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    source_kind: str
+    evidence: VersionedObjectReference
+
+    @field_validator("source_kind")
+    @classmethod
+    def validate_source_kind(cls, value: str) -> str:
+        if value not in PERFORMANCE_STATISTICAL_SOURCE_KINDS:
+            raise ValueError(f"Invalid statistical source_kind '{value}'")
+        return value
 
 
 class PerformanceResultCreateRequest(BaseModel):
@@ -25,6 +42,7 @@ class PerformanceResultCreateRequest(BaseModel):
     result_value: str = Field(..., min_length=1)
     unit: str | None = None
     statistical_method: str | None = None
+    statistical_sources: list[PerformanceStatisticalSource] = Field(default_factory=list)
     interpretation: str | None = None
     quality_rating: str = "medium"
     owner_user_id: str = Field(..., min_length=1)
@@ -53,13 +71,25 @@ class PerformanceResultCreateRequest(BaseModel):
         return value
 
     @model_validator(mode="after")
-    def reject_duplicate_claims(self):
-        keys = {
+    def validate_exact_reference_sets(self):
+        claim_keys = {
             (reference.object_uuid, reference.object_version)
             for reference in self.claims
         }
-        if len(keys) != len(self.claims):
+        if len(claim_keys) != len(self.claims):
             raise ValueError("claims must not contain duplicates")
+
+        source_keys = {
+            (source.evidence.object_uuid, source.evidence.object_version)
+            for source in self.statistical_sources
+        }
+        if len(source_keys) != len(self.statistical_sources):
+            raise ValueError("statistical_sources must not contain duplicates")
+
+        if self.statistical_method and not self.statistical_sources:
+            raise ValueError(
+                "statistical_sources are required when statistical_method is provided"
+            )
         return self
 
 
