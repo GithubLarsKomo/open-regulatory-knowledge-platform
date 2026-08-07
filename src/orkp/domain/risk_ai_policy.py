@@ -7,7 +7,14 @@ constitute or determine Risk acceptability, verification, or lifecycle decisions
 from collections.abc import Mapping
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationError,
+    field_validator,
+    model_validator,
+)
 
 from orkp.domain.exceptions import AuthorizationError, RiskEvaluationError
 
