@@ -148,7 +148,10 @@ class PerformanceClaimGapService:
 
                     lifecycle_state = evidence["evidence_lifecycle_state"]
                     version_status = evidence["evidence_version_status"]
-                    if lifecycle_state in {"deleted", "obsolete"} or version_status != "approved":
+                    if (
+                        lifecycle_state in {"deleted", "obsolete"}
+                        or version_status != "approved"
+                    ):
                         findings.append(
                             PerformanceClaimGapFinding(
                                 rule_code="PERF-EVID-UNAPPROVED-001",
@@ -193,7 +196,10 @@ class PerformanceClaimGapService:
                 findings.append(
                     PerformanceClaimGapFinding(
                         rule_code="PERF-EVID-CONTRADICTION-001",
-                        message="Active contradictory Evidence exists for the current Claim version",
+                        message=(
+                            "Active contradictory Evidence exists for the current "
+                            "Claim version"
+                        ),
                         evidence={
                             "object_uuid": UUID(bytes=relation.source_uuid).hex,
                             "object_version": relation.source_version,
