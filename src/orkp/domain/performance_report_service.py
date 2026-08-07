@@ -12,7 +12,6 @@ from orkp.domain.exceptions import (
     BaselineValidationError,
     InvalidObjectIdentifierError,
     InvalidPersistedPayloadError,
-    InvalidRelationError,
     ObjectNotFoundError,
 )
 from orkp.domain.performance_models import PerformanceStudyPayload
@@ -24,6 +23,9 @@ from orkp.domain.performance_report_models import (
     PerformanceReportSection,
     PerformanceReportSectionItem,
     PerformanceReportSnapshot,
+)
+from orkp.domain.performance_report_traceability import (
+    validate_performance_result_traceability,
 )
 from orkp.domain.performance_result_models import PerformanceResultPayload
 from orkp.domain.versioned_loader import load_versioned_object
@@ -78,7 +80,12 @@ class PerformanceReportService:
         baseline = self._load_baseline(baseline_hex)
         items = self.repo.list_baseline_items(baseline.baseline_uuid)
         product_items = [item for item in items if item.object_type == "product"]
-        result_items = [item for item in items if self._is_performance_result(item.snapshot_json)]
+        result_items = [
+            item
+            for item in items
+            if item.object_type == "evidence"
+            and self._is_performance_result(item.snapshot_json)
+        ]
         if len(product_items) != 1 or not result_items:
             raise BaselineValidationError(
                 "Baseline is not a valid Performance Evaluation baseline"
@@ -272,6 +279,12 @@ class PerformanceReportService:
                     "Selected Evidence is not a valid Performance Result"
                 ) from exc
 
+            validate_performance_result_traceability(
+                self.repo,
+                result.object.object_uuid,
+                result.version.version_no,
+                payload,
+            )
             self._add_object_version(
                 object_versions,
                 result.object.object_uuid,
