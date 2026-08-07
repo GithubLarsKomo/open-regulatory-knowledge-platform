@@ -17,6 +17,7 @@ Define analytical and clinical performance evidence management.
 
 - Performance Study — a structured investigation of analytical or clinical performance, or scientific validity; persisted as `RegulatoryObject` with `object_type='study'`
 - Performance Result — structured Evidence derived from an exact Performance Study version and linked to one or more exact Claim versions
+- Performance Evaluation Baseline — frozen Product, Performance Result and exact provenance snapshots used to generate reproducible PER sections
 - Scientific Validity Statement — documented scientific validity
 - Evidence Link — connection to supporting evidence item
 
@@ -68,6 +69,22 @@ The server derives `evidence_type` as `analytical_study`, `clinical_study`, or `
 
 Statistical provenance is captured both in the strict Performance Result payload and in exact version-pinned `derived_from` relations. Later source Evidence versions do not rewrite the historical Result provenance.
 
+### Performance Evaluation Baseline and PER Sections
+
+A Performance Evaluation baseline freezes one exact current approved/effective Product version and one or more exact current approved/effective Performance Result Evidence versions. Each selected Performance Result Evidence version must itself be approved.
+
+For each selected Performance Result, the baseline transitively freezes the exact Study, Claim and statistical-source versions referenced by the Result payload. Referenced Claims must be current approved/effective versions and their exact ObjectVersions must be approved. Historical Study and statistical-source versions referenced by approved Results are preserved rather than silently upgraded.
+
+The baseline rejects conflicting versions of the same object. After freeze, PER generation reads only `Baseline` and `BaselineItem.snapshot_json`; live RegulatoryObject/ObjectVersion payloads are not consulted.
+
+Canonical deterministic JSON groups Performance Results into:
+
+- `scientific_validity`
+- `analytical_performance`
+- `clinical_performance`
+
+Each section item contains the exact frozen Performance Result, Study, Claim and statistical-source snapshots. Canonical JSON is SHA-256 hashed and persisted as a `GeneratedArtifact` with `artifact_type='performance_evaluation_sections'` plus an `artifact_generated` audit event. PDF/DOCX rendering is deferred to the Report Generation capability.
+
 ## Scope
 
 The domain covers:
@@ -108,18 +125,22 @@ The system shall identify performance claims lacking sufficient evidence.
 - Performance Results support one or more exact Claim versions through canonical `supported_by` relations.
 - Statistical Performance Results require exact current source-data or validated-report Evidence provenance.
 - Validated report provenance requires approved/effective report Evidence and an approved exact Evidence version.
+- A PER baseline freezes an approved/effective Product, approved/effective Performance Results, current approved Claims and exact Study/statistical-source provenance.
+- PER section generation is deterministic and reads only frozen baseline snapshots.
+- Repeated generation from the same baseline produces identical canonical JSON and checksum.
 - Evidence coverage can be calculated.
 - PER sections can be generated from approved evidence.
 
 ## Interfaces
 
-- Product Service — retrieves and validates exact Product context for studies
+- Product Service — retrieves and validates exact Product context for studies and PER baselines
 - Claim Service — consumes Performance Results through existing Evidence relations and approval assessment
 - Evidence Service — exposes Performance Results and statistical source provenance through the standard Evidence graph
 - Risk Service — provides risk-benefit data for PER
-- Report Service — generates PER sections from study data
+- Performance Report Service — freezes exact Performance context and generates reproducible PER section manifests
+- Report Service — renders approved/frozen manifests into final document formats
 - AI Service — evidence summarization and gap analysis
-- REST API — creates Product-scoped Performance Studies, creates Study-scoped Performance Results, and retrieves exact versions
+- REST API — creates Product-scoped Performance Studies, Study-scoped Performance Results and Performance Report baselines; retrieves exact versions and generates deterministic PER sections
 
 ## Data Model
 
@@ -156,6 +177,16 @@ The system shall identify performance claims lacking sufficient evidence.
 | quality_rating | VARCHAR | high/medium/low |
 | evidence_type | VARCHAR | Derived evidence classification |
 
+### performance_evaluation_baseline
+
+| Field | Type | Description |
+|---|---|---|
+| baseline_uuid | UUID | Frozen baseline identifier |
+| product | VersionedObjectReference | Exact approved/effective current Product version |
+| evidence | List[VersionedObjectReference] | Selected approved/effective Performance Result versions |
+| transitive_items | BaselineItem[] | Exact Study, Claim and statistical-source snapshots derived from selected Results |
+| checksum | SHA-256 | Deterministic checksum of generated canonical PER section JSON |
+
 ## Workflow
 
 - Study creation: exact current Product → strict Performance Study draft
@@ -164,6 +195,8 @@ The system shall identify performance claims lacking sufficient evidence.
 - Current Study + current Claim version(s) → Performance Result Evidence → version-pinned Study provenance + Claim support
 - Statistical method → mandatory exact source-data or validated-report Evidence provenance
 - Historical Performance Results retain their original source Evidence versions even after those sources are versioned later
+- Approved/effective Product + approved/effective Performance Results + current approved Claims → frozen Performance Evaluation baseline
+- Frozen baseline snapshots → deterministic scientific-validity / analytical-performance / clinical-performance section JSON → checksum + GeneratedArtifact
 - Evidence coverage analysis run before PER generation
 
 ## Security
@@ -172,13 +205,14 @@ The system shall identify performance claims lacking sufficient evidence.
 - Study approval requires Clinical Evidence Reviewer role
 - Results visible per product-level permissions
 - Validated-report provenance can only reference approved/effective report Evidence
+- PER baseline generation accepts only approved/effective Product, Performance Result and Claim decision context
 
 ## AI Support
 
 - AI may summarize study results (draft only)
 - AI may identify claims lacking sufficient evidence (REQ-PERF-0006)
 - AI may propose evidence coverage reports
-- AI shall not approve study results or conclusions
+- AI shall not approve study results, claim sufficiency or conclusions
 
 ## Open Questions
 
