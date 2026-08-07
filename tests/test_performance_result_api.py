@@ -62,7 +62,6 @@ def _result_body(study, claim_uuid: str):
         "parameter": "clinical sensitivity",
         "result_value": "97.4",
         "unit": "%",
-        "statistical_method": "Wilson 95% CI",
         "quality_rating": "high",
         "owner_user_id": "result-owner",
     }
