@@ -110,6 +110,7 @@ RELATION_SCHEMA: Dict[str, RelationRule] = {
                 "study",
                 "risk_analysis",
                 "control_verification",
+                "evidence",
                 "post_market_information",
             }
         ),
