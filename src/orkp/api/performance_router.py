@@ -11,6 +11,13 @@ from orkp.domain.performance_models import (
     PerformanceStudyCreateRequest,
     PerformanceStudyResponse,
 )
+from orkp.domain.performance_report_models import (
+    PerformanceReportBaselineCreateRequest,
+    PerformanceReportBaselineResponse,
+    PerformanceReportGenerationRequest,
+    PerformanceReportGenerationResponse,
+)
+from orkp.domain.performance_report_service import PerformanceReportService
 from orkp.domain.performance_result_models import (
     PerformanceResultCreateRequest,
     PerformanceResultResponse,
@@ -80,6 +87,53 @@ def create_performance_router(
     ):
         return _call_or_404(
             lambda: PerformanceResultService(repo).get_result(result_uuid, version)
+        )
+
+    @router.post(
+        "/api/v1/performance-report-baselines",
+        response_model=PerformanceReportBaselineResponse,
+        status_code=status.HTTP_201_CREATED,
+        responses={
+            404: {"model": ErrorResponse},
+            409: {"model": ErrorResponse},
+            422: {"model": ErrorResponse},
+        },
+    )
+    async def create_performance_report_baseline(
+        body: PerformanceReportBaselineCreateRequest,
+        repo: RegulatoryObjectRepository = Depends(get_repo),
+    ):
+        return _call_or_404(lambda: PerformanceReportService(repo).create_baseline(body))
+
+    @router.get(
+        "/api/v1/performance-report-baselines/{baseline_uuid}",
+        response_model=PerformanceReportBaselineResponse,
+        responses={404: {"model": ErrorResponse}, 422: {"model": ErrorResponse}},
+    )
+    async def get_performance_report_baseline(
+        baseline_uuid: str,
+        repo: RegulatoryObjectRepository = Depends(get_repo),
+    ):
+        return _call_or_404(
+            lambda: PerformanceReportService(repo).get_baseline(baseline_uuid)
+        )
+
+    @router.post(
+        "/api/v1/performance-report-baselines/{baseline_uuid}/sections",
+        response_model=PerformanceReportGenerationResponse,
+        status_code=status.HTTP_201_CREATED,
+        responses={404: {"model": ErrorResponse}, 422: {"model": ErrorResponse}},
+    )
+    async def generate_performance_report_sections(
+        baseline_uuid: str,
+        body: PerformanceReportGenerationRequest,
+        repo: RegulatoryObjectRepository = Depends(get_repo),
+    ):
+        return _call_or_404(
+            lambda: PerformanceReportService(repo).generate_sections(
+                baseline_uuid,
+                body.generated_by_user_id,
+            )
         )
 
     return router
