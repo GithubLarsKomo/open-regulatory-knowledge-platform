@@ -210,5 +210,7 @@ class RiskReportService:
             ) from exc
         baseline = self.repo.get_baseline(baseline_uuid)
         if baseline is None:
-            raise ObjectNotFoundError(f"Baseline {UUID(bytes=baseline_uuid).hex} not found")
+            raise ObjectNotFoundError(
+                f"Baseline {UUID(bytes=baseline_uuid).hex} not found"
+            )
         return baseline
