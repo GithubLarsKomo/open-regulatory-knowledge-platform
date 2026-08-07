@@ -113,7 +113,9 @@ class RiskAIDraftContent(BaseModel):
             self.notes,
         )
         if not any(text_values) and not self.review_checklist:
-            raise ValueError("AI Risk draft must contain at least one support-text field")
+            raise ValueError(
+                "AI Risk draft must contain at least one support-text field"
+            )
         return self
 
 
