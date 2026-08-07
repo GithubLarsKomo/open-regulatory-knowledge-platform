@@ -16,7 +16,7 @@ Define analytical and clinical performance evidence management.
 ### Core Entities
 
 - Performance Study — a structured investigation of analytical or clinical performance, or scientific validity; persisted as `RegulatoryObject` with `object_type='study'`
-- Study Result — measured outcomes from a performance study
+- Performance Result — structured Evidence derived from an exact Performance Study version and linked to one or more exact Claim versions
 - Scientific Validity Statement — documented scientific validity
 - Evidence Link — connection to supporting evidence item
 
@@ -31,6 +31,28 @@ Define analytical and clinical performance evidence management.
 - `owner_user_id`: responsible user
 
 A new Performance Study must reference the exact current Product version. Persisted historical Study versions remain readable even when the Product is later versioned.
+
+### PerformanceResultPayload
+
+- persisted as Core `RegulatoryObject` with `object_type='evidence'`
+- `result_id`: stable result identifier
+- `study`: exact version-pinned Performance Study reference
+- `claims`: one or more exact version-pinned Claim references
+- `parameter`: measured performance parameter
+- `result_value`: structured textual value
+- optional `unit`, `statistical_method`, and `interpretation`
+- `quality_rating`: `high`, `medium`, or `low`
+- `owner_user_id`: responsible user
+- `evidence_type`: server-derived from the source Study category
+
+The canonical graph is:
+
+```
+Evidence(PerformanceResult) --derived_from(role=performance_result_source)--> Study
+Evidence(PerformanceResult) --supported_by--> Claim
+```
+
+The server derives `evidence_type` as `analytical_study`, `clinical_study`, or `scientific_validity` from the Study type. This keeps Performance Results compatible with the existing Claim Evidence Policy and avoids a parallel result/evidence model.
 
 ## Scope
 
@@ -68,19 +90,20 @@ The system shall identify performance claims lacking sufficient evidence.
 
 - A performance study can be registered as a strict `study` object for an exact current Product version.
 - Analytical performance, clinical performance and scientific validity are represented as distinct validated study types.
-- Results can be linked to claims.
+- Performance Results are persisted as strict Evidence objects derived from exact Study versions.
+- Performance Results support one or more exact Claim versions through canonical `supported_by` relations.
 - Evidence coverage can be calculated.
 - PER sections can be generated from approved evidence.
 
 ## Interfaces
 
 - Product Service — retrieves and validates exact Product context for studies
-- Claim Service — links performance results to claims
-- Evidence Service — stores and retrieves evidence for study support
+- Claim Service — consumes Performance Results through existing Evidence relations and approval assessment
+- Evidence Service — exposes Performance Results through the standard Evidence graph
 - Risk Service — provides risk-benefit data for PER
 - Report Service — generates PER sections from study data
 - AI Service — evidence summarization and gap analysis
-- REST API — creates Product-scoped Performance Studies and retrieves exact Study versions
+- REST API — creates Product-scoped Performance Studies, creates Study-scoped Performance Results, and retrieves exact versions
 
 ## Data Model
 
@@ -100,25 +123,31 @@ The system shall identify performance claims lacking sufficient evidence.
 | created_at | DATETIME | Object creation timestamp |
 | updated_at | DATETIME | Object update timestamp |
 
-### study_result
+### performance_result_evidence
 
 | Field | Type | Description |
 |---|---|---|
-| result_uuid | UUID | Stable identifier |
-| study_uuid | UUID | Linked study |
+| result_uuid | UUID | Evidence object UUID |
+| result_id | VARCHAR | Stable Performance Result identifier |
+| study | VersionedObjectReference | Exact source Study version |
+| claims | List[VersionedObjectReference] | Exact supported Claim versions |
 | parameter | VARCHAR | Measured parameter |
 | result_value | TEXT | Result value |
-| statistical_method | VARCHAR | Statistical method used |
-| source_data_ref | VARCHAR | Reference to source data |
+| unit | VARCHAR | Optional unit |
+| statistical_method | VARCHAR | Optional statistical method |
+| interpretation | TEXT | Optional interpretation |
+| quality_rating | VARCHAR | high/medium/low |
+| evidence_type | VARCHAR | Derived evidence classification |
 
-Study Result persistence and graph relations are introduced in the `REQ-PERF-0003`/`REQ-PERF-0004` slices rather than being folded into the Study core.
+Raw source-data / validated-report provenance for statistical outputs is added separately under `REQ-PERF-0004`.
 
 ## Workflow
 
 - Study creation: exact current Product → strict Performance Study draft
 - Study lifecycle: draft → in_review → approved → effective → superseded
 - Historical Study versions retain their exact Product reference
-- Results linked to claims before approval
+- Current Study + current Claim version(s) → Performance Result Evidence → version-pinned Study provenance + Claim support
+- Historical Performance Results remain readable after later Study/Claim versions
 - Evidence coverage analysis run before PER generation
 
 ## Security
