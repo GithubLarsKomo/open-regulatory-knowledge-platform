@@ -60,6 +60,7 @@ RiskImpactAssessment --derived_from(role=assessed_risk)--> RiskAnalysis
 - Risk Impact Assessment: separate reviewable object created for new post-market safety information; it records the human impact decision without mutating the source information
 - Risk Report Baseline: immutable Core Baseline anchored by at least one current approved/effective Risk Analysis and containing exact supporting object-version snapshots
 - Risk Report Manifest: deterministic canonical JSON generated only from the frozen Baseline snapshots; DOCX/PDF rendering remains in the separate Report Generation domain
+- Risk AI Draft Boundary: AI may propose non-decisional support text only; decision, estimation, verification and lifecycle fields are rejected by the Risk-domain contract before future AI integration can hand content to Risk workflows
 
 ## Terminology
 
@@ -77,6 +78,7 @@ RiskImpactAssessment --derived_from(role=assessed_risk)--> RiskAnalysis
 - Risk Impact Assessment: explicit human determination of whether new information changes or requires review of the risk record
 - Risk Review Finding: machine-readable review result with a stable rule code, stable severity, message and blocking disposition
 - Risk Report Baseline: frozen collection of exact object versions used as the sole source for reproducible Risk report generation
+- Risk AI Draft: AI-proposed rationale/support text that cannot contain Risk decision fields
 
 ## Domain Model
 
@@ -136,6 +138,13 @@ RiskImpactAssessment --derived_from(role=assessed_risk)--> RiskAnalysis
 - generation reads `Baseline` and `BaselineItem` only; current RegulatoryObject/ObjectVersion payloads are not consulted after freeze
 - canonical JSON uses deterministic key/item ordering and produces SHA-256 recorded in `GeneratedArtifact`
 - repeated generation from the same baseline yields the same canonical JSON and checksum even when source-object lifecycle or mutable supporting versions later change
+
+### RiskAIDraftContent
+- permits only non-decisional support text (`rationale`, `assumptions`, `uncertainty`, `benefits`, `residual_risks`, `considerations`, `notes`, `review_checklist`)
+- rejects explicit acceptability and Benefit-Risk conclusions
+- rejects Severity/Probability/Risk-level fields so AI cannot indirectly determine policy-derived acceptability
+- rejects Control Verification decisions and lifecycle/approval fields
+- is an architectural content boundary for future AI integration; trusted identity/role enforcement remains in the Security/RBAC domain
 
 ## Requirements
 
@@ -223,11 +232,12 @@ AI may draft risk rationales but shall never decide acceptability.
 - Post-Market Risk Service — records safety information and creates mandatory Risk Impact Assessment drafts
 - Risk Control Requirement Service — links Risk Controls to exact Requirement versions where applicable
 - Risk Report Service — freezes exact object versions and generates deterministic baseline-only report manifests with checksums
+- AI Service — may submit Risk support text only through the `risk_ai_policy` contract; it has no Risk acceptability or approval interface
 - Report Service — renders report manifests into document formats in the separate Report Generation domain
 
 ## Data Model
 
-See `src/orkp/domain/risk_models.py` for strict Pydantic payload models, `src/orkp/domain/overall_residual_risk_models.py` for the product-level Overall Residual Risk aggregate, `src/orkp/domain/post_market_models.py` for post-market safety information and Risk Impact Assessment models, `src/orkp/domain/risk_findings.py` for the canonical Risk review rule/severity catalog, and `src/orkp/domain/risk_report_models.py` for reproducible Risk report baseline/manifest contracts.
+See `src/orkp/domain/risk_models.py` for strict Pydantic payload models, `src/orkp/domain/overall_residual_risk_models.py` for the product-level Overall Residual Risk aggregate, `src/orkp/domain/post_market_models.py` for post-market safety information and Risk Impact Assessment models, `src/orkp/domain/risk_findings.py` for the canonical Risk review rule/severity catalog, `src/orkp/domain/risk_report_models.py` for reproducible Risk report baseline/manifest contracts, and `src/orkp/domain/risk_ai_policy.py` for the AI draft-only Risk content boundary.
 
 ## Workflow
 
@@ -236,6 +246,7 @@ Initial risk → controls → residual risk → evaluation → benefit-risk if n
 Risk Control → optional exact Requirement traceability link
 New post-market safety information → exact Risk link → automatic pending Risk Impact Assessment → human impact decision → independent review/approval
 Approved/effective Risk Analysis + exact supporting object versions → freeze Risk Report Baseline → canonical baseline-only JSON manifest → SHA-256 + GeneratedArtifact → downstream document rendering
+AI-generated Risk support text → Risk AI draft policy validation → draft-only content → existing human Risk workflow
 
 ## Security
 
@@ -244,11 +255,14 @@ Approved/effective Risk Analysis + exact supporting object versions → freeze R
 - Control Owner must not be sole verification approver
 - Risk Impact assessor must not approve their own impact assessment
 - Generic lifecycle endpoints must not bypass domain-specific Risk Impact Assessment review gates
+- AI Risk draft content cannot set acceptability, risk-estimation, verification or lifecycle/approval decision fields; authentication and trusted actor identity remain a Security/RBAC responsibility
 
 ## AI Support
 
-- AI may draft risk justifications (draft only)
-- AI shall never decide risk acceptability
+- AI may draft risk justifications and supporting rationale text only
+- AI Risk draft content is validated by `risk_ai_policy.py` before future AI integration can hand it to Risk workflows
+- AI shall never decide risk acceptability, Benefit-Risk conclusion, Risk estimates, Control Verification disposition or lifecycle/approval state
+- Initial and Residual Risk `acceptable` values remain server-derived from approved Risk Policy rules rather than client-settable fields
 - New safety information shall not be automatically classified as `no_change`; that disposition requires a human assessor
 - Risk report reproducibility is derived from frozen baseline snapshots and deterministic rendering, not from AI-generated state
 
@@ -267,6 +281,7 @@ Approved/effective Risk Analysis + exact supporting object versions → freeze R
 - A Risk Impact Assessment requires a human impact decision and independent approval.
 - Risk Report Baselines require approved/effective Risk Analysis roots and freeze exact supporting object versions.
 - Re-generating a Risk report from the same baseline produces identical canonical JSON and SHA-256 independent of later source changes.
+- AI Risk drafts can contain supporting rationale text but are rejected when they contain acceptability, estimation, verification or approval decision fields.
 
 ## Open Questions
 
