@@ -30,7 +30,9 @@ class PerformanceStudyService:
             "product",
         )
         if product.object.uuid_hex != request.product.object_uuid:
-            raise InvalidRelationError("Path Product UUID does not match request reference")
+            raise InvalidRelationError(
+                "Path Product UUID does not match request reference"
+            )
         if product.object.current_version != request.product.object_version:
             raise InvalidRelationError(
                 "Performance Study must reference the current Product version"
