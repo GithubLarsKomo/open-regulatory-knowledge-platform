@@ -69,7 +69,9 @@ def _baseline_request(product, result_uuid: str, version: int):
 
 def test_per_baseline_rejects_forged_result_payload_without_graph(repo):
     product, _, study, request = _context(repo)
-    legitimate = PerformanceResultService(repo).create_result(study.object_uuid, request)
+    legitimate = PerformanceResultService(repo).create_result(
+        study.object_uuid, request
+    )
     payload = legitimate.payload.model_dump()
 
     forged, _ = repo.create_object("evidence", payload, "result-owner", "result-owner")
@@ -83,9 +85,13 @@ def test_per_baseline_rejects_forged_result_payload_without_graph(repo):
 
 def test_per_baseline_rejects_new_result_version_with_only_old_relations(repo):
     product, _, study, request = _context(repo)
-    legitimate = PerformanceResultService(repo).create_result(study.object_uuid, request)
+    legitimate = PerformanceResultService(repo).create_result(
+        study.object_uuid, request
+    )
     result = repo.get_by_uuid_hex(legitimate.object_uuid)
-    repo.create_version(result.object_uuid, legitimate.payload.model_dump(), "result-owner")
+    repo.create_version(
+        result.object_uuid, legitimate.payload.model_dump(), "result-owner"
+    )
     _approve(repo, result)
 
     with pytest.raises(BaselineValidationError, match="Result to Study provenance"):
