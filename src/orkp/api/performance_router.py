@@ -103,7 +103,9 @@ def create_performance_router(
         body: PerformanceReportBaselineCreateRequest,
         repo: RegulatoryObjectRepository = Depends(get_repo),
     ):
-        return _call_or_404(lambda: PerformanceReportService(repo).create_baseline(body))
+        return _call_or_404(
+            lambda: PerformanceReportService(repo).create_baseline(body)
+        )
 
     @router.get(
         "/api/v1/performance-report-baselines/{baseline_uuid}",
