@@ -65,9 +65,7 @@ def test_api_creates_and_reads_exact_performance_study(client):
         "object_version": 1,
     }
 
-    loaded = client.get(
-        f"/api/v1/performance-studies/{body['object_uuid']}/versions/1"
-    )
+    loaded = client.get(f"/api/v1/performance-studies/{body['object_uuid']}/versions/1")
     assert loaded.status_code == 200
     assert loaded.json() == body
 
