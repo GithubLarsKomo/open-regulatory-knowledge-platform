@@ -7,6 +7,8 @@ from fastapi import APIRouter, Depends, status
 from orkp.api.routers import _call_or_404
 from orkp.api.schemas import ErrorResponse
 from orkp.db.repository import RegulatoryObjectRepository
+from orkp.domain.performance_gap_models import PerformanceClaimGapReport
+from orkp.domain.performance_gap_service import PerformanceClaimGapService
 from orkp.domain.performance_models import (
     PerformanceStudyCreateRequest,
     PerformanceStudyResponse,
@@ -44,6 +46,19 @@ def create_performance_router(
     ):
         return _call_or_404(
             lambda: PerformanceStudyService(repo).create_study(product_uuid, body)
+        )
+
+    @router.get(
+        "/api/v1/products/{product_uuid}/performance-evidence-gaps",
+        response_model=PerformanceClaimGapReport,
+        responses={404: {"model": ErrorResponse}, 422: {"model": ErrorResponse}},
+    )
+    async def get_performance_evidence_gaps(
+        product_uuid: str,
+        repo: RegulatoryObjectRepository = Depends(get_repo),
+    ):
+        return _call_or_404(
+            lambda: PerformanceClaimGapService(repo).evaluate_product(product_uuid)
         )
 
     @router.get(
