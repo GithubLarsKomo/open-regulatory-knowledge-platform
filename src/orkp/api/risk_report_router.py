@@ -46,9 +46,7 @@ def create_risk_report_router(
         baseline_uuid: str,
         repo: RegulatoryObjectRepository = Depends(get_repo),
     ):
-        return _call_or_404(
-            lambda: RiskReportService(repo).get_baseline(baseline_uuid)
-        )
+        return _call_or_404(lambda: RiskReportService(repo).get_baseline(baseline_uuid))
 
     @router.post(
         "/{baseline_uuid}/reports",
