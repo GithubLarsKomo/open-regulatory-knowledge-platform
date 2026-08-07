@@ -100,6 +100,7 @@ RELATION_SCHEMA: Dict[str, RelationRule] = {
             {
                 "claim",
                 "control_verification",
+                "evidence",
                 "residual_risk_evaluation",
                 "risk_impact_assessment",
             }
