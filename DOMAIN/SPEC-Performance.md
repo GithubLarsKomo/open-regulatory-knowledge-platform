@@ -41,6 +41,7 @@ A new Performance Study must reference the exact current Product version. Persis
 - `parameter`: measured performance parameter
 - `result_value`: structured textual value
 - optional `unit`, `statistical_method`, and `interpretation`
+- `statistical_sources`: exact source Evidence references used when a statistical method is present
 - `quality_rating`: `high`, `medium`, or `low`
 - `owner_user_id`: responsible user
 - `evidence_type`: server-derived from the source Study category
@@ -50,9 +51,22 @@ The canonical graph is:
 ```
 Evidence(PerformanceResult) --derived_from(role=performance_result_source)--> Study
 Evidence(PerformanceResult) --supported_by--> Claim
+Evidence(PerformanceResult) --derived_from(role=statistical_source_data)--> Evidence(internal_document)
+Evidence(PerformanceResult) --derived_from(role=validated_study_report)--> Evidence(internal_report|external_report)
 ```
 
 The server derives `evidence_type` as `analytical_study`, `clinical_study`, or `scientific_validity` from the Study type. This keeps Performance Results compatible with the existing Claim Evidence Policy and avoids a parallel result/evidence model.
+
+### PerformanceStatisticalSource
+
+- `source_kind`: `source_data` or `validated_report`
+- `evidence`: exact version-pinned Evidence reference
+- `source_data` must reference current `internal_document` Evidence
+- `validated_report` must reference current `internal_report` or `external_report` Evidence whose object lifecycle is `approved` or `effective` and whose exact ObjectVersion is approved
+- duplicate exact Evidence references are not permitted
+- a Performance Result with `statistical_method` requires at least one statistical source
+
+Statistical provenance is captured both in the strict Performance Result payload and in exact version-pinned `derived_from` relations. Later source Evidence versions do not rewrite the historical Result provenance.
 
 ## Scope
 
@@ -92,6 +106,8 @@ The system shall identify performance claims lacking sufficient evidence.
 - Analytical performance, clinical performance and scientific validity are represented as distinct validated study types.
 - Performance Results are persisted as strict Evidence objects derived from exact Study versions.
 - Performance Results support one or more exact Claim versions through canonical `supported_by` relations.
+- Statistical Performance Results require exact current source-data or validated-report Evidence provenance.
+- Validated report provenance requires approved/effective report Evidence and an approved exact Evidence version.
 - Evidence coverage can be calculated.
 - PER sections can be generated from approved evidence.
 
@@ -99,7 +115,7 @@ The system shall identify performance claims lacking sufficient evidence.
 
 - Product Service — retrieves and validates exact Product context for studies
 - Claim Service — consumes Performance Results through existing Evidence relations and approval assessment
-- Evidence Service — exposes Performance Results through the standard Evidence graph
+- Evidence Service — exposes Performance Results and statistical source provenance through the standard Evidence graph
 - Risk Service — provides risk-benefit data for PER
 - Report Service — generates PER sections from study data
 - AI Service — evidence summarization and gap analysis
@@ -135,11 +151,10 @@ The system shall identify performance claims lacking sufficient evidence.
 | result_value | TEXT | Result value |
 | unit | VARCHAR | Optional unit |
 | statistical_method | VARCHAR | Optional statistical method |
+| statistical_sources | List[PerformanceStatisticalSource] | Exact statistical provenance; required when statistical_method is set |
 | interpretation | TEXT | Optional interpretation |
 | quality_rating | VARCHAR | high/medium/low |
 | evidence_type | VARCHAR | Derived evidence classification |
-
-Raw source-data / validated-report provenance for statistical outputs is added separately under `REQ-PERF-0004`.
 
 ## Workflow
 
@@ -147,7 +162,8 @@ Raw source-data / validated-report provenance for statistical outputs is added s
 - Study lifecycle: draft → in_review → approved → effective → superseded
 - Historical Study versions retain their exact Product reference
 - Current Study + current Claim version(s) → Performance Result Evidence → version-pinned Study provenance + Claim support
-- Historical Performance Results remain readable after later Study/Claim versions
+- Statistical method → mandatory exact source-data or validated-report Evidence provenance
+- Historical Performance Results retain their original source Evidence versions even after those sources are versioned later
 - Evidence coverage analysis run before PER generation
 
 ## Security
@@ -155,6 +171,7 @@ Raw source-data / validated-report provenance for statistical outputs is added s
 - Study creation requires Regulatory Author or R&D Contributor role
 - Study approval requires Clinical Evidence Reviewer role
 - Results visible per product-level permissions
+- Validated-report provenance can only reference approved/effective report Evidence
 
 ## AI Support
 
