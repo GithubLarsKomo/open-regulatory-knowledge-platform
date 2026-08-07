@@ -101,9 +101,7 @@ def test_initial_and_residual_requests_cannot_set_acceptable_directly():
             risk_analysis_version=1,
             initial_evaluation_uuid=uuid4().hex,
             initial_evaluation_version=1,
-            control_verifications=[
-                {"object_uuid": uuid4().hex, "object_version": 1}
-            ],
+            control_verifications=[{"object_uuid": uuid4().hex, "object_version": 1}],
             residual_severity="moderate",
             residual_probability="possible",
             evaluator_user_id="human-evaluator",
