@@ -23,6 +23,8 @@ Define AI functionality for the platform.
 - Generate review checklists
 - Support impact analysis
 
+Risk-specific AI drafting shall use the Risk-domain contract in `src/orkp/domain/risk_ai_policy.py`. That contract permits only non-decisional support text such as rationale, assumptions, uncertainty, benefits, residual-risk narrative, considerations, notes and review-checklist text. It rejects acceptability, Benefit-Risk conclusions, risk-estimation fields, control-verification decisions and lifecycle/approval fields.
+
 ## Requirements
 
 ### AI-CORE-0001
@@ -72,6 +74,7 @@ The AI engine shall support hybrid retrieval using keyword search, vector search
 - Knowledge Graph — relationship context
 - Vector Index — semantic search
 - Report Engine — AI-assisted report section generation
+- Risk Domain — validates Risk AI draft content against the non-decision contract before any future AI integration can hand content to Risk workflows
 
 ## Data Model
 
@@ -90,6 +93,7 @@ The AI engine shall support hybrid retrieval using keyword search, vector search
 
 - AI drafting: user prompt → retrieval → generation → draft stored → human review → accept/reject
 - AI-generated drafts require human approval before becoming approved regulatory content (WF-APP-0006)
+- Risk AI drafting: generated support text → `risk_ai_policy` validation → draft-only content → human Risk workflow
 - Prompts and drafts are retained for auditability
 
 ## Security
@@ -98,6 +102,8 @@ The AI engine shall support hybrid retrieval using keyword search, vector search
 - AI cannot bypass approval workflows
 - AI cannot modify approved content
 - AI audit trail is read-only
+- AI must not set Risk acceptability, Benefit-Risk conclusions, Risk estimation, verification decisions or lifecycle/approval state; `risk_ai_policy.py` rejects those fields before Risk-domain use (REQ-RISK-0025)
+- Trusted identity and role enforcement remain the responsibility of the RBAC/authentication layer; the Risk AI policy is a domain-content boundary, not an authentication substitute
 
 ## Acceptance Criteria
 
@@ -105,6 +111,7 @@ The AI engine shall support hybrid retrieval using keyword search, vector search
 - AI confidence is displayed alongside generated text.
 - A human can accept or reject AI-generated draft.
 - Prompts and drafts are stored in the audit log.
+- Risk-specific AI output is limited to non-decisional draft text and cannot contain Risk decision fields.
 
 ## Open Questions
 
