@@ -100,8 +100,12 @@ def test_result_persists_exact_study_and_multi_claim_relations(repo):
     stored = repo.get_by_uuid_hex(result.object_uuid)
     relations = repo.list_active_relations_for_source(stored.object_uuid)
 
-    derived = [relation for relation in relations if relation.relation_type == "derived_from"]
-    supported = [relation for relation in relations if relation.relation_type == "supported_by"]
+    derived = [
+        relation for relation in relations if relation.relation_type == "derived_from"
+    ]
+    supported = [
+        relation for relation in relations if relation.relation_type == "supported_by"
+    ]
 
     assert len(derived) == 1
     assert derived[0].source_version == 1
