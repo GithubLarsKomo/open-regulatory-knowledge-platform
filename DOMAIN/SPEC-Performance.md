@@ -18,6 +18,7 @@ Define analytical and clinical performance evidence management.
 - Performance Study — a structured investigation of analytical or clinical performance, or scientific validity; persisted as `RegulatoryObject` with `object_type='study'`
 - Performance Result — structured Evidence derived from an exact Performance Study version and linked to one or more exact Claim versions
 - Performance Evaluation Baseline — frozen Product, Performance Result and exact provenance snapshots used to generate reproducible PER sections
+- Performance Claim Gap Report — deterministic Product-level assessment of current clinical, analytical and performance Claims against exact current-version Evidence relations and the existing Evidence Policy
 - Scientific Validity Statement — documented scientific validity
 - Evidence Link — connection to supporting evidence item
 
@@ -85,6 +86,23 @@ Canonical deterministic JSON groups Performance Results into:
 
 Each section item contains the exact frozen Performance Result, Study, Claim and statistical-source snapshots. Canonical JSON is SHA-256 hashed and persisted as a `GeneratedArtifact` with `artifact_type='performance_evaluation_sections'` plus an `artifact_generated` audit event. PDF/DOCX rendering is deferred to the Report Generation capability.
 
+### Performance Claim Evidence Gaps
+
+The Product-scoped gap report assesses only current Claims with `claim_type` equal to `clinical`, `analytical`, or `performance`. Other Claim types are excluded.
+
+The gap service reuses Evidence facts from `ClaimService.get_approval_assessment()` and the existing `EvidencePolicy`, but does not treat workflow-only blockers such as `Claim is not in_review` as Evidence insufficiency. Evidence relations are additionally filtered to the exact current Claim version so stale `supported_by` or `contradicted_by` links do not count as current Evidence.
+
+Stable machine-readable gap codes are:
+
+- `PERF-EVID-MISSING-001` — no exact active supporting Evidence for the current Claim version
+- `PERF-EVID-UNAPPROVED-001` — supporting Evidence is unresolved, not approved, obsolete or deleted
+- `PERF-EVID-QUALITY-001` — approved Evidence quality is below the existing policy threshold
+- `PERF-EVID-TYPE-001` — no approved supporting Evidence has a type allowed by the existing Evidence Policy for the Claim type
+- `PERF-EVID-CONTRADICTION-001` — exact active contradictory Evidence exists for the current Claim version
+- `PERF-CLAIM-LINK-STALE-001` — active Product-to-Claim traceability is not pinned to both the current Product and current Claim versions
+
+A Claim is `sufficient=true` only when no gap findings remain. Product-level counts report total Performance Claims, sufficient Claims and Claims with gaps in deterministic Claim-UUID order. Already-approved Claims remain evidence-sufficient when their Evidence satisfies policy; their lifecycle state alone is not an Evidence gap.
+
 ## Scope
 
 The domain covers:
@@ -96,6 +114,7 @@ The domain covers:
 - Literature evidence
 - Statistical outputs
 - PER generation
+- Performance Claim evidence-gap analysis
 
 ## Requirements
 
@@ -128,19 +147,21 @@ The system shall identify performance claims lacking sufficient evidence.
 - A PER baseline freezes an approved/effective Product, approved/effective Performance Results, current approved Claims and exact Study/statistical-source provenance.
 - PER section generation is deterministic and reads only frozen baseline snapshots.
 - Repeated generation from the same baseline produces identical canonical JSON and checksum.
-- Evidence coverage can be calculated.
+- Product Performance Claims can be evaluated for Evidence gaps using stable rule codes and exact current-version relations.
+- Claim Evidence gap analysis reuses the existing Evidence Policy and does not confuse workflow state with Evidence sufficiency.
 - PER sections can be generated from approved evidence.
 
 ## Interfaces
 
 - Product Service — retrieves and validates exact Product context for studies and PER baselines
-- Claim Service — consumes Performance Results through existing Evidence relations and approval assessment
+- Claim Service — provides current Claim Evidence facts and approval-assessment context reused by Performance gap analysis
 - Evidence Service — exposes Performance Results and statistical source provenance through the standard Evidence graph
 - Risk Service — provides risk-benefit data for PER
+- Performance Claim Gap Service — aggregates current Product Performance Claims and stable Evidence-gap findings
 - Performance Report Service — freezes exact Performance context and generates reproducible PER section manifests
 - Report Service — renders approved/frozen manifests into final document formats
-- AI Service — evidence summarization and gap analysis
-- REST API — creates Product-scoped Performance Studies, Study-scoped Performance Results and Performance Report baselines; retrieves exact versions and generates deterministic PER sections
+- AI Service — evidence summarization and explanation of deterministic gap findings
+- REST API — creates Product-scoped Performance Studies, Study-scoped Performance Results and Performance Report baselines; retrieves exact versions, exposes Product Performance Evidence gaps and generates deterministic PER sections
 
 ## Data Model
 
@@ -187,6 +208,17 @@ The system shall identify performance claims lacking sufficient evidence.
 | transitive_items | BaselineItem[] | Exact Study, Claim and statistical-source snapshots derived from selected Results |
 | checksum | SHA-256 | Deterministic checksum of generated canonical PER section JSON |
 
+### performance_claim_gap_report
+
+| Field | Type | Description |
+|---|---|---|
+| product | VersionedObjectReference | Current Product context |
+| performance_claim_count | INTEGER | Current clinical/analytical/performance Claims considered |
+| sufficient_claim_count | INTEGER | Claims without deterministic Evidence gaps |
+| gap_claim_count | INTEGER | Claims with one or more gap findings |
+| complete | BOOLEAN | True when all considered Claims are Evidence-sufficient |
+| claims | List[PerformanceClaimGapItem] | Current Claim references, Evidence counts, sufficiency and stable findings |
+
 ## Workflow
 
 - Study creation: exact current Product → strict Performance Study draft
@@ -195,9 +227,10 @@ The system shall identify performance claims lacking sufficient evidence.
 - Current Study + current Claim version(s) → Performance Result Evidence → version-pinned Study provenance + Claim support
 - Statistical method → mandatory exact source-data or validated-report Evidence provenance
 - Historical Performance Results retain their original source Evidence versions even after those sources are versioned later
+- Current Product → current clinical/analytical/performance Claims → exact Evidence relations + existing Evidence Policy → deterministic Performance Claim gap report
 - Approved/effective Product + approved/effective Performance Results + current approved Claims → frozen Performance Evaluation baseline
 - Frozen baseline snapshots → deterministic scientific-validity / analytical-performance / clinical-performance section JSON → checksum + GeneratedArtifact
-- Evidence coverage analysis run before PER generation
+- Evidence-gap review should precede final PER baseline selection and document rendering
 
 ## Security
 
@@ -206,13 +239,14 @@ The system shall identify performance claims lacking sufficient evidence.
 - Results visible per product-level permissions
 - Validated-report provenance can only reference approved/effective report Evidence
 - PER baseline generation accepts only approved/effective Product, Performance Result and Claim decision context
+- Performance gap analysis is read-only and cannot alter Claim or Evidence lifecycle decisions
 
 ## AI Support
 
 - AI may summarize study results (draft only)
-- AI may identify claims lacking sufficient evidence (REQ-PERF-0006)
+- AI may explain deterministic Performance Claim gap findings and propose remediation drafts
 - AI may propose evidence coverage reports
-- AI shall not approve study results, claim sufficiency or conclusions
+- AI shall not alter deterministic gap codes, decide claim sufficiency, approve study results, approve Claims or approve conclusions
 
 ## Open Questions
 
