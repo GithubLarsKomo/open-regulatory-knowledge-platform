@@ -17,6 +17,13 @@ from orkp.domain.performance_result_models import (
 from orkp.domain.versioned_loader import load_versioned_object
 
 
+_SOURCE_ROLE = {
+    "source_data": "statistical_source_data",
+    "validated_report": "validated_study_report",
+}
+_VALIDATED_REPORT_TYPES = {"internal_report", "external_report"}
+
+
 class PerformanceResultService:
     """Create and read version-pinned Performance Result evidence."""
 
@@ -63,6 +70,40 @@ class PerformanceResultService:
                 )
             claims.append(claim)
 
+        statistical_sources = []
+        for source_reference in request.statistical_sources:
+            source = load_versioned_object(
+                self.repo,
+                source_reference.evidence.object_uuid,
+                source_reference.evidence.object_version,
+                "evidence",
+            )
+            if source.object.current_version != source_reference.evidence.object_version:
+                raise InvalidRelationError(
+                    "Performance Result must reference current statistical source versions"
+                )
+
+            evidence_type = (source.payload or {}).get("evidence_type")
+            if source_reference.source_kind == "source_data":
+                if evidence_type != "internal_document":
+                    raise InvalidRelationError(
+                        "source_data must reference internal_document Evidence"
+                    )
+            else:
+                if evidence_type not in _VALIDATED_REPORT_TYPES:
+                    raise InvalidRelationError(
+                        "validated_report must reference internal_report or external_report Evidence"
+                    )
+                if source.object.lifecycle_state not in {"approved", "effective"}:
+                    raise InvalidRelationError(
+                        "validated_report Evidence must be approved or effective"
+                    )
+                if source.version.status != "approved":
+                    raise InvalidRelationError(
+                        "validated_report must reference an approved Evidence version"
+                    )
+            statistical_sources.append((source_reference, source))
+
         payload = PerformanceResultPayload(
             **request.model_dump(),
             evidence_type=PERFORMANCE_EVIDENCE_TYPES[study_payload.study_type],
@@ -85,6 +126,16 @@ class PerformanceResultService:
                 created_by=request.owner_user_id,
                 properties={"role": "performance_result_source"},
             )
+            for source_reference, source in statistical_sources:
+                self.repo.create_relation(
+                    source_uuid=result.object_uuid,
+                    source_version=version,
+                    target_uuid=source.object.object_uuid,
+                    target_version=source.version.version_no,
+                    relation_type="derived_from",
+                    created_by=request.owner_user_id,
+                    properties={"role": _SOURCE_ROLE[source_reference.source_kind]},
+                )
             for claim in claims:
                 self.repo.create_relation(
                     source_uuid=result.object_uuid,
