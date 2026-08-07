@@ -177,9 +177,10 @@ def test_report_checksum_matches_canonical_bytes_and_artifacts_link_to_baseline(
 
     result = service.generate_report(baseline.baseline_uuid, "report-generator")
 
-    assert result.checksum_sha256 == hashlib.sha256(
-        result.canonical_json.encode("utf-8")
-    ).hexdigest()
+    assert (
+        result.checksum_sha256
+        == hashlib.sha256(result.canonical_json.encode("utf-8")).hexdigest()
+    )
     assert [item.object_type for item in result.report.items] == [
         "hazard",
         "risk_analysis",
