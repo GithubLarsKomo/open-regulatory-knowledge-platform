@@ -249,7 +249,9 @@ class PerformanceReportService:
                 "PER baseline must reference the current Product version"
             )
         if product.version.status != "approved":
-            raise BaselineValidationError("PER baseline Product version is not approved")
+            raise BaselineValidationError(
+                "PER baseline Product version is not approved"
+            )
         self._add_object_version(
             object_versions,
             product.object.object_uuid,
@@ -294,7 +296,9 @@ class PerformanceReportService:
             self._add_claim_context(object_versions, payload)
             self._add_statistical_source_context(object_versions, payload)
 
-        return sorted(object_versions.items(), key=lambda item: (item[0].hex(), item[1]))
+        return sorted(
+            object_versions.items(), key=lambda item: (item[0].hex(), item[1])
+        )
 
     def _add_study_context(
         self,
