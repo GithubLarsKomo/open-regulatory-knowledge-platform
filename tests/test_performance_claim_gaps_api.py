@@ -20,13 +20,17 @@ def api_context():
     )
     Base.metadata.create_all(engine)
     session_factory = sessionmaker(bind=engine)
-    return TestClient(create_app(session_factory_override=session_factory)), session_factory
+    return TestClient(
+        create_app(session_factory_override=session_factory)
+    ), session_factory
 
 
 def _prepared_product(session_factory):
     with session_factory() as session:
         repo = RegulatoryObjectRepository(session)
-        product, _ = repo.create_object("product", {"id": "P-GAP-API"}, "owner", "owner")
+        product, _ = repo.create_object(
+            "product", {"id": "P-GAP-API"}, "owner", "owner"
+        )
         claim, _ = repo.create_object(
             "claim",
             {
@@ -68,7 +72,10 @@ def test_api_returns_product_performance_evidence_gaps(api_context):
     assert body["performance_claim_count"] == 1
     assert body["gap_claim_count"] == 1
     assert body["complete"] is False
-    assert body["claims"][0]["findings"][0]["rule_code"] == "PERF-EVID-MISSING-001"
+    assert (
+        body["claims"][0]["findings"][0]["rule_code"]
+        == "PERF-EVID-MISSING-001"
+    )
 
 
 def test_api_returns_404_for_missing_product(api_context):
