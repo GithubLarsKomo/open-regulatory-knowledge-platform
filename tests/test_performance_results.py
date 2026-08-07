@@ -59,7 +59,6 @@ def _request(study, *claims):
         parameter="sensitivity",
         result_value="98.7",
         unit="%",
-        statistical_method="Wilson 95% CI",
         interpretation="Meets predefined acceptance criterion",
         quality_rating="high",
         owner_user_id="result-owner",
