@@ -72,7 +72,10 @@ def _has_relation(
     for relation in relations:
         if relation.relation_type != relation_type:
             continue
-        if relation.target_uuid != target_uuid or relation.target_version != target_version:
+        if (
+            relation.target_uuid != target_uuid
+            or relation.target_version != target_version
+        ):
             continue
         if role is not None and (relation.properties or {}).get("role") != role:
             continue
