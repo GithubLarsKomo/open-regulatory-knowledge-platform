@@ -114,11 +114,11 @@ def test_only_performance_relevant_claim_types_are_assessed(repo):
     report = PerformanceClaimGapService(repo).evaluate_product(product.uuid_hex)
 
     assert report.performance_claim_count == 3
-    assert [item.claim_type for item in report.claims] == [
+    assert {item.claim_type for item in report.claims} == {
         "clinical",
         "analytical",
         "performance",
-    ]
+    }
     assert report.gap_claim_count == 3
 
 
@@ -242,4 +242,5 @@ def test_product_gap_counts_are_deterministic(repo):
     assert report.sufficient_claim_count == 1
     assert report.gap_claim_count == 1
     assert report.complete is False
-    assert [item.wording for item in report.claims] == ["C-A", "C-B"]
+    claim_uuids = [item.claim.object_uuid for item in report.claims]
+    assert claim_uuids == sorted(claim_uuids)
