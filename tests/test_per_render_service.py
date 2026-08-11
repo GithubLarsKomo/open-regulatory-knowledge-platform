@@ -8,7 +8,7 @@ import pytest
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 
-from orkp.db.models import Base, GeneratedArtifact
+from orkp.db.models import Base, EventLog, GeneratedArtifact
 from orkp.db.repository import RegulatoryObjectRepository
 from orkp.domain.exceptions import BaselineValidationError
 from orkp.domain.per_content_models import PERReportBaselineCreateRequest
@@ -168,6 +168,17 @@ def test_render_formats_are_valid_and_persist_single_artifact(
     assert artifacts[0].artifact_type == "per_report"
     assert artifacts[0].format == render_format
     assert artifacts[0].checksum == rendered.checksum_sha256
+    events = list(
+        repo.session.execute(
+            select(EventLog).where(EventLog.event_type == "artifact_generated")
+        )
+        .scalars()
+        .all()
+    )
+    assert len(events) == 1
+    assert events[0].event_data["artifact_uuid"] == rendered.artifact_uuid
+    assert events[0].event_data["format"] == render_format
+    assert events[0].event_data["checksum"] == rendered.checksum_sha256
 
     if render_format == "html":
         text = rendered.content.decode("utf-8")
