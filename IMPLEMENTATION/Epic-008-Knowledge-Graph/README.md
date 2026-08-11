@@ -92,18 +92,54 @@ REST:
 
 Depth is bounded to 1..10.
 
+## Slice 3 — Deterministic Graph Synchronization Contract
+
+Issue: #29
+
+Before a concrete Neo4j driver is introduced, the platform defines the exact payload and acknowledgement contract an infrastructure adapter must obey.
+
+`GraphSyncService.build_batch()` reuses `GraphProjectionService.traceability()` and wraps the resulting exact-version graph in `GraphSyncBatch`.
+
+The batch contract is:
+
+- schema `graph-sync-batch-1.0`
+- `source_authority = "object_store"`
+- `approval_authority = "object_store"`
+- `read_only = true`
+- `sync_mode = "replace_exact_scope"`
+- one exact traceability root + depth
+- deterministic canonical JSON
+- SHA-256 over that canonical payload
+
+`GraphSyncAdapter` is an infrastructure-neutral Protocol. A later Neo4j implementation receives the immutable batch and returns `GraphSyncResult`.
+
+`GraphSyncService.sync_scope()` rejects an adapter acknowledgement unless all of these exactly match the submitted batch:
+
+- batch checksum
+- root UUID/version
+- depth
+- node count
+- edge count
+
+This prevents a graph adapter from silently reporting success for a different or partial regulatory graph scope.
+
+No Object Store object, version, relation, lifecycle state or approval record is modified by synchronization.
+
 ## Governance
 
-All graph endpoints are read-only. They do not create versions, relations, lifecycle transitions, approvals or graph-owned approval state.
+All graph query and synchronization contracts preserve the Object Store and Event Store as regulatory authority. Graph infrastructure is a derived read model and does not create approval authority.
 
-Every graph response explicitly declares:
+Every graph query response explicitly declares:
 
 - `approval_authority = "object_store"`
 - `read_only = true`
 
+The sync batch repeats the same authority boundary.
+
 ## Deferred slices
 
-- Neo4j schema/constraints and synchronization adapter
-- event-driven/incremental synchronization
+- concrete Neo4j driver/configuration
+- Neo4j constraints/index creation
+- event-driven/incremental synchronization and retry/outbox semantics
 - RBAC graph filtering, which depends on Epic 010
 - optional future relation-type-specific impact classification/weights; not required by current `GRAPH-CORE` requirements
