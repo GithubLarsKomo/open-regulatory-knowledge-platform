@@ -2,6 +2,7 @@
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from orkp.domain.per_content_models import PERContentBlock
 from orkp.domain.performance_report_models import (
     PerformanceReportPayload,
     PerformanceReportSnapshot,
@@ -26,12 +27,13 @@ class PERDraftPayload(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    schema_version: str = "per-draft-1.0"
+    schema_version: str = "per-draft-1.1"
     baseline_uuid: str
     baseline_name: str
     baseline_description: str | None = None
     product: PerformanceReportSnapshot
     performance_sections: PerformanceReportPayload
+    content_blocks: list[PERContentBlock]
     traceability_appendix: list[PERTraceabilityEntry]
 
 
