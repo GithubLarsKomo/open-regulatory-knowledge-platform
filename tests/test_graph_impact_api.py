@@ -34,7 +34,10 @@ def _impact_context(session_factory):
             "risk_analysis", {"risk_id": "RISK-IMPACT-API"}, "risk-owner", "risk-owner"
         )
         control, _ = repo.create_object(
-            "risk_control", {"control_id": "CTRL-IMPACT-API"}, "risk-owner", "risk-owner"
+            "risk_control",
+            {"control_id": "CTRL-IMPACT-API"},
+            "risk-owner",
+            "risk-owner",
         )
         repo.create_relation(
             product.object_uuid,
@@ -72,7 +75,9 @@ def test_impact_api_returns_exact_version_paths(api_context):
     assert body["approval_authority"] == "object_store"
     assert body["read_only"] is True
     assert body["propagation_policy"] == "bidirectional_active_relations"
-    assert {(item["node"]["object_uuid"], item["distance"]) for item in body["impacted"]} == {
+    assert {
+        (item["node"]["object_uuid"], item["distance"]) for item in body["impacted"]
+    } == {
         (product_uuid, 1),
         (control_uuid, 1),
     }
@@ -103,7 +108,9 @@ def test_impact_api_preserves_historical_version_root(api_context):
 
     assert v1.status_code == 200
     assert v2.status_code == 200
-    assert product_uuid in {item["node"]["object_uuid"] for item in v1.json()["impacted"]}
+    assert product_uuid in {
+        item["node"]["object_uuid"] for item in v1.json()["impacted"]
+    }
     assert v2.json()["impacted"] == []
 
 
