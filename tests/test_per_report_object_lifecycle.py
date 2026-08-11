@@ -1,6 +1,7 @@
 """Regression tests for persisted PER report aggregates and lifecycle."""
 
 import hashlib
+from uuid import UUID
 
 import pytest
 from sqlalchemy import create_engine
@@ -272,24 +273,27 @@ def test_regeneration_after_approval_creates_successor_report(repo):
     assert service.get_report(original.report_uuid).lifecycle_state == "approved"
 
 
-def test_persisted_canonical_json_is_independent_of_later_live_source_changes(repo):
-    product, _, _, result, _, report_baseline = _context(repo)
+def test_persisted_canonical_json_is_independent_of_later_frozen_input_versions(repo):
+    product, _, _, _, _, report_baseline = _context(repo)
     report = _create_report(repo, product, report_baseline)
     service = PERReportObjectService(repo)
     before = service.get_canonical_json(report.report_uuid)
 
-    result_object = repo.get_by_uuid_hex(result.object_uuid)
+    items = repo.list_baseline_items(UUID(report_baseline.baseline_uuid).bytes)
+    completeness_item = next(
+        item for item in items if item.object_type == "report_completeness"
+    )
+    completeness_object = repo.get_by_uuid(completeness_item.object_uuid)
+    changed_payload = dict(completeness_item.snapshot_json)
+    changed_payload["owner_user_id"] = "later-completeness-author"
     repo.create_version(
-        result_object.object_uuid,
-        {
-            **result.payload.model_dump(mode="json"),
-            "interpretation": "Changed after persisted report creation.",
-        },
-        "result-owner",
+        completeness_object.object_uuid,
+        changed_payload,
+        "later-completeness-author",
     )
     repo.session.commit()
 
     after = service.get_canonical_json(report.report_uuid)
     assert before.canonical_json == after.canonical_json
     assert before.canonical_checksum_sha256 == after.canonical_checksum_sha256
-    assert "Changed after persisted report creation." not in after.canonical_json
+    assert "later-completeness-author" not in after.canonical_json
