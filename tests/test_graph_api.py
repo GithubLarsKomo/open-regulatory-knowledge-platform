@@ -75,7 +75,9 @@ def test_traceability_graph_api_returns_exact_versioned_read_model(api_context):
     assert body["root"] == {"object_uuid": claim_uuid, "object_version": 1}
     assert body["approval_authority"] == "object_store"
     assert body["read_only"] is True
-    assert {(node["object_uuid"], node["object_version"]) for node in body["nodes"]} == {
+    assert {
+        (node["object_uuid"], node["object_version"]) for node in body["nodes"]
+    } == {
         (product_uuid, 1),
         (claim_uuid, 1),
     }
@@ -113,8 +115,12 @@ def test_traceability_graph_api_preserves_historical_version_identity(api_contex
 
     assert v1.status_code == 200
     assert v2.status_code == 200
-    v1_root = next(node for node in v1.json()["nodes"] if node["object_uuid"] == claim_uuid)
-    v2_root = next(node for node in v2.json()["nodes"] if node["object_uuid"] == claim_uuid)
+    v1_root = next(
+        node for node in v1.json()["nodes"] if node["object_uuid"] == claim_uuid
+    )
+    v2_root = next(
+        node for node in v2.json()["nodes"] if node["object_uuid"] == claim_uuid
+    )
     assert v1_root["object_version"] == 1
     assert v1_root["is_current_version"] is False
     assert v2_root["object_version"] == 2
@@ -126,9 +132,7 @@ def test_traceability_graph_api_maps_invalid_uuid_and_missing_version(api_contex
     _, claim_uuid = _graph_context(session_factory)
 
     invalid = client.get("/api/v1/graph/objects/not-a-uuid/versions/1/traceability")
-    missing = client.get(
-        f"/api/v1/graph/objects/{claim_uuid}/versions/99/traceability"
-    )
+    missing = client.get(f"/api/v1/graph/objects/{claim_uuid}/versions/99/traceability")
 
     assert invalid.status_code == 422
     assert missing.status_code == 404
