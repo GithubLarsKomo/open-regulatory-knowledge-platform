@@ -46,11 +46,8 @@ class PERDraftService:
     def __init__(self, repo: RegulatoryObjectRepository):
         self.repo = repo
 
-    def generate_draft(
-        self,
-        baseline_hex: str,
-        generated_by_user_id: str,
-    ) -> PERDraftGenerationResponse:
+    def build_draft(self, baseline_hex: str) -> PERDraftPayload:
+        """Build the canonical PER manifest without persisting an artifact."""
         performance_report = PerformanceReportService(self.repo).build_report(
             baseline_hex
         )
@@ -64,7 +61,7 @@ class PERDraftService:
             performance_report,
             baseline.baseline_uuid,
         )
-        draft = PERDraftPayload(
+        return PERDraftPayload(
             schema_version=(
                 "per-draft-1.2" if completeness_report is not None else "per-draft-1.1"
             ),
@@ -77,6 +74,14 @@ class PERDraftService:
             completeness_report=completeness_report,
             traceability_appendix=traceability,
         )
+
+    def generate_draft(
+        self,
+        baseline_hex: str,
+        generated_by_user_id: str,
+    ) -> PERDraftGenerationResponse:
+        draft = self.build_draft(baseline_hex)
+        baseline = self._load_baseline(baseline_hex)
         canonical_json = json.dumps(
             draft.model_dump(mode="json"),
             ensure_ascii=False,
