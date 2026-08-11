@@ -140,9 +140,10 @@ def test_per_draft_contains_exact_traceability_and_single_artifact(repo):
     assert [reference.object_uuid for reference in trace[0].statistical_sources] == [
         source.uuid_hex
     ]
-    assert generated.checksum_sha256 == hashlib.sha256(
-        generated.canonical_json.encode("utf-8")
-    ).hexdigest()
+    assert (
+        generated.checksum_sha256
+        == hashlib.sha256(generated.canonical_json.encode("utf-8")).hexdigest()
+    )
 
     artifacts = list(repo.session.execute(select(GeneratedArtifact)).scalars().all())
     assert len(artifacts) == 1
