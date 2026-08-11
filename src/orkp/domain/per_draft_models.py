@@ -1,6 +1,6 @@
 """Strict models for reproducible baseline-only PER draft manifests."""
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from orkp.domain.per_completeness_models import PERCompletenessReport
 from orkp.domain.per_content_models import PERContentBlock
@@ -39,6 +39,22 @@ class PERDraftPayload(BaseModel):
     completeness_report: PERCompletenessReport | None = None
     section_coverage: PERSectionCoverageReport | None = None
     traceability_appendix: list[PERTraceabilityEntry]
+
+    @model_validator(mode="after")
+    def validate_schema_contract(self):
+        if self.schema_version == "per-draft-1.1":
+            if self.completeness_report is not None or self.section_coverage is not None:
+                raise ValueError(
+                    "per-draft-1.1 cannot contain report-level completeness or section coverage"
+                )
+            return self
+        if self.schema_version == "per-draft-1.3":
+            if self.completeness_report is None or self.section_coverage is None:
+                raise ValueError(
+                    "per-draft-1.3 requires completeness and canonical section coverage"
+                )
+            return self
+        raise ValueError(f"Unsupported PER draft schema_version '{self.schema_version}'")
 
 
 class PERDraftGenerationRequest(BaseModel):
