@@ -140,31 +140,29 @@ REST reference interface:
 
 Impact results are read-only analysis aids. Approval decisions and change-control authority remain in the Object Store and Event Store.
 
-## Synchronization Contract
+## Deterministic Synchronization Contract
 
-A graph infrastructure adapter shall consume the same canonical exact-version projection rather than construct an independent representation from live database state.
+Graph synchronization consumes the same canonical `TraceabilityGraph` projection and does not define a second graph semantics.
 
-Before a concrete Neo4j driver is enabled, synchronization is defined by an infrastructure-neutral exact-scope batch contract:
+Each synchronization request is represented as `graph-sync-batch-1.0` and contains:
 
-- one exact root object UUID/version and bounded traceability depth;
-- schema `graph-sync-batch-1.0`;
+- exact root object UUID/version and bounded depth through the canonical graph payload;
 - `source_authority = object_store`;
 - `approval_authority = object_store`;
-- `read_only = true` from the regulatory-governance perspective;
+- `read_only = true` from the regulatory-authority perspective;
 - `sync_mode = replace_exact_scope`;
-- deterministic canonical JSON representation;
-- SHA-256 over that canonical batch payload.
+- canonical JSON for the exact scope and a SHA-256 checksum over that canonical payload.
 
-A synchronization adapter acknowledgement shall echo the exact batch checksum, root, depth, node count and edge count. The platform shall reject an acknowledgement that claims a different or partial scope.
+The synchronization adapter is infrastructure-neutral. A concrete adapter receives the immutable batch and must acknowledge the exact checksum, root, depth, node count and edge count that it applied. Any mismatch is a synchronization failure.
 
-Synchronization must not modify Object Store objects, object versions, relations, lifecycle states, approval records or event history. The graph remains a derived read model even when it is materialized in Neo4j.
+`replace_exact_scope` means that a concrete graph adapter must make the materialized scope correspond to the submitted canonical scope rather than silently merging unbounded stale data. The exact deletion/replacement mechanics are adapter-specific, but they must not change Object Store objects, versions, relations, lifecycle state or approvals.
 
-The concrete Neo4j driver, schema constraints/indexes, event-driven scheduling and retry/outbox semantics are infrastructure concerns built on this contract; they shall not redefine regulatory graph identity, relation direction, version pinning or approval authority.
+A future Neo4j implementation shall implement this adapter contract. Neo4j is a derived read model and is never approval authority.
 
 ## Workflow
 
-- Graph synchronization source is the Object Store/Event Store authority
-- Version changes may trigger exact-scope graph synchronization
+- Graph is synchronized from object store events
+- Version changes trigger edge updates
 - Impact analysis queries are initiated by users
 - Graph does not replace object store for approval
 
@@ -189,12 +187,11 @@ RBAC filtering is implemented with the Workflow & Security epic and is not infer
 - A traceability query returns all linked objects for a claim.
 - Impact analysis identifies all exact-version objects connected to a changed risk within the configured depth and returns deterministic supporting paths.
 - Graph distinguishes object versions.
-- Graph synchronization reuses the canonical exact-version projection and is checksum-verifiable.
 - Approval remains in object store, not graph.
 
 ## Open Questions
 
-- Should concrete Neo4j synchronization be initiated synchronously, asynchronously, or through an outbox worker?
+- Should the graph be updated synchronously or asynchronously?
 - What is the maximum practical graph size?
 - Should the graph support full-text search on node properties?
 
