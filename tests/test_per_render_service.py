@@ -3,6 +3,7 @@
 import hashlib
 import io
 import zipfile
+from uuid import UUID
 
 import pytest
 from sqlalchemy import create_engine, select
@@ -214,19 +215,20 @@ def test_repeated_render_is_byte_identical_without_intermediate_draft_artifacts(
     assert {artifact.artifact_type for artifact in artifacts} == {"per_report"}
 
 
-def test_render_is_stable_after_live_result_version_changes(repo):
-    _, _, _, result, baseline = _report_baseline(repo)
+def test_render_is_stable_after_live_report_content_version_changes(repo):
+    *_, baseline = _report_baseline(repo)
     service = PERRenderService(repo)
     first = service.render(baseline.baseline_uuid, "html", "report-generator")
 
-    result_object = repo.get_by_uuid_hex(result.object_uuid)
+    items = repo.list_baseline_items(UUID(baseline.baseline_uuid).bytes)
+    content_item = next(item for item in items if item.object_type == "report_content")
+    content_object = repo.get_by_uuid(content_item.object_uuid)
+    changed_payload = dict(content_item.snapshot_json)
+    changed_payload["text"] = "Changed after report baseline freeze."
     repo.create_version(
-        result_object.object_uuid,
-        {
-            **result.payload.model_dump(mode="json"),
-            "interpretation": "Changed after report baseline freeze.",
-        },
-        "result-owner",
+        content_object.object_uuid,
+        changed_payload,
+        "report-author",
     )
     repo.session.commit()
 
