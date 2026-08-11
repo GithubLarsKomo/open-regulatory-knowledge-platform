@@ -174,7 +174,9 @@ def test_sync_scope_rejects_adapter_acknowledgement_mismatch(repo, mutate):
     _, claim, _ = _context(repo)
     adapter = RecordingAdapter(mutate=mutate)
 
-    with pytest.raises(GraphSynchronizationError, match="does not match submitted batch"):
+    with pytest.raises(
+        GraphSynchronizationError, match="does not match submitted batch"
+    ):
         GraphSyncService(repo).sync_scope(claim.uuid_hex, 1, adapter, depth=1)
 
 
