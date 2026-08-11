@@ -19,12 +19,32 @@ from orkp.domain.per_draft_service import PERDraftService
 from orkp.domain.per_render_models import PERRenderRequest
 from orkp.domain.per_render_service import PERRenderService
 from orkp.domain.per_report_baseline_service import PERReportBaselineService
+from orkp.domain.per_report_object_models import (
+    PERReportCanonicalResponse,
+    PERReportCreateRequest,
+    PERReportLifecycleRequest,
+    PERReportRegenerateRequest,
+    PERReportResponse,
+)
+from orkp.domain.per_report_object_service import PERReportObjectService
 
 
 def create_per_report_router(
     get_repo: Callable[[], RegulatoryObjectRepository],
 ) -> APIRouter:
     router = APIRouter(prefix="/api/v1/per-reports", tags=["PER Reports"])
+
+    @router.post(
+        "",
+        response_model=PERReportResponse,
+        status_code=status.HTTP_201_CREATED,
+        responses={404: {"model": ErrorResponse}, 422: {"model": ErrorResponse}},
+    )
+    async def create_per_report(
+        body: PERReportCreateRequest,
+        repo: RegulatoryObjectRepository = Depends(get_repo),
+    ):
+        return _call_or_404(lambda: PERReportObjectService(repo).create_report(body))
 
     @router.post(
         "/baselines",
@@ -38,6 +58,88 @@ def create_per_report_router(
     ):
         return _call_or_404(
             lambda: PERReportBaselineService(repo).create_baseline(body)
+        )
+
+    @router.get(
+        "/{report_uuid}",
+        response_model=PERReportResponse,
+        responses={404: {"model": ErrorResponse}, 422: {"model": ErrorResponse}},
+    )
+    async def get_per_report(
+        report_uuid: str,
+        repo: RegulatoryObjectRepository = Depends(get_repo),
+    ):
+        return _call_or_404(lambda: PERReportObjectService(repo).get_report(report_uuid))
+
+    @router.get(
+        "/{report_uuid}/canonical-json",
+        response_model=PERReportCanonicalResponse,
+        responses={404: {"model": ErrorResponse}, 422: {"model": ErrorResponse}},
+    )
+    async def get_per_report_canonical_json(
+        report_uuid: str,
+        repo: RegulatoryObjectRepository = Depends(get_repo),
+    ):
+        return _call_or_404(
+            lambda: PERReportObjectService(repo).get_canonical_json(report_uuid)
+        )
+
+    @router.post(
+        "/{report_uuid}/submit",
+        response_model=PERReportResponse,
+        responses={404: {"model": ErrorResponse}, 409: {"model": ErrorResponse}},
+    )
+    async def submit_per_report(
+        report_uuid: str,
+        body: PERReportLifecycleRequest,
+        repo: RegulatoryObjectRepository = Depends(get_repo),
+    ):
+        return _call_or_404(
+            lambda: PERReportObjectService(repo).submit_for_review(
+                report_uuid,
+                body.actor_user_id,
+            )
+        )
+
+    @router.post(
+        "/{report_uuid}/approve",
+        response_model=PERReportResponse,
+        responses={
+            403: {"model": ErrorResponse},
+            404: {"model": ErrorResponse},
+            409: {"model": ErrorResponse},
+        },
+    )
+    async def approve_per_report(
+        report_uuid: str,
+        body: PERReportLifecycleRequest,
+        repo: RegulatoryObjectRepository = Depends(get_repo),
+    ):
+        return _call_or_404(
+            lambda: PERReportObjectService(repo).approve(
+                report_uuid,
+                body.actor_user_id,
+                body.comments,
+            )
+        )
+
+    @router.post(
+        "/{report_uuid}/regenerate",
+        response_model=PERReportResponse,
+        status_code=status.HTTP_201_CREATED,
+        responses={
+            404: {"model": ErrorResponse},
+            409: {"model": ErrorResponse},
+            422: {"model": ErrorResponse},
+        },
+    )
+    async def regenerate_per_report(
+        report_uuid: str,
+        body: PERReportRegenerateRequest,
+        repo: RegulatoryObjectRepository = Depends(get_repo),
+    ):
+        return _call_or_404(
+            lambda: PERReportObjectService(repo).regenerate_report(report_uuid, body)
         )
 
     @router.post(
