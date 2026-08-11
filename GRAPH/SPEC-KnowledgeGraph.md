@@ -64,7 +64,7 @@ The graph shall not be the primary approval record; approval authority remains i
 
 ## Interfaces
 
-- Object Store — synchronization source
+- Object Store — synchronization source and approval authority
 - REST API — graph query endpoints
 - UI — graph visualization
 - Report Engine — traceability appendix
@@ -75,20 +75,49 @@ The graph shall not be the primary approval record; approval authority remains i
 
 | Property | Type | Description |
 |---|---|---|
-| node_uuid | UUID | Stable identifier |
+| node_uuid | UUID | Stable object identifier |
 | node_type | VARCHAR | Node type label |
-| object_version | INT | Object version (if applicable) |
-| label | VARCHAR | Display label |
-| lifecycle_state | VARCHAR | Current state |
+| object_version | INT | Exact Object Store version |
+| label | VARCHAR | Display label derived from the exact version payload |
+| lifecycle_state | VARCHAR | Current Object Store state |
+| version_status | VARCHAR | Exact Object Version status |
+| is_current_version | BOOLEAN | Whether this node represents the current object version |
+
+Canonical graph-node identity is the pair `(node_uuid, object_version)`. Two versions of the same regulatory object are distinct graph nodes where version-aware traceability is required.
 
 ### Edge Properties
 
 | Property | Type | Description |
 |---|---|---|
+| relation_uuid | UUID | Stable Object Store relationship identifier |
 | edge_type | VARCHAR | Relationship type |
-| source_version | INT | Source object version |
-| target_version | INT | Target object version |
+| source_version | INT | Exact source object version |
+| target_version | INT | Exact target object version |
 | created_at | DATETIME | Relationship timestamp |
+
+Only active Object Store relations are part of the current traceability projection. Graph edges do not create independent regulatory relationships.
+
+## Canonical Traceability Projection
+
+Before a Neo4j synchronization adapter is introduced, the platform exposes a canonical read-only projection directly from Object Store versions and active relations.
+
+The projection contract is:
+
+- exact root object UUID and version are mandatory;
+- incoming and outgoing active relations are traversed;
+- every node keeps object identity and object version separate;
+- historical versions remain queryable after newer versions exist;
+- inactive relations are excluded;
+- output is deterministic and duplicate-free;
+- traversal depth is explicitly bounded;
+- graph queries do not mutate objects, versions, relations, lifecycle state or approval records;
+- every graph response declares the Object Store as approval authority.
+
+REST reference interface:
+
+`GET /api/v1/graph/objects/{object_uuid}/versions/{object_version}/traceability?depth=1`
+
+The Neo4j synchronization layer shall materialize the same canonical identity/version/relation semantics rather than define a separate regulatory truth.
 
 ## Workflow
 
@@ -97,11 +126,15 @@ The graph shall not be the primary approval record; approval authority remains i
 - Impact analysis queries are initiated by users
 - Graph does not replace object store for approval
 
+Until the Neo4j synchronization adapter is enabled, the canonical traceability projection is evaluated read-only against the Object Store. This preserves one source of regulatory truth while establishing the exact graph contract for synchronization.
+
 ## Security
 
 - Graph access respects RBAC permissions
 - Product-scoped users see only relevant subgraph
 - Graph is read-only for non-administrators
+
+RBAC filtering is implemented with the Workflow & Security epic and is not inferred by the graph layer itself.
 
 ## AI Support
 
