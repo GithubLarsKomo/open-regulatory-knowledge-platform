@@ -87,9 +87,15 @@ class PERReportObjectService:
         comments: str | None = None,
     ) -> PERReportResponse:
         report, _ = self._load_current_report(report_hex)
-        if report.owner_user_id == approver_user_id:
+        current_version = self.repo.get_version(
+            report.object_uuid,
+            report.current_version,
+        )
+        if report.owner_user_id == approver_user_id or (
+            current_version is not None and current_version.created_by == approver_user_id
+        ):
             raise SelfApprovalNotAllowedError(
-                "PER report owner cannot approve their own report"
+                "PER report owner/current version author cannot approve the report"
             )
         self.repo.transition_state(
             report.object_uuid,
