@@ -140,7 +140,9 @@ def test_side_effect_free_draft_builder_creates_no_artifact(repo):
 
     draft = PERDraftService(repo).build_draft(baseline.baseline_uuid)
 
-    assert draft.schema_version == "per-draft-1.2"
+    assert draft.schema_version == "per-draft-1.3"
+    assert draft.section_coverage is not None
+    assert len(draft.section_coverage.sections) == 10
     assert _artifacts(repo) == []
 
 
