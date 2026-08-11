@@ -168,9 +168,14 @@ class PERReportObjectService:
         predecessor_report: VersionedObjectReference | None = None,
     ) -> PERReportObjectPayload:
         draft = PERDraftService(self.repo).build_draft(baseline_uuid)
-        if draft.schema_version != "per-draft-1.2" or draft.completeness_report is None:
+        if (
+            draft.schema_version != "per-draft-1.3"
+            or draft.completeness_report is None
+            or draft.section_coverage is None
+            or len(draft.section_coverage.sections) != 10
+        ):
             raise BaselineValidationError(
-                "Persisted PER report requires a derived Report baseline with completeness"
+                "Persisted PER report requires a derived Report baseline with completeness and ten-section coverage"
             )
         try:
             normalized_product = UUID(product_uuid).hex
