@@ -4,6 +4,7 @@ from typing import Callable
 
 from fastapi import APIRouter, Depends, status
 
+from orkp.api.per_report_router import create_per_report_router
 from orkp.api.routers import _call_or_404
 from orkp.api.schemas import ErrorResponse
 from orkp.db.repository import RegulatoryObjectRepository
@@ -153,4 +154,5 @@ def create_performance_router(
             )
         )
 
+    router.include_router(create_per_report_router(get_repo))
     return router
