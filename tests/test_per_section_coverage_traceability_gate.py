@@ -113,17 +113,61 @@ def test_approved_benefit_risk_without_canonical_relations_is_rejected(repo):
         relation_type="applies_to_product",
         created_by="risk-owner",
     )
-    residual, _ = repo.create_object(
-        "residual_risk_evaluation",
-        {"residual_id": "RR-BYPASS"},
-        "risk-owner",
-        "risk-owner",
-    )
     policy, _ = repo.create_object(
         "risk_policy",
         {"policy_id": "RP-BYPASS"},
         "risk-owner",
         "risk-owner",
+    )
+    residual, _ = repo.create_object(
+        "residual_risk_evaluation",
+        {
+            "evaluation_id": "RRE-BYPASS",
+            "risk_analysis_uuid": risk.uuid_hex,
+            "risk_analysis_version": 1,
+            "initial_evaluation_uuid": risk.uuid_hex,
+            "initial_evaluation_version": 1,
+            "control_verifications": [
+                {"object_uuid": risk.uuid_hex, "object_version": 1}
+            ],
+            "residual_severity": "moderate",
+            "residual_probability": "possible",
+            "calculated_risk_level": "high",
+            "acceptable": False,
+            "action_required": "benefit_risk_required",
+            "severity_improved": False,
+            "probability_improved": False,
+            "severity_worsened": False,
+            "probability_worsened": False,
+            "risk_level_improved": False,
+            "reduced": False,
+            "regression_detected": False,
+            "benefit_risk_required": True,
+            "risk_policy_uuid": policy.uuid_hex,
+            "risk_policy_version": 1,
+            "policy_revision": "1.0",
+            "evaluator_user_id": "risk-author",
+            "rationale": "Residual risk requires benefit-risk analysis",
+            "evaluated_at": "2026-08-11T00:00:00+00:00",
+        },
+        "risk-owner",
+        "risk-owner",
+    )
+    repo.create_relation(
+        source_uuid=residual.object_uuid,
+        source_version=1,
+        target_uuid=risk.object_uuid,
+        target_version=1,
+        relation_type="residual_of",
+        created_by="risk-owner",
+    )
+    repo.create_relation(
+        source_uuid=residual.object_uuid,
+        source_version=1,
+        target_uuid=policy.object_uuid,
+        target_version=1,
+        relation_type="uses_risk_policy",
+        created_by="risk-owner",
     )
     fake_benefit, _ = repo.create_object(
         "benefit_risk",
