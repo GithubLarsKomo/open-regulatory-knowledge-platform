@@ -122,12 +122,19 @@ def test_derived_baseline_freezes_ai_content_and_original_items(repo):
     completeness_items = [
         item for item in derived_items if item.object_type == "report_completeness"
     ]
-    assert response.item_count == len(source_items) + 2
+    coverage_items = [
+        item for item in derived_items if item.object_type == "report_section_coverage"
+    ]
+    assert response.item_count == len(source_items) + 3
     assert response.ai_draft_block_count == 1
     assert len(content_items) == 1
     assert len(completeness_items) == 1
+    assert len(coverage_items) == 1
     assert response.completeness_snapshot_ref.object_uuid == UUID(
         bytes=completeness_items[0].object_uuid
+    ).hex
+    assert response.section_coverage_snapshot_ref.object_uuid == UUID(
+        bytes=coverage_items[0].object_uuid
     ).hex
     payload = PERReportContentPayload(**content_items[0].snapshot_json)
     assert payload.origin == "ai_draft"
@@ -169,6 +176,7 @@ def test_ai_source_outside_performance_baseline_is_rejected_atomically(repo):
 
     assert repo.list_objects(object_type="report_content") == []
     assert repo.list_objects(object_type="report_completeness") == []
+    assert repo.list_objects(object_type="report_section_coverage") == []
 
 
 def test_duplicate_ai_block_ids_are_rejected():
@@ -204,8 +212,10 @@ def test_generated_draft_distinguishes_approved_and_ai_content(repo):
         "report-generator",
     )
 
-    assert generated.draft.schema_version == "per-draft-1.2"
+    assert generated.draft.schema_version == "per-draft-1.3"
     assert generated.draft.completeness_report is not None
+    assert generated.draft.section_coverage is not None
+    assert len(generated.draft.section_coverage.sections) == 10
     assert len(generated.draft.content_blocks) == 2
     approved, ai_draft = generated.draft.content_blocks
     assert approved.origin == "approved_source"
