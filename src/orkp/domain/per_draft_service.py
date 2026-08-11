@@ -4,9 +4,20 @@ import hashlib
 import json
 from uuid import UUID
 
+from pydantic import ValidationError
+
 from orkp.db.models import EventLog, GeneratedArtifact
 from orkp.db.repository import RegulatoryObjectRepository
-from orkp.domain.exceptions import InvalidObjectIdentifierError, ObjectNotFoundError
+from orkp.domain.exceptions import (
+    BaselineValidationError,
+    InvalidObjectIdentifierError,
+    InvalidPersistedPayloadError,
+    ObjectNotFoundError,
+)
+from orkp.domain.per_content_models import (
+    PERContentBlock,
+    PERReportContentPayload,
+)
 from orkp.domain.per_draft_models import (
     PERDraftGenerationResponse,
     PERDraftPayload,
@@ -14,11 +25,19 @@ from orkp.domain.per_draft_models import (
 )
 from orkp.domain.performance_report_models import PerformanceReportSnapshot
 from orkp.domain.performance_report_service import PerformanceReportService
+from orkp.domain.performance_result_models import PerformanceResultPayload
 from orkp.domain.risk_models import VersionedObjectReference
 
 
+_CONTENT_SECTION_ORDER = {
+    "scientific_validity": 0,
+    "analytical_performance": 1,
+    "clinical_performance": 2,
+}
+
+
 class PERDraftService:
-    """Compose a PER draft solely from a frozen Performance Evaluation baseline."""
+    """Compose a PER draft solely from a frozen report baseline."""
 
     def __init__(self, repo: RegulatoryObjectRepository):
         self.repo = repo
@@ -33,12 +52,17 @@ class PERDraftService:
         )
         baseline = self._load_baseline(baseline_hex)
         traceability = self._build_traceability(performance_report)
+        content_blocks = self._build_content_blocks(
+            performance_report,
+            baseline.baseline_uuid,
+        )
         draft = PERDraftPayload(
             baseline_uuid=performance_report.baseline_uuid,
             baseline_name=performance_report.baseline_name,
             baseline_description=performance_report.baseline_description,
             product=performance_report.product,
             performance_sections=performance_report,
+            content_blocks=content_blocks,
             traceability_appendix=traceability,
         )
         canonical_json = json.dumps(
@@ -86,6 +110,107 @@ class PERDraftService:
             canonical_json=canonical_json,
             draft=draft,
         )
+
+    def _build_content_blocks(
+        self,
+        report,
+        baseline_uuid: bytes,
+    ) -> list[PERContentBlock]:
+        allowed_refs = self._report_reference_keys(report)
+        blocks: list[PERContentBlock] = []
+
+        for section in report.sections:
+            for item in section.items:
+                try:
+                    result = PerformanceResultPayload(
+                        **item.performance_result.snapshot
+                    )
+                except ValidationError as exc:
+                    raise InvalidPersistedPayloadError(
+                        "Frozen Performance Result payload is invalid"
+                    ) from exc
+                if result.interpretation:
+                    blocks.append(
+                        PERContentBlock(
+                            block_id=(
+                                f"approved:{item.performance_result.object_uuid}:"
+                                f"v{item.performance_result.object_version}"
+                            ),
+                            section_type=section.section_type,
+                            text=result.interpretation,
+                            origin="approved_source",
+                            review_status="source_approved",
+                            source_refs=[self._reference(item.performance_result)],
+                        )
+                    )
+
+        for item in self.repo.list_baseline_items(baseline_uuid):
+            if item.object_type != "report_content":
+                continue
+            try:
+                payload = PERReportContentPayload(**dict(item.snapshot_json or {}))
+            except ValidationError as exc:
+                raise InvalidPersistedPayloadError(
+                    "Frozen report_content payload is invalid"
+                ) from exc
+            if payload.block_id.startswith("approved:"):
+                raise BaselineValidationError(
+                    "AI report_content block_id uses reserved 'approved:' prefix"
+                )
+            missing = [
+                reference
+                for reference in payload.source_refs
+                if (reference.object_uuid, reference.object_version) not in allowed_refs
+            ]
+            if missing:
+                raise BaselineValidationError(
+                    f"AI report_content '{payload.block_id}' references sources outside "
+                    "the frozen Performance context"
+                )
+            blocks.append(
+                PERContentBlock(
+                    block_id=payload.block_id,
+                    section_type=payload.section_type,
+                    text=payload.text,
+                    origin=payload.origin,
+                    review_status=payload.review_status,
+                    source_refs=payload.source_refs,
+                    model_id=payload.model_id,
+                )
+            )
+
+        block_ids = [block.block_id for block in blocks]
+        if len(block_ids) != len(set(block_ids)):
+            raise BaselineValidationError(
+                "PER draft baseline contains duplicate content block IDs"
+            )
+        return sorted(
+            blocks,
+            key=lambda block: (
+                _CONTENT_SECTION_ORDER[block.section_type],
+                0 if block.origin == "approved_source" else 1,
+                block.block_id,
+            ),
+        )
+
+    @classmethod
+    def _report_reference_keys(cls, report) -> set[tuple[str, int]]:
+        refs = {
+            (report.product.object_uuid, report.product.object_version),
+        }
+        for section in report.sections:
+            for item in section.items:
+                snapshots = [
+                    item.performance_result,
+                    item.study,
+                    *item.claims,
+                    *item.statistical_sources,
+                ]
+                refs.update(
+                    (snapshot.object_uuid, snapshot.object_version)
+                    for snapshot in snapshots
+                )
+        return refs
 
     @classmethod
     def _build_traceability(cls, report) -> list[PERTraceabilityEntry]:
