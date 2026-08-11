@@ -108,9 +108,7 @@ def _baseline_body(source_baseline_uuid: str, result_uuid: str):
                 "section_type": "clinical_performance",
                 "text": "AI API narrative.",
                 "model_id": "external-api-model-v1",
-                "source_refs": [
-                    {"object_uuid": result_uuid, "object_version": 1}
-                ],
+                "source_refs": [{"object_uuid": result_uuid, "object_version": 1}],
             }
         ],
         "created_by_user_id": "report-author",
