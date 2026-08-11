@@ -1,4 +1,4 @@
-"""Derived PER Report baselines with frozen authoring and completeness context."""
+"""Derived PER Report baselines with frozen authoring and report context."""
 
 from uuid import UUID
 
@@ -14,13 +14,16 @@ from orkp.domain.per_content_models import (
     PERReportBaselineResponse,
     PERReportContentPayload,
 )
+from orkp.domain.per_section_coverage_models import PERSectionCoverageSnapshotPayload
+from orkp.domain.per_section_coverage_service import PERSectionCoverageService
 from orkp.domain.performance_gap_service import PerformanceClaimGapService
 from orkp.domain.performance_report_service import PerformanceReportService
+from orkp.domain.risk_models import VersionedObjectReference
 from orkp.domain.versioned_loader import load_versioned_object
 
 
 class PERReportBaselineService:
-    """Freeze completeness and optional AI draft text into a PER Report baseline."""
+    """Freeze completeness, section coverage and optional AI text into a baseline."""
 
     def __init__(self, repo: RegulatoryObjectRepository):
         self.repo = repo
@@ -37,7 +40,8 @@ class PERReportBaselineService:
         )
         source_items = self.repo.list_baseline_items(source_baseline.baseline_uuid)
         if any(
-            item.object_type in {"report_content", "report_completeness"}
+            item.object_type
+            in {"report_content", "report_completeness", "report_section_coverage"}
             for item in source_items
         ):
             raise BaselineValidationError(
@@ -75,6 +79,16 @@ class PERReportBaselineService:
                     "in the Performance Evaluation baseline"
                 )
 
+        product_ref = VersionedObjectReference(
+            object_uuid=performance_report.product.object_uuid,
+            object_version=performance_report.product.object_version,
+        )
+        section_service = PERSectionCoverageService(self.repo)
+        section_context = section_service.prepare_cross_domain_context(
+            product_ref,
+            request,
+        )
+
         object_versions: dict[bytes, int] = {}
         for item in source_items:
             self._add_object_version(
@@ -83,6 +97,8 @@ class PERReportBaselineService:
                 item.version_no,
             )
         self._add_gap_context(object_versions, gap_report)
+        for object_uuid, version in section_context.object_versions.items():
+            self._add_object_version(object_versions, object_uuid, version)
 
         try:
             completeness_payload = PERCompletenessSnapshotPayload(
@@ -100,6 +116,32 @@ class PERReportBaselineService:
                 object_versions,
                 completeness_object.object_uuid,
                 completeness_version.version_no,
+            )
+            completeness_ref = VersionedObjectReference(
+                object_uuid=completeness_object.uuid_hex,
+                object_version=completeness_version.version_no,
+            )
+
+            section_payload = PERSectionCoverageSnapshotPayload(
+                source_performance_baseline_uuid=source_baseline_hex,
+                sections=section_service.build_sections(
+                    performance_report,
+                    gap_report,
+                    completeness_ref,
+                    section_context,
+                ),
+                owner_user_id=request.created_by_user_id,
+            )
+            section_object, section_version = self.repo.create_object(
+                object_type="report_section_coverage",
+                payload=section_payload.model_dump(mode="json"),
+                owner_user_id=request.created_by_user_id,
+                created_by=request.created_by_user_id,
+            )
+            self._add_object_version(
+                object_versions,
+                section_object.object_uuid,
+                section_version.version_no,
             )
 
             for block in request.ai_draft_blocks:
@@ -145,9 +187,10 @@ class PERReportBaselineService:
             description=baseline.description,
             item_count=len(object_versions),
             ai_draft_block_count=len(request.ai_draft_blocks),
-            completeness_snapshot_ref={
-                "object_uuid": completeness_object.uuid_hex,
-                "object_version": completeness_version.version_no,
+            completeness_snapshot_ref=completeness_ref,
+            section_coverage_snapshot_ref={
+                "object_uuid": section_object.uuid_hex,
+                "object_version": section_version.version_no,
             },
             created_by_user_id=baseline.created_by,
         )
