@@ -125,7 +125,9 @@ class PerformanceClaimGapService:
                     for item in assessment["supporting_evidence"]
                 }
                 required_quality = policy.get_min_quality_for_severity(payload.severity)
-                allowed_types = set(policy.get_allowed_evidence_types(payload.claim_type))
+                allowed_types = set(
+                    policy.get_allowed_evidence_types(payload.claim_type)
+                )
                 has_allowed_approved_type = False
 
                 for relation in exact_support:
