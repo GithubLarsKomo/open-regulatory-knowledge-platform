@@ -14,6 +14,10 @@ from orkp.domain.exceptions import (
     InvalidPersistedPayloadError,
     ObjectNotFoundError,
 )
+from orkp.domain.per_completeness_models import (
+    PERCompletenessReport,
+    PERCompletenessSnapshotPayload,
+)
 from orkp.domain.per_content_models import (
     PERContentBlock,
     PERReportContentPayload,
@@ -56,13 +60,21 @@ class PERDraftService:
             performance_report,
             baseline.baseline_uuid,
         )
+        completeness_report = self._build_completeness_report(
+            performance_report,
+            baseline.baseline_uuid,
+        )
         draft = PERDraftPayload(
+            schema_version=(
+                "per-draft-1.2" if completeness_report is not None else "per-draft-1.1"
+            ),
             baseline_uuid=performance_report.baseline_uuid,
             baseline_name=performance_report.baseline_name,
             baseline_description=performance_report.baseline_description,
             product=performance_report.product,
             performance_sections=performance_report,
             content_blocks=content_blocks,
+            completeness_report=completeness_report,
             traceability_appendix=traceability,
         )
         canonical_json = json.dumps(
@@ -109,6 +121,70 @@ class PERDraftService:
             checksum_sha256=checksum,
             canonical_json=canonical_json,
             draft=draft,
+        )
+
+    def _build_completeness_report(
+        self,
+        report,
+        baseline_uuid: bytes,
+    ) -> PERCompletenessReport | None:
+        items = self.repo.list_baseline_items(baseline_uuid)
+        completeness_items = [
+            item for item in items if item.object_type == "report_completeness"
+        ]
+        if not completeness_items:
+            return None
+        if len(completeness_items) != 1:
+            raise BaselineValidationError(
+                "PER Report baseline must contain exactly one completeness snapshot"
+            )
+
+        item = completeness_items[0]
+        try:
+            payload = PERCompletenessSnapshotPayload(**dict(item.snapshot_json or {}))
+        except ValidationError as exc:
+            raise InvalidPersistedPayloadError(
+                "Frozen report_completeness payload is invalid"
+            ) from exc
+
+        if (
+            payload.gap_report.product.object_uuid != report.product.object_uuid
+            or payload.gap_report.product.object_version != report.product.object_version
+        ):
+            raise BaselineValidationError(
+                "Frozen completeness Product does not match PER Product"
+            )
+
+        frozen_refs = {
+            (UUID(bytes=frozen.object_uuid).hex, frozen.version_no) for frozen in items
+        }
+        for claim_item in payload.gap_report.claims:
+            claim_key = (
+                claim_item.claim.object_uuid,
+                claim_item.claim.object_version,
+            )
+            if claim_key not in frozen_refs:
+                raise BaselineValidationError(
+                    "Frozen completeness report references a Claim outside the baseline"
+                )
+            for finding in claim_item.findings:
+                if finding.evidence is None:
+                    continue
+                evidence_key = (
+                    finding.evidence.object_uuid,
+                    finding.evidence.object_version,
+                )
+                if evidence_key not in frozen_refs:
+                    raise BaselineValidationError(
+                        "Frozen completeness report references Evidence outside the baseline"
+                    )
+
+        return PERCompletenessReport(
+            snapshot_ref={
+                "object_uuid": UUID(bytes=item.object_uuid).hex,
+                "object_version": item.version_no,
+            },
+            gap_report=payload.gap_report,
         )
 
     def _build_content_blocks(
