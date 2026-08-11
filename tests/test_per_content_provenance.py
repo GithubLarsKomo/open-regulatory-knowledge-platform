@@ -205,11 +205,14 @@ def test_generated_draft_distinguishes_approved_and_ai_content(repo):
     assert approved.review_status == "source_approved"
     assert approved.text == "Approved source interpretation."
     assert approved.model_id is None
+    assert approved.content_ref is None
     assert approved.source_refs[0].object_uuid == result.object_uuid
     assert ai_draft.origin == "ai_draft"
     assert ai_draft.review_status == "unapproved_draft"
     assert ai_draft.text == "AI-generated clinical narrative."
     assert ai_draft.model_id == "external-model-v1"
+    assert ai_draft.content_ref is not None
+    assert ai_draft.content_ref.object_version == 1
     assert ai_draft.source_refs[0].object_uuid == result.object_uuid
 
 
