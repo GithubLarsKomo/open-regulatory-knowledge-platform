@@ -56,9 +56,7 @@ class PERReportBaselineService:
                     "in the Performance Evaluation baseline"
                 )
 
-        object_versions = [
-            (item.object_uuid, item.version_no) for item in source_items
-        ]
+        object_versions = [(item.object_uuid, item.version_no) for item in source_items]
         try:
             for block in request.ai_draft_blocks:
                 payload = PERReportContentPayload(
