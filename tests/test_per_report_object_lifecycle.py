@@ -158,7 +158,9 @@ def test_create_persists_stable_report_object_and_canonical_snapshot(repo):
     assert payload.report_type == "PER-addendum"
     assert payload.product.object_uuid == product.uuid_hex
     assert payload.baseline_uuid == report_baseline.baseline_uuid
-    assert payload.draft.schema_version == "per-draft-1.2"
+    assert payload.draft.schema_version == "per-draft-1.3"
+    assert payload.draft.section_coverage is not None
+    assert len(payload.draft.section_coverage.sections) == 10
 
     canonical = PERReportObjectService(repo).get_canonical_json(response.report_uuid)
     assert canonical.object_version == 1
