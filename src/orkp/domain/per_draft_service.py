@@ -28,7 +28,9 @@ class PERDraftService:
         baseline_hex: str,
         generated_by_user_id: str,
     ) -> PERDraftGenerationResponse:
-        performance_report = PerformanceReportService(self.repo).build_report(baseline_hex)
+        performance_report = PerformanceReportService(self.repo).build_report(
+            baseline_hex
+        )
         baseline = self._load_baseline(baseline_hex)
         traceability = self._build_traceability(performance_report)
         draft = PERDraftPayload(
