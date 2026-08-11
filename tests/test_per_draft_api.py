@@ -103,7 +103,8 @@ def test_api_generates_per_draft_from_frozen_baseline(api_context):
     assert response.status_code == 201
     body = response.json()
     assert body["baseline_uuid"] == baseline_uuid
-    assert body["draft"]["schema_version"] == "per-draft-1.0"
+    assert body["draft"]["schema_version"] == "per-draft-1.1"
+    assert body["draft"]["content_blocks"] == []
     assert body["draft"]["performance_sections"]["sections"][0]["section_type"] == (
         "analytical_performance"
     )
