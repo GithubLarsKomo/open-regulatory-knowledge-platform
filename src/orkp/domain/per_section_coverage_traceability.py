@@ -9,6 +9,7 @@ from orkp.domain.benefit_risk_models import BenefitRiskAnalysisPayload
 from orkp.domain.exceptions import BaselineValidationError, ORKPError
 from orkp.domain.per_content_models import PERReportBaselineCreateRequest
 from orkp.domain.post_market_models import RiskImpactAssessmentDraftPayload
+from orkp.domain.risk_models import ResidualRiskEvaluationPayload
 from orkp.domain.versioned_loader import load_versioned_object
 
 
@@ -26,16 +27,47 @@ def validate_cross_domain_section_traceability(
                 "benefit_risk",
             )
             payload = BenefitRiskAnalysisPayload(**loaded.payload)
+            residual = load_versioned_object(
+                repo,
+                payload.residual_evaluation.object_uuid,
+                payload.residual_evaluation.object_version,
+                "residual_risk_evaluation",
+            )
+            residual_payload = ResidualRiskEvaluationPayload(**residual.payload)
         except (ORKPError, ValidationError) as exc:
             raise BaselineValidationError(
                 "Benefit-Risk source traceability context is invalid"
             ) from exc
+
+        if residual_payload.acceptable or not residual_payload.benefit_risk_required:
+            raise BaselineValidationError(
+                "Benefit-Risk source residual evaluation does not require benefit-risk analysis"
+            )
+        if (
+            residual_payload.risk_analysis_uuid != payload.risk_analysis.object_uuid
+            or residual_payload.risk_analysis_version
+            != payload.risk_analysis.object_version
+        ):
+            raise BaselineValidationError(
+                "Benefit-Risk source and residual evaluation reference different Risk Analysis versions"
+            )
+        if (
+            residual_payload.risk_policy_uuid != payload.risk_policy.object_uuid
+            or residual_payload.risk_policy_version != payload.risk_policy.object_version
+        ):
+            raise BaselineValidationError(
+                "Benefit-Risk source and residual evaluation reference different Risk Policy versions"
+            )
+
+        residual_uuid = residual.object.object_uuid
+        risk_uuid = UUID(payload.risk_analysis.object_uuid).bytes
+        policy_uuid = UUID(payload.risk_policy.object_uuid).bytes
         _require_relation(
             repo,
             loaded.object.object_uuid,
             loaded.version.version_no,
             "benefit_risk_for",
-            UUID(payload.residual_evaluation.object_uuid).bytes,
+            residual_uuid,
             payload.residual_evaluation.object_version,
         )
         _require_relation(
@@ -43,7 +75,23 @@ def validate_cross_domain_section_traceability(
             loaded.object.object_uuid,
             loaded.version.version_no,
             "uses_risk_policy",
-            UUID(payload.risk_policy.object_uuid).bytes,
+            policy_uuid,
+            payload.risk_policy.object_version,
+        )
+        _require_relation(
+            repo,
+            residual_uuid,
+            residual.version.version_no,
+            "residual_of",
+            risk_uuid,
+            payload.risk_analysis.object_version,
+        )
+        _require_relation(
+            repo,
+            residual_uuid,
+            residual.version.version_no,
+            "uses_risk_policy",
+            policy_uuid,
             payload.risk_policy.object_version,
         )
 
