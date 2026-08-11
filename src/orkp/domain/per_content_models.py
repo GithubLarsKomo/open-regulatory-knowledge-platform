@@ -47,14 +47,14 @@ class PERAIDraftBlockInput(BaseModel):
 
 
 class PERReportBaselineCreateRequest(BaseModel):
-    """Create a derived report baseline with frozen AI draft content."""
+    """Create a derived report baseline with frozen report context."""
 
     model_config = ConfigDict(extra="forbid")
 
     name: str = Field(..., min_length=1)
     description: str | None = None
     performance_baseline_uuid: str = Field(..., min_length=1)
-    ai_draft_blocks: list[PERAIDraftBlockInput] = Field(..., min_length=1)
+    ai_draft_blocks: list[PERAIDraftBlockInput] = Field(default_factory=list)
     created_by_user_id: str = Field(..., min_length=1)
 
     @field_validator("name", "created_by_user_id", "performance_baseline_uuid")
@@ -84,6 +84,7 @@ class PERReportBaselineResponse(BaseModel):
     description: str | None = None
     item_count: int
     ai_draft_block_count: int
+    completeness_snapshot_ref: VersionedObjectReference
     created_by_user_id: str
 
 
