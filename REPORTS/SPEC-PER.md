@@ -2,25 +2,27 @@
 
 ## Purpose
 
-Define automated generation of the Performance Evaluation Report.
+Define automated generation, persistence and reproducible rendering of the Performance Evaluation Report.
 
 ## Scope
 
-The PER generation covers:
+The PER capability covers:
 
-- Automated PER draft generation from structured data
-- PER section composition (scientific validity, analytical performance, clinical performance)
-- Traceability appendix generation
-- Explicit approved-source vs AI-draft content provenance
-- Frozen completeness gap reporting
-- Baseline-based reproducibility
+- automated PER draft generation from structured data;
+- PER section composition (scientific validity, analytical performance, clinical performance);
+- traceability appendix generation;
+- explicit approved-source vs AI-draft content provenance;
+- frozen completeness gap reporting;
+- baseline-based reproducibility;
+- a persisted, versioned PER Report aggregate with governed review/approval lifecycle;
+- deterministic JSON, HTML, DOCX and PDF output projections.
 
 ## Stakeholders
 
 - Regulatory Authors — initiate and review PER drafts
-- QM Reviewers — approve PER content
-- Regulatory Approvers — sign off on final report
-- Auditors — review traceability and completeness
+- QM Reviewers — review PER content
+- Regulatory Approvers — approve final report content
+- Auditors — review traceability, lifecycle and completeness
 
 ## Inputs
 
@@ -53,9 +55,9 @@ The PER generation covers:
 
 ### Canonical PER Draft Manifest
 
-The Report Generation capability consumes frozen baselines. It does not reselect live Product, Claim, Evidence, Study, report-content or completeness payloads during PER composition.
+Report generation consumes frozen baselines. It does not reselect live Product, Claim, Evidence, Study, report-content or completeness payloads during PER composition.
 
-`PerformanceReportService.build_report()` is the side-effect-free baseline-only builder for the frozen scientific-validity, analytical-performance and clinical-performance section payload. The existing Performance section-generation endpoint continues to persist its own `performance_evaluation_sections` artifact, while the PER Draft Service may reuse the builder without creating that intermediate artifact.
+`PerformanceReportService.build_report()` is the side-effect-free baseline-only builder for frozen scientific-validity, analytical-performance and clinical-performance sections. `PERDraftService.build_draft()` composes the complete canonical PER draft without persisting an intermediate artifact.
 
 A draft generated directly from a Performance Evaluation baseline retains schema `per-draft-1.1` and has no report-level completeness snapshot. A draft generated from a derived PER Report baseline uses schema `per-draft-1.2` and contains:
 
@@ -68,7 +70,7 @@ A draft generated directly from a Performance Evaluation baseline retains schema
 
 Each traceability entry pins the exact frozen versions of Performance Result Evidence, source Performance Study, supported Claim(s), and statistical-source Evidence where present.
 
-The canonical draft JSON is serialized with deterministic key ordering and compact separators, SHA-256 hashed, and recorded as a `GeneratedArtifact` with `artifact_type='per_draft'`, `format='json'`, the source baseline UUID and an `artifact_generated` audit event.
+The canonical draft JSON is serialized with deterministic key ordering and compact separators. The JSON draft endpoint records SHA-256 plus a `GeneratedArtifact` with `artifact_type='per_draft'` and `format='json'`.
 
 ### Content Provenance
 
@@ -111,7 +113,49 @@ The gap report retains the existing stable rule codes and does not introduce a s
 
 PER draft generation does **not** call the live Performance gap evaluator. It reads exactly one frozen `report_completeness.snapshot_json`, verifies that its Product matches the frozen PER Product, verifies that every referenced Claim/Evidence version is present in the same baseline, and exposes the result as `completeness_report` with an exact `snapshot_ref`.
 
-Later Product, Claim, Evidence, relation or gap-status changes therefore do not alter regeneration from the same report baseline.
+### Persisted PER Report Aggregate
+
+A governed PER Report is persisted in the existing Core RegulatoryObject store with `object_type='report'`. No separate report table is required.
+
+`PERReportObjectPayload` schema `per-report-object-1.0` stores:
+
+- `report_type`: `PER` or `PER-addendum`;
+- the exact frozen Product reference;
+- mandatory derived PER Report `baseline_uuid`;
+- the exact canonical `PERDraftPayload` snapshot;
+- SHA-256 of the canonical draft JSON;
+- optional exact predecessor Report reference.
+
+Persisted Report creation requires a derived Report baseline with frozen completeness (`per-draft-1.2`). A raw Performance Evaluation baseline is sufficient for draft-manifest generation but not for creation of a governed persisted PER Report.
+
+The persisted payload validates that Product and Baseline match the embedded frozen draft and that its SHA-256 matches a canonical reserialization. Retrieval therefore detects corrupted or inconsistent persisted report payloads.
+
+The stable `report_uuid` is the Core RegulatoryObject UUID. Lifecycle uses the existing Core state machine:
+
+- creation → `draft`;
+- submit → `in_review`;
+- approve → `approved`;
+- approved/effective/obsolete versions are immutable through the Core repository.
+
+Self-approval is forbidden for the Report owner and the author of the current Report version.
+
+Regeneration rules:
+
+- while `draft`, regeneration from another valid derived Report baseline creates a new ObjectVersion on the same `report_uuid`;
+- while `in_review` or `rejected`, regeneration is rejected until the lifecycle is resolved;
+- after `approved`, `effective` or `obsolete`, regeneration creates a new Report aggregate in `draft` with an exact predecessor Report UUID/version reference.
+
+The canonical-JSON retrieval endpoint reads the persisted Report snapshot; it does not regenerate from live source objects.
+
+### Deterministic Document Rendering
+
+HTML, DOCX and PDF are projections of `PERDraftService.build_draft()` and therefore consume the same frozen baseline-only manifest.
+
+- HTML is deterministic UTF-8 semantic output.
+- DOCX is a deterministic minimal OOXML package with fixed package metadata and entry ordering.
+- PDF is a deterministic PDF 1.4 text representation using Helvetica/WinAnsi. Characters outside Windows-1252 are rejected rather than silently changed.
+
+Each successful document render records exactly one `GeneratedArtifact` with `artifact_type='per_report'`, requested format and SHA-256 over the exact returned bytes, plus an `artifact_generated` audit event. Rendering does not create an intermediate `per_draft` artifact.
 
 ## Interfaces
 
@@ -123,9 +167,10 @@ Later Product, Claim, Evidence, relation or gap-status changes therefore do not 
 - Performance Report Service — side-effect-free frozen Performance section composition
 - PER Report Baseline Service — atomically freezes completeness plus optional external AI draft content
 - PER Draft Service — canonical baseline-only PER draft, completeness, content provenance and exact traceability appendix
+- PER Report Object Service — stable persisted Report identity, versioning, lifecycle and canonical snapshot retrieval
+- PER Render Service — deterministic HTML/DOCX/PDF projection and artifact audit
 - Risk Service — risk-benefit analysis
 - AI Service — may provide external draft text but is not invoked by Report Generation
-- Template Service — DOCX/PDF template rendering
 
 ## Data Model
 
@@ -133,13 +178,15 @@ Later Product, Claim, Evidence, relation or gap-status changes therefore do not 
 
 | Field | Type | Description |
 |---|---|---|
-| report_uuid | UUID | Stable identifier |
-| product_uuid | UUID | Subject product |
-| report_type | VARCHAR | PER / PER-addendum |
-| baseline_uuid | UUID | Baseline snapshot reference |
-| lifecycle_state | VARCHAR | draft / in_review / approved |
-| generated_at | DATETIME | Generation timestamp |
-| generated_by | VARCHAR | User who initiated generation |
+| report_uuid | UUID | Stable Core RegulatoryObject identifier |
+| object_version | INTEGER | Version of the persisted Report aggregate |
+| report_type | VARCHAR | `PER` / `PER-addendum` |
+| product | VersionedObjectReference | Exact Product UUID/version from frozen draft |
+| baseline_uuid | UUID | Derived Report baseline snapshot reference |
+| lifecycle_state | VARCHAR | `draft` / `in_review` / `approved` plus Core post-approval states |
+| draft | PERDraftPayload | Exact frozen canonical report snapshot |
+| canonical_checksum_sha256 | SHA-256 | Integrity checksum of canonical draft JSON |
+| predecessor_report | VersionedObjectReference? | Prior approved Report when regeneration creates a successor aggregate |
 
 ### PER Draft Manifest
 
@@ -152,7 +199,6 @@ Later Product, Claim, Evidence, relation or gap-status changes therefore do not 
 | content_blocks | List[PERContentBlock] | Explicit approved-source / AI-draft text provenance |
 | completeness_report | PERCompletenessReport? | Frozen gap report and exact completeness snapshot reference |
 | traceability_appendix | List[PERTraceabilityEntry] | Exact frozen Result/Study/Claim/source version references |
-| checksum | SHA-256 | Deterministic checksum of canonical JSON |
 
 ### PER Report Content
 
@@ -179,18 +225,20 @@ Later Product, Claim, Evidence, relation or gap-status changes therefore do not 
 
 ## Workflow
 
-- PER lifecycle: data collection → Performance Evaluation baseline → derived PER Report baseline with frozen completeness and optional AI draft content → canonical PER draft → review → approval → publication
-- Report regeneration from the same derived baseline must not re-evaluate completeness
-- Report regeneration triggers version bump in the later report-lifecycle slice
-- Approved reports are immutable
+- data collection → Performance Evaluation baseline → derived PER Report baseline with frozen completeness and optional AI draft content → canonical PER draft → persisted PER Report `draft` → `in_review` → `approved` → optional Core post-approval states;
+- regeneration from the same derived baseline never re-evaluates completeness;
+- draft regeneration versions the same Report aggregate;
+- post-approval regeneration creates a successor Report aggregate and preserves the approved predecessor;
+- document rendering is reproducible from the frozen baseline and records checksummed artifacts.
 
 ## Security
 
-- PER generation requires Regulatory Author role
-- PER approval requires Regulatory Approver role
+- PER generation requires Regulatory Author role at the authorization layer
+- PER approval requires Regulatory Approver role at the authorization layer
 - PER content is reproducible from baseline for audit verification
 - Report generation shall not bypass Product, Claim, Evidence, Performance or Risk approval decisions; it consumes their frozen outputs
-- AI-generated text remains explicitly unapproved until a later governed human-review workflow changes that status
+- AI-generated text remains explicitly unapproved until governed human review changes that status
+- PER Report self-approval by the Report owner/current-version author is forbidden
 
 ## AI Support
 
@@ -202,7 +250,7 @@ Later Product, Claim, Evidence, relation or gap-status changes therefore do not 
 
 ## Acceptance Criteria
 
-- A PER draft can be generated from approved product data.
+- A PER draft can be generated from approved structured Product/Performance data.
 - The canonical JSON-first PER draft can be generated from a frozen baseline without live regulatory-object payload reads.
 - Generated PER includes traceability to exact frozen source object versions.
 - Approved source text and AI-generated draft text are explicitly distinguishable in the manifest.
@@ -210,13 +258,16 @@ Later Product, Claim, Evidence, relation or gap-status changes therefore do not 
 - A derived PER Report baseline freezes exactly one completeness snapshot generated from the matching frozen Product version.
 - Missing/insufficient Performance evidence is exposed using the stable gap codes from the existing Performance gap analysis.
 - Repeated generation from the same report baseline does not re-evaluate completeness and yields identical canonical JSON/checksum after later live gap changes.
-- Report can be reproduced from a stored baseline.
+- A stable persisted PER Report aggregate references exact Product and derived baseline versions.
+- Persisted canonical JSON is retrieved from the stored Report snapshot and remains independent of later live source changes.
+- Approved Reports are immutable; regeneration after approval creates a successor Report rather than mutating the approved object.
+- HTML, DOCX and PDF outputs are deterministic projections of the same frozen canonical manifest.
 
 ## Open Questions
 
 - Should PER support multi-language generation?
 - How to handle large evidence sets in the traceability appendix?
-- Should PER generation support incremental updates (addendum)?
+- Should PER generation support incremental updates beyond the current `PER-addendum` report type?
 
 ### REP-PER-0001
 The system shall generate a PER draft from approved structured data.
