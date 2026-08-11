@@ -138,9 +138,9 @@ class GraphProjectionService:
         root_key = (graph.root.object_uuid, graph.root.object_version)
         nodes = {(node.object_uuid, node.object_version): node for node in graph.nodes}
 
-        adjacency: dict[
-            tuple[str, int], list[tuple[tuple[str, int], GraphEdge]]
-        ] = {key: [] for key in nodes}
+        adjacency: dict[tuple[str, int], list[tuple[tuple[str, int], GraphEdge]]] = {
+            key: [] for key in nodes
+        }
         for edge in graph.edges:
             source_key = (edge.source.object_uuid, edge.source.object_version)
             target_key = (edge.target.object_uuid, edge.target.object_version)
@@ -158,9 +158,7 @@ class GraphProjectionService:
             )
 
         distances: dict[tuple[str, int], int] = {root_key: 0}
-        parents: dict[
-            tuple[str, int], tuple[tuple[str, int], GraphEdge]
-        ] = {}
+        parents: dict[tuple[str, int], tuple[tuple[str, int], GraphEdge]] = {}
         queue = deque([root_key])
 
         while queue:
@@ -242,9 +240,7 @@ class GraphProjectionService:
     def _load_node(self, object_uuid: bytes, object_version: int) -> GraphNode:
         obj = self.repo.get_by_uuid_including_deleted(object_uuid)
         if obj is None:
-            raise ObjectNotFoundError(
-                f"Object {UUID(bytes=object_uuid).hex} not found"
-            )
+            raise ObjectNotFoundError(f"Object {UUID(bytes=object_uuid).hex} not found")
         version = self.repo.get_version(object_uuid, object_version)
         if version is None:
             raise ObjectVersionNotFoundError(
