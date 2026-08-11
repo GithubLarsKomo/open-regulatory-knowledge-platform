@@ -128,7 +128,8 @@ def test_per_draft_contains_exact_traceability_and_single_artifact(repo):
         "report-generator",
     )
 
-    assert generated.draft.schema_version == "per-draft-1.0"
+    assert generated.draft.schema_version == "per-draft-1.1"
+    assert generated.draft.content_blocks == []
     assert generated.draft.performance_sections.sections[0].section_type == (
         "clinical_performance"
     )
