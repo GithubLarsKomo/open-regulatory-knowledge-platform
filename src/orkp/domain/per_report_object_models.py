@@ -36,6 +36,13 @@ class PERReportObjectPayload(BaseModel):
     canonical_checksum_sha256: str
     predecessor_report: VersionedObjectReference | None = None
 
+    @field_validator("schema_version")
+    @classmethod
+    def validate_schema_version(cls, value: str) -> str:
+        if value != "per-report-object-1.0":
+            raise ValueError("Unsupported persisted PER report schema_version")
+        return value
+
     @field_validator("report_type")
     @classmethod
     def validate_report_type(cls, value: str) -> str:
@@ -61,6 +68,12 @@ class PERReportObjectPayload(BaseModel):
 
     @model_validator(mode="after")
     def validate_frozen_contract(self):
+        if self.draft.schema_version != "per-draft-1.3":
+            raise ValueError("Persisted PER report requires governed per-draft-1.3")
+        if self.draft.completeness_report is None or self.draft.section_coverage is None:
+            raise ValueError(
+                "Persisted PER report requires completeness and canonical section coverage"
+            )
         if self.draft.baseline_uuid != self.baseline_uuid:
             raise ValueError("PER report baseline_uuid must match frozen draft baseline_uuid")
         if (
