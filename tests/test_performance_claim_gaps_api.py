@@ -62,9 +62,7 @@ def test_api_returns_product_performance_evidence_gaps(api_context):
     client, session_factory = api_context
     product_uuid = _prepared_product(session_factory)
 
-    response = client.get(
-        f"/api/v1/products/{product_uuid}/performance-evidence-gaps"
-    )
+    response = client.get(f"/api/v1/products/{product_uuid}/performance-evidence-gaps")
 
     assert response.status_code == 200
     body = response.json()
@@ -72,10 +70,7 @@ def test_api_returns_product_performance_evidence_gaps(api_context):
     assert body["performance_claim_count"] == 1
     assert body["gap_claim_count"] == 1
     assert body["complete"] is False
-    assert (
-        body["claims"][0]["findings"][0]["rule_code"]
-        == "PERF-EVID-MISSING-001"
-    )
+    assert body["claims"][0]["findings"][0]["rule_code"] == "PERF-EVID-MISSING-001"
 
 
 def test_api_returns_404_for_missing_product(api_context):
