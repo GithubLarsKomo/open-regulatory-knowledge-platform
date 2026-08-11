@@ -100,9 +100,7 @@ def _derived_request(source_baseline_uuid: str, result_uuid: str):
                 "section_type": "clinical_performance",
                 "text": "AI-generated clinical narrative.",
                 "model_id": "external-model-v1",
-                "source_refs": [
-                    {"object_uuid": result_uuid, "object_version": 1}
-                ],
+                "source_refs": [{"object_uuid": result_uuid, "object_version": 1}],
             }
         ],
         created_by_user_id="report-author",
@@ -267,9 +265,9 @@ def test_generator_rejects_report_content_with_unfrozen_source(repo):
         "report-author",
     )
     source_items = repo.list_baseline_items(UUID(source_baseline.baseline_uuid).bytes)
-    object_versions = [
-        (item.object_uuid, item.version_no) for item in source_items
-    ] + [(content_object.object_uuid, 1)]
+    object_versions = [(item.object_uuid, item.version_no) for item in source_items] + [
+        (content_object.object_uuid, 1)
+    ]
     tampered_baseline = repo.create_baseline(
         "Tampered report baseline",
         None,
