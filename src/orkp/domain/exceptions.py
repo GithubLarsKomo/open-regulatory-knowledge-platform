@@ -170,3 +170,10 @@ class InvalidObjectIdentifierError(ORKPError):
 
     status_code = 422
     message = "Invalid object identifier format"
+
+
+class GraphSynchronizationError(ORKPError):
+    """Raised when a graph synchronization adapter violates the sync contract."""
+
+    status_code = 502
+    message = "Graph synchronization contract violation"
