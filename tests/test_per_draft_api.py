@@ -107,9 +107,10 @@ def test_api_generates_per_draft_from_frozen_baseline(api_context):
     assert body["draft"]["performance_sections"]["sections"][0]["section_type"] == (
         "analytical_performance"
     )
-    assert body["draft"]["traceability_appendix"][0]["performance_result"][
-        "object_uuid"
-    ] == result_uuid
+    assert (
+        body["draft"]["traceability_appendix"][0]["performance_result"]["object_uuid"]
+        == result_uuid
+    )
 
 
 def test_api_returns_404_for_missing_per_baseline(api_context):
