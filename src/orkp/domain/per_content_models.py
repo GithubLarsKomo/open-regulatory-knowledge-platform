@@ -55,6 +55,8 @@ class PERReportBaselineCreateRequest(BaseModel):
     description: str | None = None
     performance_baseline_uuid: str = Field(..., min_length=1)
     ai_draft_blocks: list[PERAIDraftBlockInput] = Field(default_factory=list)
+    benefit_risk_sources: list[VersionedObjectReference] = Field(default_factory=list)
+    pmpf_assessments: list[VersionedObjectReference] = Field(default_factory=list)
     created_by_user_id: str = Field(..., min_length=1)
 
     @field_validator("name", "created_by_user_id", "performance_baseline_uuid")
@@ -66,12 +68,19 @@ class PERReportBaselineCreateRequest(BaseModel):
         return value
 
     @model_validator(mode="after")
-    def reject_duplicate_block_ids(self):
+    def reject_duplicate_references(self):
         block_ids = [block.block_id for block in self.ai_draft_blocks]
         if len(block_ids) != len(set(block_ids)):
             raise ValueError(
                 "ai_draft_blocks must not contain duplicate block_id values"
             )
+        for field_name, references in (
+            ("benefit_risk_sources", self.benefit_risk_sources),
+            ("pmpf_assessments", self.pmpf_assessments),
+        ):
+            keys = [(ref.object_uuid, ref.object_version) for ref in references]
+            if len(keys) != len(set(keys)):
+                raise ValueError(f"{field_name} must not contain duplicate references")
         return self
 
 
@@ -85,6 +94,7 @@ class PERReportBaselineResponse(BaseModel):
     item_count: int
     ai_draft_block_count: int
     completeness_snapshot_ref: VersionedObjectReference
+    section_coverage_snapshot_ref: VersionedObjectReference
     created_by_user_id: str
 
 
