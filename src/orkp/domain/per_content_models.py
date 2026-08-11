@@ -147,6 +147,7 @@ class PERContentBlock(BaseModel):
     origin: str
     review_status: str
     source_refs: list[VersionedObjectReference]
+    content_ref: VersionedObjectReference | None = None
     model_id: str | None = None
 
     @model_validator(mode="after")
@@ -156,11 +157,15 @@ class PERContentBlock(BaseModel):
                 raise ValueError("approved_source content requires source_approved status")
             if self.model_id is not None:
                 raise ValueError("approved_source content cannot carry model_id")
+            if self.content_ref is not None:
+                raise ValueError("approved_source content cannot carry content_ref")
         elif self.origin == "ai_draft":
             if self.review_status != "unapproved_draft":
                 raise ValueError("ai_draft content requires unapproved_draft status")
             if not self.model_id:
                 raise ValueError("ai_draft content requires model_id")
+            if self.content_ref is None:
+                raise ValueError("ai_draft content requires frozen content_ref")
         else:
             raise ValueError(f"Unknown content origin '{self.origin}'")
         return self
