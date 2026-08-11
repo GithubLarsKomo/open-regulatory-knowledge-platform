@@ -69,7 +69,9 @@ class PERReportBaselineCreateRequest(BaseModel):
     def reject_duplicate_block_ids(self):
         block_ids = [block.block_id for block in self.ai_draft_blocks]
         if len(block_ids) != len(set(block_ids)):
-            raise ValueError("ai_draft_blocks must not contain duplicate block_id values")
+            raise ValueError(
+                "ai_draft_blocks must not contain duplicate block_id values"
+            )
         return self
 
 
@@ -154,7 +156,9 @@ class PERContentBlock(BaseModel):
     def validate_provenance_contract(self):
         if self.origin == "approved_source":
             if self.review_status != "source_approved":
-                raise ValueError("approved_source content requires source_approved status")
+                raise ValueError(
+                    "approved_source content requires source_approved status"
+                )
             if self.model_id is not None:
                 raise ValueError("approved_source content cannot carry model_id")
             if self.content_ref is not None:
