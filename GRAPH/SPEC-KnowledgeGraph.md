@@ -140,10 +140,31 @@ REST reference interface:
 
 Impact results are read-only analysis aids. Approval decisions and change-control authority remain in the Object Store and Event Store.
 
+## Synchronization Contract
+
+A graph infrastructure adapter shall consume the same canonical exact-version projection rather than construct an independent representation from live database state.
+
+Before a concrete Neo4j driver is enabled, synchronization is defined by an infrastructure-neutral exact-scope batch contract:
+
+- one exact root object UUID/version and bounded traceability depth;
+- schema `graph-sync-batch-1.0`;
+- `source_authority = object_store`;
+- `approval_authority = object_store`;
+- `read_only = true` from the regulatory-governance perspective;
+- `sync_mode = replace_exact_scope`;
+- deterministic canonical JSON representation;
+- SHA-256 over that canonical batch payload.
+
+A synchronization adapter acknowledgement shall echo the exact batch checksum, root, depth, node count and edge count. The platform shall reject an acknowledgement that claims a different or partial scope.
+
+Synchronization must not modify Object Store objects, object versions, relations, lifecycle states, approval records or event history. The graph remains a derived read model even when it is materialized in Neo4j.
+
+The concrete Neo4j driver, schema constraints/indexes, event-driven scheduling and retry/outbox semantics are infrastructure concerns built on this contract; they shall not redefine regulatory graph identity, relation direction, version pinning or approval authority.
+
 ## Workflow
 
-- Graph is synchronized from object store events
-- Version changes trigger edge updates
+- Graph synchronization source is the Object Store/Event Store authority
+- Version changes may trigger exact-scope graph synchronization
 - Impact analysis queries are initiated by users
 - Graph does not replace object store for approval
 
@@ -168,11 +189,12 @@ RBAC filtering is implemented with the Workflow & Security epic and is not infer
 - A traceability query returns all linked objects for a claim.
 - Impact analysis identifies all exact-version objects connected to a changed risk within the configured depth and returns deterministic supporting paths.
 - Graph distinguishes object versions.
+- Graph synchronization reuses the canonical exact-version projection and is checksum-verifiable.
 - Approval remains in object store, not graph.
 
 ## Open Questions
 
-- Should the graph be updated synchronously or asynchronously?
+- Should concrete Neo4j synchronization be initiated synchronously, asynchronously, or through an outbox worker?
 - What is the maximum practical graph size?
 - Should the graph support full-text search on node properties?
 
