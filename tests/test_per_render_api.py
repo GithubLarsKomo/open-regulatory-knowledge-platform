@@ -1,5 +1,7 @@
 """API regressions for deterministic PER document downloads."""
 
+import hashlib
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -152,7 +154,9 @@ def test_api_returns_rendered_per_bytes_and_artifact_headers(
     )
     assert len(response.headers["x-artifact-uuid"]) == 32
     assert response.headers["x-baseline-uuid"] == baseline_uuid
-    assert len(response.headers["x-checksum-sha256"]) == 64
+    assert response.headers["x-checksum-sha256"] == hashlib.sha256(
+        response.content
+    ).hexdigest()
 
 
 def test_api_rejects_unsupported_per_render_format(api_context):
