@@ -34,12 +34,16 @@ class GraphSyncBatch(BaseModel):
     def validate_checksum(self):
         expected = self._checksum_for_graph(self.graph)
         if self.canonical_checksum_sha256 != expected:
-            raise ValueError("graph sync batch checksum does not match canonical payload")
+            raise ValueError(
+                "graph sync batch checksum does not match canonical payload"
+            )
         return self
 
     @classmethod
     def _checksum_for_graph(cls, graph: TraceabilityGraph) -> str:
-        return hashlib.sha256(cls._canonical_graph_json(graph).encode("utf-8")).hexdigest()
+        return hashlib.sha256(
+            cls._canonical_graph_json(graph).encode("utf-8")
+        ).hexdigest()
 
     @staticmethod
     def _canonical_graph_json(graph: TraceabilityGraph) -> str:
