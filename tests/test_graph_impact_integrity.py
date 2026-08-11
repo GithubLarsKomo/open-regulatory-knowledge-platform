@@ -50,9 +50,11 @@ def impact_payload():
             evidence.object_uuid, 1, claim.object_uuid, 1, "supported_by", "owner"
         )
         session.commit()
-        return GraphProjectionService(repo).impact_analysis(
-            product.uuid_hex, 1, depth=2
-        ).model_dump(mode="json")
+        return (
+            GraphProjectionService(repo)
+            .impact_analysis(product.uuid_hex, 1, depth=2)
+            .model_dump(mode="json")
+        )
 
 
 def test_impact_payload_rejects_path_not_starting_at_changed_root(impact_payload):
