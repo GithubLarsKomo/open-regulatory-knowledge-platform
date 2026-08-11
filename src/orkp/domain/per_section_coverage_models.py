@@ -1,6 +1,7 @@
 """Strict frozen coverage models for the canonical ten-section PER structure."""
 
 from typing import Any, Literal
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -20,16 +21,17 @@ PER_CANONICAL_SECTION_IDS = (
     "completeness_report",
 )
 
-PER_SECTION_GAP_CODES = {
-    "PER-SECTION-INTENDED-PURPOSE-MISSING",
-    "PER-SECTION-SCIENTIFIC-VALIDITY-MISSING",
-    "PER-SECTION-ANALYTICAL-PERFORMANCE-MISSING",
-    "PER-SECTION-CLINICAL-PERFORMANCE-MISSING",
-    "PER-SECTION-CLAIMS-EVIDENCE-MISSING",
-    "PER-SECTION-RISK-BENEFIT-MISSING",
-    "PER-SECTION-PMPF-MISSING",
-    "PER-SECTION-TRACEABILITY-MISSING",
+PER_SECTION_GAP_CODE_BY_ID = {
+    "intended_purpose": "PER-SECTION-INTENDED-PURPOSE-MISSING",
+    "scientific_validity": "PER-SECTION-SCIENTIFIC-VALIDITY-MISSING",
+    "analytical_performance": "PER-SECTION-ANALYTICAL-PERFORMANCE-MISSING",
+    "clinical_performance": "PER-SECTION-CLINICAL-PERFORMANCE-MISSING",
+    "claims_and_evidence": "PER-SECTION-CLAIMS-EVIDENCE-MISSING",
+    "risk_benefit_analysis": "PER-SECTION-RISK-BENEFIT-MISSING",
+    "pmpf_summary": "PER-SECTION-PMPF-MISSING",
+    "traceability_appendix": "PER-SECTION-TRACEABILITY-MISSING",
 }
+PER_SECTION_GAP_CODES = set(PER_SECTION_GAP_CODE_BY_ID.values())
 
 
 class PERCanonicalSection(BaseModel):
@@ -59,13 +61,26 @@ class PERCanonicalSection(BaseModel):
 
     @model_validator(mode="after")
     def validate_status_contract(self):
-        if self.status == "available" and self.gap_code is not None:
-            raise ValueError("available canonical PER section cannot carry gap_code")
-        if self.status == "missing" and self.gap_code is None:
-            raise ValueError("missing canonical PER section requires gap_code")
         keys = [(ref.object_uuid, ref.object_version) for ref in self.source_refs]
         if len(keys) != len(set(keys)):
             raise ValueError("canonical PER section source_refs must be unique")
+
+        if self.status == "available":
+            if self.gap_code is not None:
+                raise ValueError("available canonical PER section cannot carry gap_code")
+            if not self.source_refs:
+                raise ValueError("available canonical PER section requires source_refs")
+            return self
+
+        expected_gap = PER_SECTION_GAP_CODE_BY_ID.get(self.section_id)
+        if expected_gap is None:
+            raise ValueError(
+                f"Canonical PER section '{self.section_id}' cannot be marked missing"
+            )
+        if self.gap_code != expected_gap:
+            raise ValueError(
+                f"Missing canonical PER section '{self.section_id}' requires gap_code '{expected_gap}'"
+            )
         return self
 
 
@@ -78,6 +93,31 @@ class PERSectionCoverageSnapshotPayload(BaseModel):
     source_performance_baseline_uuid: str = Field(..., min_length=1)
     sections: list[PERCanonicalSection]
     owner_user_id: str = Field(..., min_length=1)
+
+    @field_validator("schema_version")
+    @classmethod
+    def validate_schema_version(cls, value: str) -> str:
+        if value != "per-section-coverage-1.0":
+            raise ValueError("Unsupported PER section coverage schema_version")
+        return value
+
+    @field_validator("source_performance_baseline_uuid")
+    @classmethod
+    def normalize_source_baseline_uuid(cls, value: str) -> str:
+        try:
+            return UUID(value).hex
+        except (ValueError, AttributeError, TypeError) as exc:
+            raise ValueError(
+                "source_performance_baseline_uuid must be a valid UUID"
+            ) from exc
+
+    @field_validator("owner_user_id")
+    @classmethod
+    def strip_owner_user_id(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("owner_user_id must not be blank")
+        return value
 
     @model_validator(mode="after")
     def require_exact_canonical_order(self):
