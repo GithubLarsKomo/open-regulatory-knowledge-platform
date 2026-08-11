@@ -4,6 +4,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from orkp.domain.per_completeness_models import PERCompletenessReport
 from orkp.domain.per_content_models import PERContentBlock
+from orkp.domain.per_section_coverage_models import PERSectionCoverageReport
 from orkp.domain.performance_report_models import (
     PerformanceReportPayload,
     PerformanceReportSnapshot,
@@ -36,6 +37,7 @@ class PERDraftPayload(BaseModel):
     performance_sections: PerformanceReportPayload
     content_blocks: list[PERContentBlock]
     completeness_report: PERCompletenessReport | None = None
+    section_coverage: PERSectionCoverageReport | None = None
     traceability_appendix: list[PERTraceabilityEntry]
 
 
