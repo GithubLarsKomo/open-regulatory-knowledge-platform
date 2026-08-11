@@ -16,6 +16,9 @@ from orkp.domain.per_content_models import (
 )
 from orkp.domain.per_section_coverage_models import PERSectionCoverageSnapshotPayload
 from orkp.domain.per_section_coverage_service import PERSectionCoverageService
+from orkp.domain.per_section_coverage_traceability import (
+    validate_cross_domain_section_traceability,
+)
 from orkp.domain.performance_gap_service import PerformanceClaimGapService
 from orkp.domain.performance_report_service import PerformanceReportService
 from orkp.domain.risk_models import VersionedObjectReference
@@ -83,6 +86,7 @@ class PERReportBaselineService:
             object_uuid=performance_report.product.object_uuid,
             object_version=performance_report.product.object_version,
         )
+        validate_cross_domain_section_traceability(self.repo, request)
         section_service = PERSectionCoverageService(self.repo)
         section_context = section_service.prepare_cross_domain_context(
             product_ref,
