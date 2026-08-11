@@ -188,8 +188,9 @@ def test_draft_uses_frozen_completeness_after_live_gap_is_resolved(repo, monkeyp
     )
     second = service.generate_draft(report_baseline.baseline_uuid, "report-generator")
 
-    assert first.draft.schema_version == "per-draft-1.2"
+    assert first.draft.schema_version == "per-draft-1.3"
     assert first.draft.completeness_report is not None
+    assert first.draft.section_coverage is not None
     assert first.draft.completeness_report.gap_report.gap_claim_count == 1
     assert first.canonical_json == second.canonical_json
     assert first.checksum_sha256 == second.checksum_sha256
@@ -215,6 +216,7 @@ def test_stale_source_product_is_rejected_for_completeness(repo, monkeypatch):
         _report_baseline(repo, source_baseline.baseline_uuid)
 
     assert repo.list_objects(object_type="report_completeness") == []
+    assert repo.list_objects(object_type="report_section_coverage") == []
 
 
 def test_generator_rejects_completeness_missing_frozen_claim_context(repo):
