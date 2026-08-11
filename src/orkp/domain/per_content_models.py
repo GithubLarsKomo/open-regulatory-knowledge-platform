@@ -29,6 +29,11 @@ class PERAIDraftBlockInput(BaseModel):
         value = value.strip()
         if not value:
             raise ValueError("must not be blank")
+        return value
+
+    @field_validator("block_id")
+    @classmethod
+    def reserve_approved_prefix(cls, value: str) -> str:
         if value.startswith("approved:"):
             raise ValueError("'approved:' is reserved for approved source blocks")
         return value
