@@ -99,7 +99,7 @@ Only active Object Store relations are part of the current traceability projecti
 
 ## Canonical Traceability Projection
 
-Before a Neo4j synchronization adapter is introduced, the platform exposes a canonical read-only projection directly from Object Store versions and active relations.
+The platform exposes a canonical read-only projection directly from Object Store versions and active relations.
 
 The projection contract is:
 
@@ -117,7 +117,7 @@ REST reference interface:
 
 `GET /api/v1/graph/objects/{object_uuid}/versions/{object_version}/traceability?depth=1`
 
-The Neo4j synchronization layer shall materialize the same canonical identity/version/relation semantics rather than define a separate regulatory truth.
+Any materialized graph layer shall reproduce the same canonical identity/version/relation semantics rather than define a separate regulatory truth.
 
 ## Change Impact Analysis
 
@@ -155,18 +155,40 @@ Each synchronization request is represented as `graph-sync-batch-1.0` and contai
 
 The synchronization adapter is infrastructure-neutral. A concrete adapter receives the immutable batch and must acknowledge the exact checksum, root, depth, node count and edge count that it applied. Any mismatch is a synchronization failure.
 
-`replace_exact_scope` means that a concrete graph adapter must make the materialized scope correspond to the submitted canonical scope rather than silently merging unbounded stale data. The exact deletion/replacement mechanics are adapter-specific, but they must not change Object Store objects, versions, relations, lifecycle state or approvals.
+`replace_exact_scope` means that a concrete graph adapter must make the materialized scope correspond to the submitted canonical scope rather than silently merging unbounded stale data. The synchronization layer must not change Object Store objects, versions, relations, lifecycle state or approvals.
 
-A future Neo4j implementation shall implement this adapter contract. Neo4j is a derived read model and is never approval authority.
+## Neo4j Materialization
+
+Neo4j is an optional derived read-model implementation of the synchronization contract.
+
+The materialization uses static infrastructure identifiers:
+
+- `:ORKPObjectVersion` nodes represent exact object UUID/version pairs;
+- `:ORKPSyncScope` nodes represent stable root UUID/root version/depth synchronization scopes;
+- `:ORKP_RELATION` relationships represent exact Object Store relation UUIDs;
+- original `object_type` and `relation_type` values are stored as properties rather than interpolated into Cypher labels or relationship types.
+
+The Neo4j schema uses idempotent property-uniqueness constraints for:
+
+- `(object_uuid, object_version)` on `ORKPObjectVersion`;
+- `scope_key` on `ORKPSyncScope`;
+- `relation_uuid` on `ORKP_RELATION`.
+
+Exact-scope replacement occurs atomically in one explicit write transaction. Nodes and relationships keep a list of synchronized `scope_keys`. Replacing one scope removes only that scope membership, then upserts the submitted canonical scope. Relationships and nodes are deleted only when they have no remaining scope membership. Node cleanup is non-detaching so an unexpected shared relationship causes the transaction to fail instead of being silently removed.
+
+Canonical relation metadata that may contain nested structures is serialized as deterministic JSON rather than expanded as arbitrary Neo4j properties.
+
+The concrete adapter is optional infrastructure. Core ORKP remains importable and usable without the Neo4j Python package installed.
+
+Neo4j never becomes approval authority.
 
 ## Workflow
 
-- Graph is synchronized from object store events
-- Version changes trigger edge updates
-- Impact analysis queries are initiated by users
-- Graph does not replace object store for approval
-
-Until the Neo4j synchronization adapter is enabled, canonical traceability and impact analysis are evaluated read-only against the Object Store. This preserves one source of regulatory truth while establishing the exact graph contract for synchronization.
+- Canonical graph queries are evaluated from the Object Store.
+- Exact scopes may be materialized into Neo4j through the deterministic synchronization contract.
+- Version changes may later trigger synchronization through an event/outbox mechanism.
+- Impact analysis queries are initiated by users.
+- Graph infrastructure does not replace the Object Store for approval.
 
 ## Security
 
@@ -191,7 +213,7 @@ RBAC filtering is implemented with the Workflow & Security epic and is not infer
 
 ## Open Questions
 
-- Should the graph be updated synchronously or asynchronously?
+- Should synchronization be triggered synchronously or through an outbox worker?
 - What is the maximum practical graph size?
 - Should the graph support full-text search on node properties?
 
