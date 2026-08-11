@@ -119,6 +119,27 @@ REST reference interface:
 
 The Neo4j synchronization layer shall materialize the same canonical identity/version/relation semantics rather than define a separate regulatory truth.
 
+## Change Impact Analysis
+
+Impact analysis uses the same canonical exact-version projection. A changed root is always identified by the pair `(object_uuid, object_version)`; the graph shall not silently substitute the object's current version.
+
+The initial deterministic propagation policy is `bidirectional_active_relations`:
+
+- only active relations pinned to the exact changed version are traversed;
+- incoming and outgoing relations are both considered because regulatory review obligations can propagate in either structural direction;
+- every reachable exact-version node within the bounded depth is reported as potentially impacted;
+- the changed root itself is not repeated as an impacted node;
+- every impacted node includes its graph distance and one deterministic shortest path from the changed root;
+- the path includes exact object UUID/version references and exact relation UUIDs;
+- inactive relations are excluded;
+- no relation-type-specific causal weight, severity, or automatic regulatory conclusion is inferred by this baseline policy.
+
+REST reference interface:
+
+`GET /api/v1/graph/objects/{object_uuid}/versions/{object_version}/impact?depth=2`
+
+Impact results are read-only analysis aids. Approval decisions and change-control authority remain in the Object Store and Event Store.
+
 ## Workflow
 
 - Graph is synchronized from object store events
@@ -126,7 +147,7 @@ The Neo4j synchronization layer shall materialize the same canonical identity/ve
 - Impact analysis queries are initiated by users
 - Graph does not replace object store for approval
 
-Until the Neo4j synchronization adapter is enabled, the canonical traceability projection is evaluated read-only against the Object Store. This preserves one source of regulatory truth while establishing the exact graph contract for synchronization.
+Until the Neo4j synchronization adapter is enabled, canonical traceability and impact analysis are evaluated read-only against the Object Store. This preserves one source of regulatory truth while establishing the exact graph contract for synchronization.
 
 ## Security
 
@@ -145,7 +166,7 @@ RBAC filtering is implemented with the Workflow & Security epic and is not infer
 ## Acceptance Criteria
 
 - A traceability query returns all linked objects for a claim.
-- Impact analysis identifies all objects affected by a risk change.
+- Impact analysis identifies all exact-version objects connected to a changed risk within the configured depth and returns deterministic supporting paths.
 - Graph distinguishes object versions.
 - Approval remains in object store, not graph.
 
