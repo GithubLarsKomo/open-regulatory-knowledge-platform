@@ -104,12 +104,8 @@ class PerformanceReportService:
             created_by_user_id=baseline.created_by,
         )
 
-    def generate_sections(
-        self,
-        baseline_hex: str,
-        generated_by_user_id: str,
-    ) -> PerformanceReportGenerationResponse:
-        """Generate canonical PER sections exclusively from frozen snapshots."""
+    def build_report(self, baseline_hex: str) -> PerformanceReportPayload:
+        """Build deterministic Performance sections from frozen snapshots only."""
         baseline = self._load_baseline(baseline_hex)
         items = self.repo.list_baseline_items(baseline.baseline_uuid)
         snapshots = {
@@ -178,13 +174,22 @@ class PerformanceReportService:
                 grouped.items(), key=lambda item: _SECTION_ORDER[item[0]]
             )
         ]
-        report = PerformanceReportPayload(
+        return PerformanceReportPayload(
             baseline_uuid=UUID(bytes=baseline.baseline_uuid).hex,
             baseline_name=baseline.name,
             baseline_description=baseline.description,
             product=product_snapshots[0],
             sections=sections,
         )
+
+    def generate_sections(
+        self,
+        baseline_hex: str,
+        generated_by_user_id: str,
+    ) -> PerformanceReportGenerationResponse:
+        """Generate canonical PER sections exclusively from frozen snapshots."""
+        report = self.build_report(baseline_hex)
+        baseline = self._load_baseline(baseline_hex)
         canonical_json = json.dumps(
             report.model_dump(mode="json"),
             ensure_ascii=False,
