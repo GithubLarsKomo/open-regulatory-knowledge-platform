@@ -43,6 +43,7 @@ from orkp.api.routers import (
     create_claim_router,
     create_evidence_router,
 )
+from orkp.api.graph_router import create_graph_router
 from orkp.api.performance_router import create_performance_router
 from orkp.api.risk_routers import create_risk_evaluation_router
 from orkp.api.post_market_router import create_post_market_router
@@ -464,6 +465,7 @@ def create_app(session_factory_override=None) -> FastAPI:
     app.include_router(create_risk_evaluation_router(get_repo))
     app.include_router(create_post_market_router(get_repo))
     app.include_router(create_risk_control_requirement_router(get_repo))
+    app.include_router(create_graph_router(get_repo))
 
     return app
 
