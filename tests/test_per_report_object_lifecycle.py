@@ -146,7 +146,9 @@ def _fresh_report_baseline(repo, source_baseline):
 def test_create_persists_stable_report_object_and_canonical_snapshot(repo):
     product, _, _, _, _, report_baseline = _context(repo)
 
-    response = _create_report(repo, product, report_baseline, report_type="PER-addendum")
+    response = _create_report(
+        repo, product, report_baseline, report_type="PER-addendum"
+    )
 
     report = repo.get_by_uuid_hex(response.report_uuid)
     assert report is not None
@@ -164,9 +166,10 @@ def test_create_persists_stable_report_object_and_canonical_snapshot(repo):
 
     canonical = PERReportObjectService(repo).get_canonical_json(response.report_uuid)
     assert canonical.object_version == 1
-    assert canonical.canonical_checksum_sha256 == hashlib.sha256(
-        canonical.canonical_json.encode("utf-8")
-    ).hexdigest()
+    assert (
+        canonical.canonical_checksum_sha256
+        == hashlib.sha256(canonical.canonical_json.encode("utf-8")).hexdigest()
+    )
     assert canonical.canonical_checksum_sha256 == response.canonical_checksum_sha256
 
 
@@ -224,7 +227,10 @@ def test_draft_regeneration_creates_new_version_same_report_uuid(repo):
     assert regenerated.object_version == 2
     assert regenerated.lifecycle_state == "draft"
     assert regenerated.baseline_uuid == regenerated_baseline.baseline_uuid
-    assert len(repo.list_versions(repo.get_by_uuid_hex(original.report_uuid).object_uuid)) == 2
+    assert (
+        len(repo.list_versions(repo.get_by_uuid_hex(original.report_uuid).object_uuid))
+        == 2
+    )
 
 
 def test_report_approval_is_four_eyes_and_approved_version_is_immutable(repo):

@@ -114,9 +114,7 @@ def _residual_payload(
         "risk_analysis_version": 1,
         "initial_evaluation_uuid": risk_uuid,
         "initial_evaluation_version": 1,
-        "control_verifications": [
-            {"object_uuid": risk_uuid, "object_version": 1}
-        ],
+        "control_verifications": [{"object_uuid": risk_uuid, "object_version": 1}],
         "residual_severity": "moderate",
         "residual_probability": "possible",
         "calculated_risk_level": "high",
@@ -211,9 +209,7 @@ def _freeze(repo, source_baseline_uuid: str, benefit_uuid: str):
         PERReportBaselineCreateRequest(
             name="Residual provenance report baseline",
             performance_baseline_uuid=source_baseline_uuid,
-            benefit_risk_sources=[
-                {"object_uuid": benefit_uuid, "object_version": 1}
-            ],
+            benefit_risk_sources=[{"object_uuid": benefit_uuid, "object_version": 1}],
             created_by_user_id="report-author",
         )
     )

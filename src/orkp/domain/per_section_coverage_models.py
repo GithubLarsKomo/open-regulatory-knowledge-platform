@@ -67,7 +67,9 @@ class PERCanonicalSection(BaseModel):
 
         if self.status == "available":
             if self.gap_code is not None:
-                raise ValueError("available canonical PER section cannot carry gap_code")
+                raise ValueError(
+                    "available canonical PER section cannot carry gap_code"
+                )
             if not self.source_refs:
                 raise ValueError("available canonical PER section requires source_refs")
             return self

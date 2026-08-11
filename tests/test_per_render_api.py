@@ -154,9 +154,10 @@ def test_api_returns_rendered_per_bytes_and_artifact_headers(
     )
     assert len(response.headers["x-artifact-uuid"]) == 32
     assert response.headers["x-baseline-uuid"] == baseline_uuid
-    assert response.headers["x-checksum-sha256"] == hashlib.sha256(
-        response.content
-    ).hexdigest()
+    assert (
+        response.headers["x-checksum-sha256"]
+        == hashlib.sha256(response.content).hexdigest()
+    )
 
 
 def test_api_rejects_unsupported_per_render_format(api_context):

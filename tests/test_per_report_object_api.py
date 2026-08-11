@@ -165,9 +165,10 @@ def test_api_creates_gets_and_returns_canonical_persisted_report(api_context):
     assert canonical.status_code == 200
     canonical_body = canonical.json()
     assert canonical_body["report_uuid"] == report_uuid
-    assert canonical_body["canonical_checksum_sha256"] == hashlib.sha256(
-        canonical_body["canonical_json"].encode("utf-8")
-    ).hexdigest()
+    assert (
+        canonical_body["canonical_checksum_sha256"]
+        == hashlib.sha256(canonical_body["canonical_json"].encode("utf-8")).hexdigest()
+    )
 
 
 def test_api_rejects_raw_performance_baseline_and_invalid_report_type(api_context):
@@ -184,7 +185,9 @@ def test_api_rejects_raw_performance_baseline_and_invalid_report_type(api_contex
 def test_api_submit_approval_requires_independent_approver(api_context):
     client, session_factory = api_context
     product_uuid, _, report_baseline_uuid, _ = _prepared_baselines(session_factory)
-    report_uuid = _create(client, product_uuid, report_baseline_uuid).json()["report_uuid"]
+    report_uuid = _create(client, product_uuid, report_baseline_uuid).json()[
+        "report_uuid"
+    ]
 
     submitted = client.post(
         f"/api/v1/per-reports/{report_uuid}/submit",
@@ -209,10 +212,12 @@ def test_api_submit_approval_requires_independent_approver(api_context):
 
 def test_api_regeneration_after_approval_creates_successor_aggregate(api_context):
     client, session_factory = api_context
-    product_uuid, _, report_baseline_uuid, successor_baseline_uuid = _prepared_baselines(
-        session_factory
+    product_uuid, _, report_baseline_uuid, successor_baseline_uuid = (
+        _prepared_baselines(session_factory)
     )
-    report_uuid = _create(client, product_uuid, report_baseline_uuid).json()["report_uuid"]
+    report_uuid = _create(client, product_uuid, report_baseline_uuid).json()[
+        "report_uuid"
+    ]
     client.post(
         f"/api/v1/per-reports/{report_uuid}/submit",
         json={"actor_user_id": "report-owner"},

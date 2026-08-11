@@ -92,7 +92,8 @@ class PERReportObjectService:
             report.current_version,
         )
         if report.owner_user_id == approver_user_id or (
-            current_version is not None and current_version.created_by == approver_user_id
+            current_version is not None
+            and current_version.created_by == approver_user_id
         ):
             raise SelfApprovalNotAllowedError(
                 "PER report owner/current version author cannot approve the report"

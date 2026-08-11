@@ -113,9 +113,7 @@ def _sections():
         {
             "section_id": "completeness_report",
             "status": "available",
-            "source_refs": [
-                {"object_uuid": COMPLETENESS_UUID, "object_version": 1}
-            ],
+            "source_refs": [{"object_uuid": COMPLETENESS_UUID, "object_version": 1}],
             "data": {"complete": True},
         },
     ]

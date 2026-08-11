@@ -207,7 +207,9 @@ def test_assessor_cannot_approve_own_assessment(repo):
     service.transition_assessment(completed.object_uuid, "in_review", "risk-assessor")
 
     with pytest.raises(SelfApprovalNotAllowedError):
-        service.transition_assessment(completed.object_uuid, "approved", "risk-assessor")
+        service.transition_assessment(
+            completed.object_uuid, "approved", "risk-assessor"
+        )
 
 
 def test_independent_reviewer_can_approve_completed_assessment(repo):
@@ -284,4 +286,6 @@ def test_approval_requires_current_assessment_provenance(repo):
     repo.session.commit()
 
     with pytest.raises(InvalidRelationError):
-        service.transition_assessment(completed.object_uuid, "approved", "risk-approver")
+        service.transition_assessment(
+            completed.object_uuid, "approved", "risk-approver"
+        )

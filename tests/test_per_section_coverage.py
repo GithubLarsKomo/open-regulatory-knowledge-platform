@@ -293,7 +293,9 @@ def _risk_context(repo, product):
 def _section(draft, section_id):
     assert draft.section_coverage is not None
     return next(
-        section for section in draft.section_coverage.sections if section.section_id == section_id
+        section
+        for section in draft.section_coverage.sections
+        if section.section_id == section_id
     )
 
 
@@ -375,7 +377,9 @@ def test_cross_domain_risk_source_for_other_product_is_rejected(repo):
     repo.session.commit()
     _, benefit, _, _ = _risk_context(repo, other)
 
-    with pytest.raises(BaselineValidationError, match="not pinned to the frozen Product"):
+    with pytest.raises(
+        BaselineValidationError, match="not pinned to the frozen Product"
+    ):
         PERReportBaselineService(repo).create_baseline(
             PERReportBaselineCreateRequest(
                 name="Wrong Product risk source",
@@ -498,7 +502,9 @@ def test_generator_rejects_duplicate_section_coverage_snapshots(repo):
         )
     )
     items = repo.list_baseline_items(UUID(report_baseline.baseline_uuid).bytes)
-    coverage = next(item for item in items if item.object_type == "report_section_coverage")
+    coverage = next(
+        item for item in items if item.object_type == "report_section_coverage"
+    )
     duplicate, _ = repo.create_object(
         "report_section_coverage",
         dict(coverage.snapshot_json),

@@ -167,7 +167,8 @@ class PERDraftService:
 
         if (
             payload.gap_report.product.object_uuid != report.product.object_uuid
-            or payload.gap_report.product.object_version != report.product.object_version
+            or payload.gap_report.product.object_version
+            != report.product.object_version
         ):
             raise BaselineValidationError(
                 "Frozen completeness Product does not match PER Product"

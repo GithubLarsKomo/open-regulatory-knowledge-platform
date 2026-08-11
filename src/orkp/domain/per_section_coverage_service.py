@@ -47,7 +47,9 @@ class PERSectionCoverageService:
         context = PERSectionCoverageContext()
         for reference in request.benefit_risk_sources:
             context.benefit_risk.append(
-                self._load_benefit_risk_source(product, reference, context.object_versions)
+                self._load_benefit_risk_source(
+                    product, reference, context.object_versions
+                )
             )
         for reference in request.pmpf_assessments:
             context.pmpf.append(
@@ -112,9 +114,7 @@ class PERSectionCoverageService:
             status="available" if trace_refs else "missing",
             source_refs=trace_refs,
             data={"source_count": len(trace_refs)},
-            gap_code=(
-                None if trace_refs else "PER-SECTION-TRACEABILITY-MISSING"
-            ),
+            gap_code=(None if trace_refs else "PER-SECTION-TRACEABILITY-MISSING"),
         )
 
         risk_benefit = self._cross_domain_section(
@@ -245,7 +245,9 @@ class PERSectionCoverageService:
         try:
             information_payload = PostMarketInformationPayload(**information.payload)
         except ValidationError as exc:
-            raise BaselineValidationError("PMPF information payload is invalid") from exc
+            raise BaselineValidationError(
+                "PMPF information payload is invalid"
+            ) from exc
         if information_payload.source_type != "pmpf":
             raise BaselineValidationError(
                 "PMPF section source must reference post_market_information with source_type='pmpf'"
@@ -294,7 +296,9 @@ class PERSectionCoverageService:
                 allowed_lifecycle_states=["approved", "effective"],
             )
         except ORKPError as exc:
-            raise BaselineValidationError(f"{label} source is not usable: {exc}") from exc
+            raise BaselineValidationError(
+                f"{label} source is not usable: {exc}"
+            ) from exc
         if loaded.version.status != "approved":
             raise BaselineValidationError(f"{label} source version is not approved")
         return loaded
@@ -315,7 +319,9 @@ class PERSectionCoverageService:
         except ORKPError as exc:
             raise BaselineValidationError(f"{label} context is invalid: {exc}") from exc
 
-    def _assert_risk_product_link(self, risk, product: VersionedObjectReference) -> None:
+    def _assert_risk_product_link(
+        self, risk, product: VersionedObjectReference
+    ) -> None:
         product_uuid = UUID(product.object_uuid).bytes
         exact_outgoing = any(
             relation.relation_type == "applies_to_product"
@@ -350,10 +356,7 @@ class PERSectionCoverageService:
                     cls._snapshot_ref(item.performance_result),
                     cls._snapshot_ref(item.study),
                     *(cls._snapshot_ref(claim) for claim in item.claims),
-                    *(
-                        cls._snapshot_ref(source)
-                        for source in item.statistical_sources
-                    ),
+                    *(cls._snapshot_ref(source) for source in item.statistical_sources),
                 ]
             )
         refs = cls._sorted_unique_refs(refs)

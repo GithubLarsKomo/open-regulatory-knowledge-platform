@@ -130,12 +130,14 @@ def test_derived_baseline_freezes_ai_content_and_original_items(repo):
     assert len(content_items) == 1
     assert len(completeness_items) == 1
     assert len(coverage_items) == 1
-    assert response.completeness_snapshot_ref.object_uuid == UUID(
-        bytes=completeness_items[0].object_uuid
-    ).hex
-    assert response.section_coverage_snapshot_ref.object_uuid == UUID(
-        bytes=coverage_items[0].object_uuid
-    ).hex
+    assert (
+        response.completeness_snapshot_ref.object_uuid
+        == UUID(bytes=completeness_items[0].object_uuid).hex
+    )
+    assert (
+        response.section_coverage_snapshot_ref.object_uuid
+        == UUID(bytes=coverage_items[0].object_uuid).hex
+    )
     payload = PERReportContentPayload(**content_items[0].snapshot_json)
     assert payload.origin == "ai_draft"
     assert payload.review_status == "unapproved_draft"

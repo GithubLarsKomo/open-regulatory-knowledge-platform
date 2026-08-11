@@ -63,19 +63,26 @@ class PERReportObjectPayload(BaseModel):
     def validate_checksum(cls, value: str) -> str:
         value = value.lower()
         if len(value) != 64 or any(ch not in "0123456789abcdef" for ch in value):
-            raise ValueError("canonical_checksum_sha256 must be 64 lowercase hex characters")
+            raise ValueError(
+                "canonical_checksum_sha256 must be 64 lowercase hex characters"
+            )
         return value
 
     @model_validator(mode="after")
     def validate_frozen_contract(self):
         if self.draft.schema_version != "per-draft-1.3":
             raise ValueError("Persisted PER report requires governed per-draft-1.3")
-        if self.draft.completeness_report is None or self.draft.section_coverage is None:
+        if (
+            self.draft.completeness_report is None
+            or self.draft.section_coverage is None
+        ):
             raise ValueError(
                 "Persisted PER report requires completeness and canonical section coverage"
             )
         if self.draft.baseline_uuid != self.baseline_uuid:
-            raise ValueError("PER report baseline_uuid must match frozen draft baseline_uuid")
+            raise ValueError(
+                "PER report baseline_uuid must match frozen draft baseline_uuid"
+            )
         if (
             self.draft.product.object_uuid != self.product.object_uuid
             or self.draft.product.object_version != self.product.object_version
@@ -84,7 +91,9 @@ class PERReportObjectPayload(BaseModel):
         canonical = canonicalize_per_draft(self.draft)
         expected = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
         if self.canonical_checksum_sha256 != expected:
-            raise ValueError("PER report canonical checksum does not match frozen draft")
+            raise ValueError(
+                "PER report canonical checksum does not match frozen draft"
+            )
         return self
 
 

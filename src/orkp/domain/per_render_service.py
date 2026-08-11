@@ -167,7 +167,9 @@ class PERRenderService:
                 study = item.study.snapshot
                 cls._append_if_present(blocks, "Study", study.get("title"))
                 for claim in item.claims:
-                    wording = claim.snapshot.get("wording") or claim.snapshot.get("claim_id")
+                    wording = claim.snapshot.get("wording") or claim.snapshot.get(
+                        "claim_id"
+                    )
                     blocks.append(
                         _DocumentBlock(
                             "bullet",
@@ -312,16 +314,14 @@ class PERRenderService:
         for block in blocks:
             tag = tags[block.style]
             css_class = f' class="{block.style}"'
-            body_parts.append(
-                f"<{tag}{css_class}>{html.escape(block.text)}</{tag}>"
-            )
+            body_parts.append(f"<{tag}{css_class}>{html.escape(block.text)}</{tag}>")
         document = (
-            "<!doctype html><html><head><meta charset=\"utf-8\">"
+            '<!doctype html><html><head><meta charset="utf-8">'
             "<title>Performance Evaluation Report</title>"
             "<style>body{font-family:Arial,sans-serif;max-width:980px;margin:40px auto;"
             "line-height:1.45}h1,h2,h3,h4{page-break-after:avoid}.bullet{margin-left:2em}"
             ".body{white-space:pre-wrap}</style></head><body>"
-            f"<div data-per-schema=\"{html.escape(draft.schema_version)}\">"
+            f'<div data-per-schema="{html.escape(draft.schema_version)}">'
             + "".join(body_parts)
             + "</div></body></html>"
         )
@@ -340,7 +340,7 @@ class PERRenderService:
             paragraphs.append(
                 "<w:p><w:r><w:rPr>"
                 + "".join(properties)
-                + "</w:rPr><w:t xml:space=\"preserve\">"
+                + '</w:rPr><w:t xml:space="preserve">'
                 + xml_escape(text)
                 + "</w:t></w:r></w:p>"
             )

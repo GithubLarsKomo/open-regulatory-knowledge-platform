@@ -177,9 +177,11 @@ def test_draft_uses_frozen_completeness_after_live_gap_is_resolved(repo, monkeyp
         created_by="owner",
     )
     repo.session.commit()
-    assert PerformanceClaimGapService(repo).evaluate_product(
-        first.draft.product.object_uuid
-    ).complete
+    assert (
+        PerformanceClaimGapService(repo)
+        .evaluate_product(first.draft.product.object_uuid)
+        .complete
+    )
 
     monkeypatch.setattr(
         PerformanceClaimGapService,

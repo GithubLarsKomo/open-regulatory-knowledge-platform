@@ -69,7 +69,9 @@ def create_per_report_router(
         report_uuid: str,
         repo: RegulatoryObjectRepository = Depends(get_repo),
     ):
-        return _call_or_404(lambda: PERReportObjectService(repo).get_report(report_uuid))
+        return _call_or_404(
+            lambda: PERReportObjectService(repo).get_report(report_uuid)
+        )
 
     @router.get(
         "/{report_uuid}/canonical-json",

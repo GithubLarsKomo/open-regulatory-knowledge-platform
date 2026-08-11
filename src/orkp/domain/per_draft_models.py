@@ -43,7 +43,10 @@ class PERDraftPayload(BaseModel):
     @model_validator(mode="after")
     def validate_schema_contract(self):
         if self.schema_version == "per-draft-1.1":
-            if self.completeness_report is not None or self.section_coverage is not None:
+            if (
+                self.completeness_report is not None
+                or self.section_coverage is not None
+            ):
                 raise ValueError(
                     "per-draft-1.1 cannot contain report-level completeness or section coverage"
                 )
@@ -54,7 +57,9 @@ class PERDraftPayload(BaseModel):
                     "per-draft-1.3 requires completeness and canonical section coverage"
                 )
             return self
-        raise ValueError(f"Unsupported PER draft schema_version '{self.schema_version}'")
+        raise ValueError(
+            f"Unsupported PER draft schema_version '{self.schema_version}'"
+        )
 
 
 class PERDraftGenerationRequest(BaseModel):

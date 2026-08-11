@@ -53,7 +53,8 @@ def validate_cross_domain_section_traceability(
             )
         if (
             residual_payload.risk_policy_uuid != payload.risk_policy.object_uuid
-            or residual_payload.risk_policy_version != payload.risk_policy.object_version
+            or residual_payload.risk_policy_version
+            != payload.risk_policy.object_version
         ):
             raise BaselineValidationError(
                 "Benefit-Risk source and residual evaluation reference different Risk Policy versions"
