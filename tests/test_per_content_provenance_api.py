@@ -128,6 +128,7 @@ def test_api_freezes_ai_content_then_generates_provenance_marked_draft(api_conte
     baseline_body = baseline_response.json()
     assert baseline_body["source_performance_baseline_uuid"] == source_baseline_uuid
     assert baseline_body["ai_draft_block_count"] == 1
+    assert baseline_body["completeness_snapshot_ref"]["object_version"] == 1
 
     draft_response = client.post(
         f"/api/v1/per-reports/{baseline_body['baseline_uuid']}/drafts",
@@ -136,7 +137,8 @@ def test_api_freezes_ai_content_then_generates_provenance_marked_draft(api_conte
 
     assert draft_response.status_code == 201
     draft = draft_response.json()["draft"]
-    assert draft["schema_version"] == "per-draft-1.1"
+    assert draft["schema_version"] == "per-draft-1.2"
+    assert draft["completeness_report"] is not None
     assert [block["origin"] for block in draft["content_blocks"]] == [
         "approved_source",
         "ai_draft",
