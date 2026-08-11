@@ -9,6 +9,7 @@ from orkp.domain.exceptions import (
     ObjectNotFoundError,
     ObjectVersionNotFoundError,
 )
+from orkp.domain.graph_impact_models import ImpactAnalysis, ImpactedObject
 from orkp.domain.graph_models import (
     GraphEdge,
     GraphNode,
@@ -56,7 +57,9 @@ class GraphProjectionService:
                 f"Object version must be >= 1, got {object_version}"
             )
         if depth < 0 or depth > 10:
-            raise InvalidObjectIdentifierError("Graph traversal depth must be between 0 and 10")
+            raise InvalidObjectIdentifierError(
+                "Graph traversal depth must be between 0 and 10"
+            )
 
         self._load_node(root_uuid, object_version)
 
@@ -114,6 +117,108 @@ class GraphProjectionService:
             edges=sorted_edges,
         )
 
+    def impact_analysis(
+        self,
+        object_uuid: str,
+        object_version: int,
+        depth: int = 2,
+    ) -> ImpactAnalysis:
+        """Return conservative exact-version change impact using graph connectivity.
+
+        This deliberately does not infer regulatory causality from relation names.
+        Any exact-version node reachable through active relations is considered
+        potentially impacted and is returned with one deterministic shortest path.
+        """
+        if depth < 1 or depth > 10:
+            raise InvalidObjectIdentifierError(
+                "Impact analysis depth must be between 1 and 10"
+            )
+
+        graph = self.traceability(object_uuid, object_version, depth)
+        root_key = (graph.root.object_uuid, graph.root.object_version)
+        nodes = {(node.object_uuid, node.object_version): node for node in graph.nodes}
+
+        adjacency: dict[
+            tuple[str, int], list[tuple[tuple[str, int], GraphEdge]]
+        ] = {key: [] for key in nodes}
+        for edge in graph.edges:
+            source_key = (edge.source.object_uuid, edge.source.object_version)
+            target_key = (edge.target.object_uuid, edge.target.object_version)
+            adjacency.setdefault(source_key, []).append((target_key, edge))
+            adjacency.setdefault(target_key, []).append((source_key, edge))
+
+        for neighbors in adjacency.values():
+            neighbors.sort(
+                key=lambda item: (
+                    item[1].relation_type,
+                    item[0][0],
+                    item[0][1],
+                    item[1].relation_uuid,
+                )
+            )
+
+        distances: dict[tuple[str, int], int] = {root_key: 0}
+        parents: dict[
+            tuple[str, int], tuple[tuple[str, int], GraphEdge]
+        ] = {}
+        queue = deque([root_key])
+
+        while queue:
+            current = queue.popleft()
+            current_distance = distances[current]
+            if current_distance >= depth:
+                continue
+            for adjacent, edge in adjacency.get(current, []):
+                if adjacent in distances:
+                    continue
+                distances[adjacent] = current_distance + 1
+                parents[adjacent] = (current, edge)
+                queue.append(adjacent)
+
+        impacted: list[ImpactedObject] = []
+        for key, distance in distances.items():
+            if key == root_key:
+                continue
+            path_keys = [key]
+            relation_ids: list[str] = []
+            cursor = key
+            while cursor != root_key:
+                parent, edge = parents[cursor]
+                relation_ids.append(edge.relation_uuid)
+                path_keys.append(parent)
+                cursor = parent
+            path_keys.reverse()
+            relation_ids.reverse()
+            impacted.append(
+                ImpactedObject(
+                    node=nodes[key],
+                    distance=distance,
+                    path=[
+                        GraphObjectReference(
+                            object_uuid=path_uuid,
+                            object_version=path_version,
+                        )
+                        for path_uuid, path_version in path_keys
+                    ],
+                    relation_path=relation_ids,
+                )
+            )
+
+        impacted.sort(
+            key=lambda item: (
+                item.distance,
+                item.node.object_type,
+                item.node.object_uuid,
+                item.node.object_version,
+            )
+        )
+        return ImpactAnalysis(
+            changed=graph.root,
+            depth=depth,
+            impacted=impacted,
+            edges=graph.edges,
+        )
+
     def _relations_for_exact_version(self, object_uuid: bytes, version: int):
         by_uuid = {}
         for relation in self.repo.list_active_relations_for_source(object_uuid):
@@ -149,7 +254,12 @@ class GraphProjectionService:
             object_uuid=UUID(bytes=object_uuid).hex,
             object_version=object_version,
             object_type=obj.object_type,
-            label=self._label_for(obj.object_type, object_uuid, object_version, version.payload_json),
+            label=self._label_for(
+                obj.object_type,
+                object_uuid,
+                object_version,
+                version.payload_json,
+            ),
             version_status=version.status,
             current_lifecycle_state=obj.lifecycle_state,
             is_current_version=obj.current_version == object_version,
