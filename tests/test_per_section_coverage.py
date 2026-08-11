@@ -156,6 +156,22 @@ def _risk_context(repo, product):
         "risk-author",
         "risk-author",
     )
+    repo.create_relation(
+        source_uuid=benefit.object_uuid,
+        source_version=1,
+        target_uuid=residual.object_uuid,
+        target_version=1,
+        relation_type="benefit_risk_for",
+        created_by="risk-author",
+    )
+    repo.create_relation(
+        source_uuid=benefit.object_uuid,
+        source_version=1,
+        target_uuid=policy.object_uuid,
+        target_version=1,
+        relation_type="uses_risk_policy",
+        created_by="risk-author",
+    )
     _approve(repo, benefit, actor="risk-approver")
 
     information, _ = repo.create_object(
@@ -172,6 +188,22 @@ def _risk_context(repo, product):
         },
         "pmpf-author",
         "pmpf-author",
+    )
+    repo.create_relation(
+        source_uuid=information.object_uuid,
+        source_version=1,
+        target_uuid=risk.object_uuid,
+        target_version=1,
+        relation_type="impacts_risk",
+        created_by="pmpf-author",
+    )
+    repo.create_relation(
+        source_uuid=risk.object_uuid,
+        source_version=1,
+        target_uuid=information.object_uuid,
+        target_version=1,
+        relation_type="informed_by",
+        created_by="pmpf-author",
     )
     assessment, _ = repo.create_object(
         "risk_impact_assessment",
@@ -190,6 +222,24 @@ def _risk_context(repo, product):
         },
         "pmpf-assessor",
         "pmpf-assessor",
+    )
+    repo.create_relation(
+        source_uuid=assessment.object_uuid,
+        source_version=1,
+        target_uuid=information.object_uuid,
+        target_version=1,
+        relation_type="derived_from",
+        created_by="pmpf-assessor",
+        properties={"role": "impact_assessment_source"},
+    )
+    repo.create_relation(
+        source_uuid=assessment.object_uuid,
+        source_version=1,
+        target_uuid=risk.object_uuid,
+        target_version=1,
+        relation_type="derived_from",
+        created_by="pmpf-assessor",
+        properties={"role": "assessed_risk"},
     )
     _approve(repo, assessment, actor="pmpf-approver")
     repo.session.commit()
@@ -298,13 +348,12 @@ def test_cross_domain_risk_source_for_other_product_is_rejected(repo):
 
 def test_non_pmpf_information_is_rejected(repo):
     product, _, _, source = _performance_context(repo)
-    _, _, information, assessment = _risk_context(repo, product)
+    risk, _, information, assessment = _risk_context(repo, product)
     info = repo.get_by_uuid_hex(information.uuid_hex)
     payload = dict(repo.get_version(info.object_uuid, 1).payload_json)
     payload["source_type"] = "complaint"
     repo.create_version(info.object_uuid, payload, "pmpf-author")
     assessment_obj = repo.get_by_uuid_hex(assessment.uuid_hex)
-    # The approved assessment pins information v1; create a separate approved assessment for v2.
     assessment2, _ = repo.create_object(
         "risk_impact_assessment",
         {
@@ -317,6 +366,40 @@ def test_non_pmpf_information_is_rejected(repo):
         },
         "pmpf-assessor-2",
         "pmpf-assessor-2",
+    )
+    repo.create_relation(
+        source_uuid=assessment2.object_uuid,
+        source_version=1,
+        target_uuid=information.object_uuid,
+        target_version=2,
+        relation_type="derived_from",
+        created_by="pmpf-assessor-2",
+        properties={"role": "impact_assessment_source"},
+    )
+    repo.create_relation(
+        source_uuid=assessment2.object_uuid,
+        source_version=1,
+        target_uuid=risk.object_uuid,
+        target_version=1,
+        relation_type="derived_from",
+        created_by="pmpf-assessor-2",
+        properties={"role": "assessed_risk"},
+    )
+    repo.create_relation(
+        source_uuid=information.object_uuid,
+        source_version=2,
+        target_uuid=risk.object_uuid,
+        target_version=1,
+        relation_type="impacts_risk",
+        created_by="pmpf-author",
+    )
+    repo.create_relation(
+        source_uuid=risk.object_uuid,
+        source_version=1,
+        target_uuid=information.object_uuid,
+        target_version=2,
+        relation_type="informed_by",
+        created_by="pmpf-author",
     )
     _approve(repo, assessment2, actor="pmpf-approver-2")
 
