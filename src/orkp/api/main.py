@@ -51,6 +51,11 @@ from orkp.api.risk_control_requirement_router import (
 )
 
 
+# Domain-governed object types must not be created or versioned through generic
+# Core write endpoints when doing so would bypass their validation contract.
+_GOVERNED_GENERIC_CREATION = {"report"}
+_GOVERNED_GENERIC_VERSIONING = {"report"}
+
 # Sensitive transitions are owned by domain services so their completeness,
 # four-eyes and side-effect rules cannot be bypassed through the generic API.
 _GOVERNED_GENERIC_TRANSITIONS = {
@@ -62,6 +67,7 @@ _GOVERNED_GENERIC_TRANSITIONS = {
     "benefit_risk": {"approved"},
     "overall_residual_risk": {"approved"},
     "risk_impact_assessment": {"in_review", "approved"},
+    "report": {"in_review", "approved"},
 }
 
 # ---------------------------------------------------------------------------
@@ -148,6 +154,15 @@ def create_app(session_factory_override=None) -> FastAPI:
         repo: RegulatoryObjectRepository = Depends(get_repo),
     ):
         """Create a new regulatory object with its initial version (DB-CORE-0001)."""
+        if body.object_type in _GOVERNED_GENERIC_CREATION:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    f"Object type '{body.object_type}' must use its domain-specific "
+                    "creation workflow"
+                ),
+            )
+
         obj, version = repo.create_object(
             object_type=body.object_type,
             payload=body.payload,
@@ -286,6 +301,14 @@ def create_app(session_factory_override=None) -> FastAPI:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Object {object_uuid} not found",
+            )
+        if obj.object_type in _GOVERNED_GENERIC_VERSIONING:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    f"Object type '{obj.object_type}' must use its domain-specific "
+                    "versioning workflow"
+                ),
             )
 
         version = repo.create_version(
