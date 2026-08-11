@@ -64,7 +64,9 @@ class ImpactAnalysis(BaseModel):
             (item.node.object_uuid, item.node.object_version) for item in self.impacted
         ]
         if len(keys) != len(set(keys)):
-            raise ValueError("impact analysis must not contain duplicate impacted nodes")
+            raise ValueError(
+                "impact analysis must not contain duplicate impacted nodes"
+            )
 
         edge_ids = [edge.relation_uuid for edge in self.edges]
         if len(edge_ids) != len(set(edge_ids)):
