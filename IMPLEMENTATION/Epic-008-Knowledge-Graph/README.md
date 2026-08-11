@@ -57,18 +57,53 @@ REST:
 
 Depth is bounded to 0..10. Output is duplicate-free and deterministically sorted.
 
-### Governance
+## Slice 2 — Exact-Version Change Impact Analysis
 
-The graph endpoint is read-only. It does not create versions, relations, lifecycle transitions, approvals or graph-owned approval state.
+Issue: #28
 
-Every response explicitly declares:
+Primary requirement:
+
+- `GRAPH-CORE-0002` — impact analysis after changes to claims, risks, evidence or requirements
+
+### Impact boundary
+
+Impact analysis reuses the canonical traceability projection. It does not maintain a second relation index or versioning model.
+
+The changed root is always an exact `(object_uuid, object_version)`. Only active relations pinned to that exact version are considered. A later version of the same UUID is a different impact root unless an explicit versioned relation connects it.
+
+The first impact policy is deliberately conservative:
+
+`bidirectional_active_relations`
+
+Any exact-version node reachable over active relations within the requested depth is reported as potentially impacted. This policy does **not** claim domain-specific causal semantics or automatic regulatory decisions.
+
+For every impacted node, the response contains:
+
+- exact impacted node/version
+- graph distance from the changed root
+- one deterministic shortest object-version path
+- the exact relation UUID path supporting that impact path
+
+The changed root itself is not repeated in the impacted list. Output is duplicate-free and deterministic.
+
+REST:
+
+`GET /api/v1/graph/objects/{object_uuid}/versions/{object_version}/impact?depth=2`
+
+Depth is bounded to 1..10.
+
+## Governance
+
+All graph endpoints are read-only. They do not create versions, relations, lifecycle transitions, approvals or graph-owned approval state.
+
+Every graph response explicitly declares:
 
 - `approval_authority = "object_store"`
 - `read_only = true`
 
-### Deferred slices
+## Deferred slices
 
 - Neo4j schema/constraints and synchronization adapter
 - event-driven/incremental synchronization
-- `GRAPH-CORE-0002` impact analysis
 - RBAC graph filtering, which depends on Epic 010
+- optional future relation-type-specific impact classification/weights; not required by current `GRAPH-CORE` requirements
