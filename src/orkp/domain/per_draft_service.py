@@ -175,6 +175,10 @@ class PERDraftService:
                     origin=payload.origin,
                     review_status=payload.review_status,
                     source_refs=payload.source_refs,
+                    content_ref=VersionedObjectReference(
+                        object_uuid=UUID(bytes=item.object_uuid).hex,
+                        object_version=item.version_no,
+                    ),
                     model_id=payload.model_id,
                 )
             )
