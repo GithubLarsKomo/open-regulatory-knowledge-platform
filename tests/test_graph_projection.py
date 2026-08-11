@@ -226,7 +226,9 @@ def test_projection_order_is_deterministic_and_duplicate_free(repo):
     second = service.traceability(claim.uuid_hex, 1, depth=2)
 
     assert first.model_dump(mode="json") == second.model_dump(mode="json")
-    assert len(first.nodes) == len({(n.object_uuid, n.object_version) for n in first.nodes})
+    assert len(first.nodes) == len(
+        {(n.object_uuid, n.object_version) for n in first.nodes}
+    )
     assert len(first.edges) == len({edge.relation_uuid for edge in first.edges})
 
 
