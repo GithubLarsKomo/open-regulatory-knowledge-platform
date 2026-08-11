@@ -1,6 +1,7 @@
 """Regressions for deterministic graph synchronization adapter contract."""
 
 from copy import deepcopy
+from uuid import UUID
 
 import pytest
 from pydantic import ValidationError
@@ -100,7 +101,9 @@ def test_sync_batch_preserves_exact_versions_and_active_relations(repo):
         (product.uuid_hex, 1),
         (claim.uuid_hex, 1),
     }
-    assert [edge.relation_uuid for edge in batch.graph.edges] == [relation.uuid_hex]
+    assert [edge.relation_uuid for edge in batch.graph.edges] == [
+        UUID(bytes=relation.relation_uuid).hex
+    ]
     assert batch.graph.edges[0].source.object_version == 1
     assert batch.graph.edges[0].target.object_version == 1
 
