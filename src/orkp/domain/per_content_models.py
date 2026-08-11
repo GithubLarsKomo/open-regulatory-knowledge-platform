@@ -29,6 +29,8 @@ class PERAIDraftBlockInput(BaseModel):
         value = value.strip()
         if not value:
             raise ValueError("must not be blank")
+        if value.startswith("approved:"):
+            raise ValueError("'approved:' is reserved for approved source blocks")
         return value
 
     @field_validator("section_type")
@@ -47,7 +49,7 @@ class PERReportBaselineCreateRequest(BaseModel):
     name: str = Field(..., min_length=1)
     description: str | None = None
     performance_baseline_uuid: str = Field(..., min_length=1)
-    ai_draft_blocks: list[PERAIDraftBlockInput] = Field(default_factory=list)
+    ai_draft_blocks: list[PERAIDraftBlockInput] = Field(..., min_length=1)
     created_by_user_id: str = Field(..., min_length=1)
 
     @field_validator("name", "created_by_user_id", "performance_baseline_uuid")
@@ -83,15 +85,36 @@ class PERReportContentPayload(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    block_id: str
+    block_id: str = Field(..., min_length=1)
     section_type: str
-    text: str
+    text: str = Field(..., min_length=1)
     origin: str = "ai_draft"
     review_status: str = "unapproved_draft"
-    model_id: str
-    source_performance_baseline_uuid: str
-    source_refs: list[VersionedObjectReference]
-    owner_user_id: str
+    model_id: str = Field(..., min_length=1)
+    source_performance_baseline_uuid: str = Field(..., min_length=1)
+    source_refs: list[VersionedObjectReference] = Field(..., min_length=1)
+    owner_user_id: str = Field(..., min_length=1)
+
+    @field_validator(
+        "block_id",
+        "text",
+        "model_id",
+        "source_performance_baseline_uuid",
+        "owner_user_id",
+    )
+    @classmethod
+    def strip_persisted_required_text(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("must not be blank")
+        return value
+
+    @field_validator("section_type")
+    @classmethod
+    def validate_persisted_section_type(cls, value: str) -> str:
+        if value not in PER_SECTION_TYPES:
+            raise ValueError(f"Invalid PER section_type '{value}'")
+        return value
 
     @field_validator("origin")
     @classmethod
