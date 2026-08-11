@@ -27,6 +27,10 @@ from orkp.domain.per_draft_models import (
     PERDraftPayload,
     PERTraceabilityEntry,
 )
+from orkp.domain.per_section_coverage_models import (
+    PERSectionCoverageReport,
+    PERSectionCoverageSnapshotPayload,
+)
 from orkp.domain.performance_report_models import PerformanceReportSnapshot
 from orkp.domain.performance_report_service import PerformanceReportService
 from orkp.domain.performance_result_models import PerformanceResultPayload
@@ -61,9 +65,17 @@ class PERDraftService:
             performance_report,
             baseline.baseline_uuid,
         )
+        section_coverage = self._build_section_coverage(
+            performance_report,
+            baseline.baseline_uuid,
+        )
+        if (completeness_report is None) != (section_coverage is None):
+            raise BaselineValidationError(
+                "Derived PER Report baseline must freeze both completeness and section coverage"
+            )
         return PERDraftPayload(
             schema_version=(
-                "per-draft-1.2" if completeness_report is not None else "per-draft-1.1"
+                "per-draft-1.3" if section_coverage is not None else "per-draft-1.1"
             ),
             baseline_uuid=performance_report.baseline_uuid,
             baseline_name=performance_report.baseline_name,
@@ -72,6 +84,7 @@ class PERDraftService:
             performance_sections=performance_report,
             content_blocks=content_blocks,
             completeness_report=completeness_report,
+            section_coverage=section_coverage,
             traceability_appendix=traceability,
         )
 
@@ -190,6 +203,59 @@ class PERDraftService:
                 "object_version": item.version_no,
             },
             gap_report=payload.gap_report,
+        )
+
+    def _build_section_coverage(
+        self,
+        report,
+        baseline_uuid: bytes,
+    ) -> PERSectionCoverageReport | None:
+        items = self.repo.list_baseline_items(baseline_uuid)
+        coverage_items = [
+            item for item in items if item.object_type == "report_section_coverage"
+        ]
+        if not coverage_items:
+            return None
+        if len(coverage_items) != 1:
+            raise BaselineValidationError(
+                "PER Report baseline must contain exactly one section coverage snapshot"
+            )
+        item = coverage_items[0]
+        try:
+            payload = PERSectionCoverageSnapshotPayload(
+                **dict(item.snapshot_json or {})
+            )
+        except ValidationError as exc:
+            raise InvalidPersistedPayloadError(
+                "Frozen report_section_coverage payload is invalid"
+            ) from exc
+
+        frozen_refs = {
+            (UUID(bytes=frozen.object_uuid).hex, frozen.version_no) for frozen in items
+        }
+        product_key = (report.product.object_uuid, report.product.object_version)
+        cover = payload.sections[0]
+        if product_key not in {
+            (reference.object_uuid, reference.object_version)
+            for reference in cover.source_refs
+        }:
+            raise BaselineValidationError(
+                "Frozen Cover Page section does not reference the PER Product"
+            )
+        for section in payload.sections:
+            for reference in section.source_refs:
+                key = (reference.object_uuid, reference.object_version)
+                if key not in frozen_refs:
+                    raise BaselineValidationError(
+                        f"Frozen canonical section '{section.section_id}' references "
+                        "an object outside the baseline"
+                    )
+        return PERSectionCoverageReport(
+            snapshot_ref={
+                "object_uuid": UUID(bytes=item.object_uuid).hex,
+                "object_version": item.version_no,
+            },
+            sections=payload.sections,
         )
 
     def _build_content_blocks(
