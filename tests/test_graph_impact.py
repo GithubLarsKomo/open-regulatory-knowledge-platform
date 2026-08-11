@@ -6,7 +6,10 @@ from sqlalchemy.orm import Session
 
 from orkp.db.models import Base
 from orkp.db.repository import RegulatoryObjectRepository
-from orkp.domain.exceptions import InvalidObjectIdentifierError, ObjectVersionNotFoundError
+from orkp.domain.exceptions import (
+    InvalidObjectIdentifierError,
+    ObjectVersionNotFoundError,
+)
 from orkp.domain.graph_service import GraphProjectionService
 
 
@@ -171,12 +174,12 @@ def test_impact_distinguishes_versions_and_historical_roots(repo):
     v1 = service.impact_analysis(claim.uuid_hex, 1, depth=1)
     v2 = service.impact_analysis(claim.uuid_hex, 2, depth=1)
 
-    assert {(item.node.object_uuid, item.node.object_version) for item in v1.impacted} == {
-        (product.uuid_hex, 1)
-    }
-    assert {(item.node.object_uuid, item.node.object_version) for item in v2.impacted} == {
-        (evidence.uuid_hex, 1)
-    }
+    assert {
+        (item.node.object_uuid, item.node.object_version) for item in v1.impacted
+    } == {(product.uuid_hex, 1)}
+    assert {
+        (item.node.object_uuid, item.node.object_version) for item in v2.impacted
+    } == {(evidence.uuid_hex, 1)}
 
 
 def test_inactive_relation_is_excluded_from_impact(repo):
