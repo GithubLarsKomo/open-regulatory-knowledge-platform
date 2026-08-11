@@ -158,7 +158,8 @@ RBAC filtering is implemented with the Workflow & Security epic and is not infer
 ## Example Query
 
 ```cypher
-MATCH (c:Claim)-[:SUPPORTED_BY]->(e:Evidence)-[:DERIVED_FROM]->(s:Study)
+MATCH (e:Evidence)-[:SUPPORTED_BY]->(c:Claim),
+      (e)-[:DERIVED_FROM]->(s:Study)
 WHERE c.claim_id = $claimId
 RETURN c, e, s
 ```
