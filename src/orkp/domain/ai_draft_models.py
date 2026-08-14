@@ -114,6 +114,14 @@ class AIDraftPayload(BaseModel):
     target_domain: AITargetDomain = "general"
     risk_support: RiskAIDraftContent | None = None
 
+    @field_validator("prompt_text", "model_id", "initiated_by_user_id")
+    @classmethod
+    def strip_persisted_required_fields(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("must not be blank")
+        return value
+
     @model_validator(mode="after")
     def validate_persisted_grounding(self):
         context_keys = [
