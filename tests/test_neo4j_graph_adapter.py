@@ -120,7 +120,9 @@ def test_adapter_creates_community_compatible_uniqueness_constraints():
     assert len(driver.schema_calls) == 3
     assert all(call[1] == {"database_": "orkp"} for call in driver.schema_calls)
     queries = [call[0] for call in driver.schema_calls]
-    assert any("(n.object_uuid, n.object_version) IS UNIQUE" in query for query in queries)
+    assert any(
+        "(n.object_uuid, n.object_version) IS UNIQUE" in query for query in queries
+    )
     assert any("s.scope_key IS UNIQUE" in query for query in queries)
     assert any("r.relation_uuid IS UNIQUE" in query for query in queries)
     assert all("IF NOT EXISTS" in query for query in queries)
@@ -151,8 +153,12 @@ def test_replace_scope_removes_only_membership_then_upserts_and_cleans_unused():
     Neo4jGraphSyncAdapter(driver).apply(batch)
 
     queries = [query for query, _ in driver.transaction.calls]
-    assert "SET r.scope_keys = [key IN r.scope_keys WHERE key <> $scope_key]" in queries[0]
-    assert "SET n.scope_keys = [key IN n.scope_keys WHERE key <> $scope_key]" in queries[1]
+    assert (
+        "SET r.scope_keys = [key IN r.scope_keys WHERE key <> $scope_key]" in queries[0]
+    )
+    assert (
+        "SET n.scope_keys = [key IN n.scope_keys WHERE key <> $scope_key]" in queries[1]
+    )
     assert "MERGE (scope:ORKPSyncScope" in queries[2]
     assert "UNWIND $nodes AS item" in queries[3]
     assert "UNWIND $edges AS item" in queries[4]
@@ -169,7 +175,9 @@ def test_adapter_preserves_exact_versions_and_uses_static_graph_identifiers():
 
     node_params = driver.transaction.calls[3][1]
     edge_params = driver.transaction.calls[4][1]
-    assert {(item["object_uuid"], item["object_version"]) for item in node_params["nodes"]} == {
+    assert {
+        (item["object_uuid"], item["object_version"]) for item in node_params["nodes"]
+    } == {
         ("00000000000000000000000000000001", 1),
         ("00000000000000000000000000000002", 2),
     }
