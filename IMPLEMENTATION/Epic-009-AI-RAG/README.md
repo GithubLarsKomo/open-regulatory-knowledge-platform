@@ -60,13 +60,15 @@ Human accept/reject/approval is deferred to Epic 010 / `WF-APP-0006`.
 
 ### Version history
 
-Regeneration while the AI draft remains mutable creates a new Object Store version under the same stable AI draft UUID. Previous prompt, context and generated content remain available through Core version history.
+Regeneration while the AI draft remains mutable creates a new Object Store version under the same stable AI draft UUID. Previous prompt, context and generated content remain available through Core version history and the append-only Event Store.
 
 ### Risk boundary
 
-For `target_domain='risk'`, optional structured `risk_support` is passed through the existing `risk_ai_policy` validator before persistence.
+For `target_domain='risk'`, free-form blocks may contain only directly cited `retrieved_fact` content. AI-derived Risk `inference` or `generated_wording` blocks are rejected.
 
-Risk acceptability, Benefit-Risk conclusions, risk-estimation fields, verification decisions and lifecycle/approval fields remain forbidden.
+Any AI-derived Risk support prose must be supplied through structured `risk_support`, which is passed through the existing `risk_ai_policy` validator before persistence.
+
+Risk acceptability, Benefit-Risk conclusions, risk-estimation fields, verification decisions and lifecycle/approval fields remain forbidden. This prevents free-text AI output from bypassing the Risk-domain non-decision contract.
 
 ### REST API
 
