@@ -25,3 +25,6 @@ dev = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+markers = [
+    "integration: tests that require explicitly configured external infrastructure",
+]
