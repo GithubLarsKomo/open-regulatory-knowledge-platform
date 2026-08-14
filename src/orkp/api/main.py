@@ -43,6 +43,7 @@ from orkp.api.routers import (
     create_claim_router,
     create_evidence_router,
 )
+from orkp.api.ai_router import create_ai_router
 from orkp.api.graph_router import create_graph_router
 from orkp.api.performance_router import create_performance_router
 from orkp.api.risk_routers import create_risk_evaluation_router
@@ -54,8 +55,8 @@ from orkp.api.risk_control_requirement_router import (
 
 # Domain-governed object types must not be created or versioned through generic
 # Core write endpoints when doing so would bypass their validation contract.
-_GOVERNED_GENERIC_CREATION = {"report"}
-_GOVERNED_GENERIC_VERSIONING = {"report"}
+_GOVERNED_GENERIC_CREATION = {"report", "ai_draft"}
+_GOVERNED_GENERIC_VERSIONING = {"report", "ai_draft"}
 
 # Sensitive transitions are owned by domain services so their completeness,
 # four-eyes and side-effect rules cannot be bypassed through the generic API.
@@ -69,6 +70,7 @@ _GOVERNED_GENERIC_TRANSITIONS = {
     "overall_residual_risk": {"approved"},
     "risk_impact_assessment": {"in_review", "approved"},
     "report": {"in_review", "approved"},
+    "ai_draft": {"in_review", "approved", "effective", "obsolete", "rejected"},
 }
 
 # ---------------------------------------------------------------------------
@@ -466,6 +468,7 @@ def create_app(session_factory_override=None) -> FastAPI:
     app.include_router(create_post_market_router(get_repo))
     app.include_router(create_risk_control_requirement_router(get_repo))
     app.include_router(create_graph_router(get_repo))
+    app.include_router(create_ai_router(get_repo))
 
     return app
 
