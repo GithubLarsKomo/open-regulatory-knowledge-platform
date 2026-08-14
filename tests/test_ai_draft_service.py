@@ -170,9 +170,12 @@ def test_regeneration_creates_new_version_and_preserves_historical_payload(repo)
     assert regenerated.payload.model_id == "provider/model-2"
     obj = repo.get_by_uuid_hex(created.draft_uuid)
     versions = repo.list_versions(obj.object_uuid)
-    assert [version.version_no for version in versions] == [1, 2]
-    assert versions[0].payload_json["prompt_text"] == "Draft a grounded regulatory statement."
-    assert versions[1].payload_json["prompt_text"] == "Regenerate with a narrower wording."
+    assert [version.version_no for version in versions] == [2, 1]
+    assert versions[1].payload_json["prompt_text"] == "Draft a grounded regulatory statement."
+    assert versions[0].payload_json["prompt_text"] == "Regenerate with a narrower wording."
+    events = repo.get_event_history(obj.object_uuid)
+    assert [event.event_type for event in events] == ["created", "updated"]
+    assert [event.event_data["version"] for event in events] == [1, 2]
 
 
 def test_risk_targeted_ai_draft_rejects_decision_fields(repo):
