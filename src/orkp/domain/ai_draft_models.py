@@ -77,7 +77,18 @@ class AIDraftCreateRequest(BaseModel):
                 raise ValueError(
                     f"AI draft block '{block.block_id}' cites a source outside context_refs"
                 )
-        if self.target_domain != "risk" and self.risk_support is not None:
+        if self.target_domain == "risk":
+            non_facts = [
+                block.block_id
+                for block in self.blocks
+                if block.statement_kind != "retrieved_fact"
+            ]
+            if non_facts:
+                raise ValueError(
+                    "Risk-targeted AI-derived wording/inference must use structured "
+                    "risk_support; non-fact blocks: " + ", ".join(non_facts)
+                )
+        elif self.risk_support is not None:
             raise ValueError("risk_support requires target_domain='risk'")
         return self
 
@@ -140,8 +151,17 @@ class AIDraftPayload(BaseModel):
                     f"AI draft block '{block.block_id}' cites a source outside context_refs"
                 )
         if self.target_domain == "risk":
-            return self
-        if self.risk_support is not None:
+            non_facts = [
+                block.block_id
+                for block in self.blocks
+                if block.statement_kind != "retrieved_fact"
+            ]
+            if non_facts:
+                raise ValueError(
+                    "Risk-targeted AI-derived wording/inference must use structured "
+                    "risk_support; non-fact blocks: " + ", ".join(non_facts)
+                )
+        elif self.risk_support is not None:
             raise ValueError("risk_support requires target_domain='risk'")
         return self
 
