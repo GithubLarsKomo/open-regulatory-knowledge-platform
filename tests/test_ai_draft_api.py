@@ -96,9 +96,9 @@ def test_ai_draft_api_create_get_and_regenerate_preserve_audit_versions(api_cont
     assert regenerated.json()["object_version"] == 2
     versions = client.get(f"/api/v1/objects/{draft_uuid}/versions")
     assert versions.status_code == 200
-    assert [item["version_no"] for item in versions.json()] == [1, 2]
-    assert versions.json()[0]["payload"]["prompt_text"] == "Draft a grounded statement."
-    assert versions.json()[1]["payload"]["prompt_text"] == (
+    assert [item["version_no"] for item in versions.json()] == [2, 1]
+    assert versions.json()[1]["payload"]["prompt_text"] == "Draft a grounded statement."
+    assert versions.json()[0]["payload"]["prompt_text"] == (
         "Regenerate with narrower wording."
     )
 
