@@ -103,7 +103,7 @@ Generic Core creation, generic version creation and generic lifecycle progressio
 
 An AI draft shall not use another `ai_draft` object as a grounding source. This prevents generated text from being silently laundered into a later draft as if it were retrieved regulatory evidence.
 
-Risk-targeted structured support content is additionally validated by `risk_ai_policy.py` before persistence. Decision fields remain forbidden.
+For `target_domain = risk`, free-form AI-derived `inference` and `generated_wording` blocks are not permitted. Risk-targeted blocks may contain only directly cited `retrieved_fact` content. Any AI-derived Risk support prose must be supplied through structured `risk_support`, which is validated by `risk_ai_policy.py` before persistence. Decision fields remain forbidden. This prevents free-text AI wording from bypassing the Risk-domain non-decision contract.
 
 Provider invocation is not part of the grounded persistence boundary. An external/provider result may be submitted to the boundary only after it satisfies the strict grounding/provenance model.
 
@@ -140,7 +140,7 @@ Governed AI draft endpoints:
 - AI drafting: user prompt → retrieval → generation → strict grounded draft persistence → human review → accept/reject
 - AI-generated drafts require human approval before becoming approved regulatory content (WF-APP-0006)
 - AI persistence itself never marks generated content approved
-- Risk AI drafting: generated support text → `risk_ai_policy` validation → draft-only content → human Risk workflow
+- Risk AI drafting: cited retrieved facts + structured generated support text → `risk_ai_policy` validation → draft-only content → human Risk workflow
 - Prompts, exact context references and every generated draft version are retained through the Object Store/event audit trail
 
 ## Security
@@ -160,7 +160,7 @@ Governed AI draft endpoints:
 - Retrieved facts, inference and generated wording are explicitly distinguishable.
 - Prompts, exact context references and generated draft versions are stored for auditability.
 - AI persistence cannot mark content approved; human accept/reject is provided by the later workflow layer.
-- Risk-specific AI output is limited to non-decisional draft text and cannot contain Risk decision fields.
+- Risk-specific AI output is limited to cited retrieved facts plus structured non-decisional support text and cannot contain Risk decision fields.
 
 ## Open Questions
 
