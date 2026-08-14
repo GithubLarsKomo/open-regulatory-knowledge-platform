@@ -53,6 +53,14 @@ def _request(source, **overrides):
                 ],
             },
             {
+                "block_id": "inference-1",
+                "statement_kind": "inference",
+                "text": "The result may support the proposed interpretation.",
+                "source_refs": [
+                    {"object_uuid": source.uuid_hex, "object_version": 1},
+                ],
+            },
+            {
                 "block_id": "wording-1",
                 "statement_kind": "generated_wording",
                 "text": "Draft wording based on the cited source.",
@@ -66,6 +74,19 @@ def _request(source, **overrides):
     }
     payload.update(overrides)
     return AIDraftCreateRequest(**payload)
+
+
+def _risk_fact_block(source):
+    return [
+        {
+            "block_id": "risk-fact",
+            "statement_kind": "retrieved_fact",
+            "text": "The cited Risk Analysis contains the referenced hazard context.",
+            "source_refs": [
+                {"object_uuid": source.uuid_hex, "object_version": 1},
+            ],
+        }
+    ]
 
 
 def test_create_ai_draft_persists_prompt_grounding_provenance_and_draft_status(repo):
@@ -85,6 +106,7 @@ def test_create_ai_draft_persists_prompt_grounding_provenance_and_draft_status(r
     assert response.payload.confidence_score == 0.82
     assert [block.statement_kind for block in response.payload.blocks] == [
         "retrieved_fact",
+        "inference",
         "generated_wording",
     ]
     assert response.payload.context_refs[0].object_uuid == source.uuid_hex
@@ -178,11 +200,19 @@ def test_regeneration_creates_new_version_and_preserves_historical_payload(repo)
     assert [event.event_data["version"] for event in events] == [1, 2]
 
 
+def test_risk_targeted_ai_draft_rejects_free_form_ai_derived_blocks(repo):
+    source = _source(repo, object_type="risk_analysis", payload={"risk_id": "RA-AI"})
+
+    with pytest.raises(ValidationError, match="must use structured risk_support"):
+        _request(source, target_domain="risk")
+
+
 def test_risk_targeted_ai_draft_rejects_decision_fields(repo):
     source = _source(repo, object_type="risk_analysis", payload={"risk_id": "RA-AI"})
     request = _request(
         source,
         target_domain="risk",
+        blocks=_risk_fact_block(source),
         risk_support={"rationale": "Draft rationale", "acceptable": True},
     )
 
