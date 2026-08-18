@@ -70,7 +70,9 @@ class AIDraftCreateRequest(BaseModel):
         allowed = set(context_keys)
         block_ids = [block.block_id for block in self.blocks]
         if len(block_ids) != len(set(block_ids)):
-            raise ValueError("AI draft blocks must not contain duplicate block_id values")
+            raise ValueError(
+                "AI draft blocks must not contain duplicate block_id values"
+            )
         for block in self.blocks:
             keys = {(ref.object_uuid, ref.object_version) for ref in block.source_refs}
             if not keys.issubset(allowed):
@@ -143,7 +145,9 @@ class AIDraftPayload(BaseModel):
         allowed = set(context_keys)
         block_ids = [block.block_id for block in self.blocks]
         if len(block_ids) != len(set(block_ids)):
-            raise ValueError("AI draft blocks must not contain duplicate block_id values")
+            raise ValueError(
+                "AI draft blocks must not contain duplicate block_id values"
+            )
         for block in self.blocks:
             keys = {(ref.object_uuid, ref.object_version) for ref in block.source_refs}
             if not keys.issubset(allowed):

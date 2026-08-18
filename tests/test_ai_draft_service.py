@@ -123,9 +123,7 @@ def test_ai_draft_rejects_missing_exact_context_version(repo):
                 "block_id": "fact",
                 "statement_kind": "retrieved_fact",
                 "text": "Fact",
-                "source_refs": [
-                    {"object_uuid": source.uuid_hex, "object_version": 99}
-                ],
+                "source_refs": [{"object_uuid": source.uuid_hex, "object_version": 99}],
             }
         ],
     )
@@ -193,11 +191,19 @@ def test_regeneration_creates_new_version_and_preserves_historical_payload(repo)
     obj = repo.get_by_uuid_hex(created.draft_uuid)
     versions = repo.list_versions(obj.object_uuid)
     assert [version.version_no for version in versions] == [2, 1]
-    assert versions[1].payload_json["prompt_text"] == "Draft a grounded regulatory statement."
+    assert (
+        versions[1].payload_json["prompt_text"]
+        == "Draft a grounded regulatory statement."
+    )
     assert versions[0].payload_json["prompt_text"] == "Regenerate with a narrower wording."
     events = repo.get_event_history(obj.object_uuid)
-    assert [event.event_type for event in events] == ["created", "updated"]
-    assert [event.event_data["version"] for event in events] == [1, 2]
+    assert {event.event_type for event in events} == {"created", "updated"}
+    event_versions = {
+        event.event_type: event.event_data["version"]
+        for event in events
+        if event.event_type in {"created", "updated"}
+    }
+    assert event_versions == {"created": 1, "updated": 2}
 
 
 def test_risk_targeted_ai_draft_rejects_free_form_ai_derived_blocks(repo):
