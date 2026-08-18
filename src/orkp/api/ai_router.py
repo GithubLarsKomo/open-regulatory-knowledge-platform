@@ -47,7 +47,11 @@ def create_ai_router(
         "/drafts/{draft_uuid}/regenerate",
         response_model=AIDraftResponse,
         status_code=status.HTTP_201_CREATED,
-        responses={404: {"model": ErrorResponse}, 409: {"model": ErrorResponse}, 422: {"model": ErrorResponse}},
+        responses={
+            404: {"model": ErrorResponse},
+            409: {"model": ErrorResponse},
+            422: {"model": ErrorResponse},
+        },
     )
     async def regenerate_ai_draft(
         draft_uuid: str,
