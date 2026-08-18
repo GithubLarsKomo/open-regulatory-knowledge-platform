@@ -6,7 +6,7 @@ In progress.
 
 ## Slice 1 — Auditable Grounded AI Draft Record
 
-Issue: #32
+Issue: #32 — completed.
 
 Primary requirements:
 
@@ -76,8 +76,52 @@ Risk acceptability, Benefit-Risk conclusions, risk-estimation fields, verificati
 - `GET /api/v1/ai/drafts/{draft_uuid}`
 - `POST /api/v1/ai/drafts/{draft_uuid}/regenerate`
 
-## Deferred slice
+## Slice 2 — Deterministic Hybrid Retrieval Contract
 
-`AI-CORE-0005` hybrid retrieval is the next Epic-009 slice. It will combine keyword, vector and graph retrieval into the exact context-reference contract established here.
+Issue: #33.
 
-Provider-specific LLM invocation, human workflow integration and RBAC are also deferred.
+Primary requirement:
+
+- `AI-CORE-0005` — hybrid retrieval combines keyword search, vector search and graph traversal.
+
+### Retrieval architecture
+
+Hybrid retrieval is exact-version-first. Every channel produces `RetrievalHit` values containing an ORKP object UUID, object version, object type, normalized score and channel identifier.
+
+Channels:
+
+- **keyword** — `ObjectStoreKeywordRetrievalAdapter` searches current Object Store payloads deterministically;
+- **vector** — `VectorRetrievalAdapter` is an injected provider-neutral protocol; no vector database or embedding model is hidden in Core;
+- **graph** — `GraphRetrievalAdapter` uses the canonical exact-version `GraphProjectionService` from explicit seed references.
+
+The hybrid service revalidates every returned UUID/version against the authoritative Object Store before a hit can become grounding context.
+
+### Fusion
+
+Duplicate hits are merged by exact `(object_uuid, object_version)` identity.
+
+Default channel weights:
+
+- keyword: 0.35
+- vector: 0.45
+- graph: 0.20
+
+Each candidate exposes all individual channel scores plus the deterministic weighted fused score. Ties are resolved stably by object type, UUID and version.
+
+Historical and current versions are never silently conflated.
+
+### AI grounding boundary
+
+`ai_draft` objects are excluded from keyword, vector and graph results. An `ai_draft` is also rejected as a graph retrieval seed. Generated AI content therefore cannot be laundered into a later draft through retrieval.
+
+Retrieval is read-only and does not change Object Store versions, graph relations, lifecycle or approval state.
+
+### Runtime boundary
+
+No REST retrieval endpoint is exposed in this slice because Core does not yet have a configured vector provider. The domain contract can be used by a later provider/runtime once a concrete `VectorRetrievalAdapter` is injected.
+
+Provider-specific vector stores, embedding models, literature adapters and LLM invocation remain outside this slice.
+
+## Deferred
+
+Provider-specific LLM invocation, concrete vector infrastructure, literature retrieval, human workflow integration and RBAC are deferred to later slices/epics.
