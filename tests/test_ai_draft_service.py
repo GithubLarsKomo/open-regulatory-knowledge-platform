@@ -195,7 +195,10 @@ def test_regeneration_creates_new_version_and_preserves_historical_payload(repo)
         versions[1].payload_json["prompt_text"]
         == "Draft a grounded regulatory statement."
     )
-    assert versions[0].payload_json["prompt_text"] == "Regenerate with a narrower wording."
+    assert (
+        versions[0].payload_json["prompt_text"]
+        == "Regenerate with a narrower wording."
+    )
     events = repo.get_event_history(obj.object_uuid)
     assert {event.event_type for event in events} == {"created", "updated"}
     event_versions = {
