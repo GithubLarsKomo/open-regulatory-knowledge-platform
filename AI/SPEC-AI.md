@@ -107,12 +107,64 @@ For `target_domain = risk`, free-form AI-derived `inference` and `generated_word
 
 Provider invocation is not part of the grounded persistence boundary. An external/provider result may be submitted to the boundary only after it satisfies the strict grounding/provenance model.
 
+## Deterministic Hybrid Retrieval
+
+ORKP implements `AI-CORE-0005` as an exact-version hybrid retrieval contract. Retrieval output is suitable for direct conversion into the `context_refs` used by `ai-draft-1.0`.
+
+Every retrieval hit shall contain:
+
+- exact ORKP `object_uuid`;
+- exact `object_version`;
+- `object_type`;
+- channel identifier (`keyword`, `vector` or `graph`);
+- normalized channel score in the range `(0, 1]`.
+
+### Keyword channel
+
+`ObjectStoreKeywordRetrievalAdapter` performs deterministic keyword search over the current versions of non-deleted Object Store objects. Historical versions are not silently substituted for current keyword hits.
+
+The channel shall not return `ai_draft` objects.
+
+### Vector channel
+
+Semantic search is exposed through the provider-neutral `VectorRetrievalAdapter` protocol.
+
+Core does not embed a vector database, embedding model or external provider in this contract. A concrete adapter must return exact ORKP UUID/version references and normalized scores. The hybrid service revalidates every vector hit against the authoritative Object Store before use.
+
+Unknown versions, incorrect object types and wrong channel declarations are rejected rather than silently accepted.
+
+### Graph channel
+
+`GraphRetrievalAdapter` traverses the canonical exact-version `GraphProjectionService` from explicit versioned seed references.
+
+Graph scores are distance-based and remain bound to the exact versions returned by the graph projection. Current and historical versions are not conflated.
+
+An `ai_draft` cannot be used as a graph retrieval seed and cannot appear as a graph retrieval result.
+
+### Fusion
+
+Hybrid retrieval merges candidates by exact `(object_uuid, object_version)` identity.
+
+Default weights are:
+
+- keyword: `0.35`;
+- vector: `0.45`;
+- graph: `0.20`.
+
+For each exact candidate, the highest score contributed by each channel is retained. The final score is the weighted score divided by the configured total weight. Results are sorted deterministically by fused score and then stable object identity fields.
+
+The response exposes both the fused score and the individual channel scores so downstream AI and human reviewers can distinguish why a source was retrieved.
+
+Hybrid retrieval is read-only. It shall not mutate Object Store payloads, versions, graph relations, lifecycle or approval state.
+
+No default REST endpoint is defined until a concrete vector provider is configured. The domain service and adapter protocol define the provider-neutral runtime boundary.
+
 ## Interfaces
 
 - REST API — AI drafting requests and responses
 - Object Store — source object retrieval and AI draft version/audit persistence
 - Knowledge Graph — relationship context
-- Vector Index — semantic search
+- Vector Index — semantic search through an injected adapter
 - Report Engine — AI-assisted report section generation
 - Risk Domain — validates Risk AI draft content against the non-decision contract before any future AI integration can hand content to Risk workflows
 
@@ -137,7 +189,7 @@ Governed AI draft endpoints:
 
 ## Workflow
 
-- AI drafting: user prompt → retrieval → generation → strict grounded draft persistence → human review → accept/reject
+- AI drafting: user prompt → hybrid retrieval → generation → strict grounded draft persistence → human review → accept/reject
 - AI-generated drafts require human approval before becoming approved regulatory content (WF-APP-0006)
 - AI persistence itself never marks generated content approved
 - Risk AI drafting: cited retrieved facts + structured generated support text → `risk_ai_policy` validation → draft-only content → human Risk workflow
@@ -150,6 +202,7 @@ Governed AI draft endpoints:
 - AI cannot modify approved content
 - AI audit trail is read-only from the AI service perspective
 - Generic Core write endpoints cannot create/version/approve `ai_draft` outside the AI domain contract
+- AI drafts cannot be used as direct grounding sources or graph retrieval seeds for later AI drafts
 - AI must not set Risk acceptability, Benefit-Risk conclusions, Risk estimation, verification decisions or lifecycle/approval state; `risk_ai_policy.py` rejects those fields before Risk-domain use (REQ-RISK-0025)
 - Trusted identity and role enforcement remain the responsibility of the RBAC/authentication layer; the Risk AI policy is a domain-content boundary, not an authentication substitute
 
@@ -161,9 +214,12 @@ Governed AI draft endpoints:
 - Prompts, exact context references and generated draft versions are stored for auditability.
 - AI persistence cannot mark content approved; human accept/reject is provided by the later workflow layer.
 - Risk-specific AI output is limited to cited retrieved facts plus structured non-decisional support text and cannot contain Risk decision fields.
+- Hybrid retrieval combines keyword, vector and graph channels into exact versioned ORKP references.
+- Hybrid retrieval exposes per-channel and fused scores and rejects stale or inconsistent adapter hits.
 
 ## Open Questions
 
 - Which LLM provider(s) to support initially?
+- Which concrete vector index and embedding model should implement `VectorRetrievalAdapter` first?
 - Should AI functions be extensible via plugin architecture?
 - How to handle multi-language prompt and generation?
