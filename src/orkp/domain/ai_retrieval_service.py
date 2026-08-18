@@ -156,6 +156,13 @@ class HybridRetrievalService:
         self.graph_adapter = graph_adapter or GraphRetrievalAdapter(repo)
 
     def retrieve(self, request: HybridRetrievalRequest) -> HybridRetrievalResponse:
+        for seed in request.graph_seed_refs:
+            seed_type = self._validate_reference(seed, "Graph retrieval seed")
+            if seed_type == "ai_draft":
+                raise ObjectTypeMismatchError(
+                    "AI draft cannot be used as a graph retrieval seed"
+                )
+
         keyword_hits = self.keyword_adapter.search(
             request.query_text,
             request.keyword_limit,
@@ -236,26 +243,32 @@ class HybridRetrievalService:
         )
 
     def _validate_hit(self, hit: RetrievalHit) -> str | None:
+        object_type = self._validate_reference(hit.reference, "Retrieval hit")
+        if object_type != hit.object_type:
+            raise ObjectTypeMismatchError(
+                f"Retrieval hit type {hit.object_type} does not match Object Store type {object_type}"
+            )
+        if object_type == "ai_draft":
+            return None
+        return object_type
+
+    def _validate_reference(
+        self,
+        reference: VersionedObjectReference,
+        label: str,
+    ) -> str:
         try:
-            object_uuid = UUID(hit.reference.object_uuid).bytes
+            object_uuid = UUID(reference.object_uuid).bytes
         except (ValueError, AttributeError, TypeError) as exc:
             raise ObjectNotFoundError(
-                f"Retrieval hit has invalid object UUID {hit.reference.object_uuid}"
+                f"{label} has invalid object UUID {reference.object_uuid}"
             ) from exc
         obj = self.repo.get_by_uuid(object_uuid)
         if obj is None:
-            raise ObjectNotFoundError(
-                f"Retrieval hit object {hit.reference.object_uuid} not found"
-            )
-        version = self.repo.get_version(object_uuid, hit.reference.object_version)
+            raise ObjectNotFoundError(f"{label} object {reference.object_uuid} not found")
+        version = self.repo.get_version(object_uuid, reference.object_version)
         if version is None:
             raise ObjectVersionNotFoundError(
-                f"Retrieval hit {hit.reference.object_uuid} v{hit.reference.object_version} not found"
+                f"{label} {reference.object_uuid} v{reference.object_version} not found"
             )
-        if obj.object_type != hit.object_type:
-            raise ObjectTypeMismatchError(
-                f"Retrieval hit type {hit.object_type} does not match Object Store type {obj.object_type}"
-            )
-        if obj.object_type == "ai_draft":
-            return None
         return obj.object_type
