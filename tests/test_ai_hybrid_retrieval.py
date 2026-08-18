@@ -20,6 +20,7 @@ from orkp.domain.exceptions import (
     ObjectTypeMismatchError,
     ObjectVersionNotFoundError,
 )
+from orkp.domain.risk_models import VersionedObjectReference
 
 
 class RecordingVectorAdapter:
@@ -126,7 +127,12 @@ def test_graph_retrieval_uses_exact_seed_version_and_distance_score(repo):
     product, claim, evidence = _context(repo)
 
     hits = GraphRetrievalAdapter(repo).search(
-        [{"object_uuid": claim.uuid_hex, "object_version": 1}],
+        [
+            VersionedObjectReference(
+                object_uuid=claim.uuid_hex,
+                object_version=1,
+            )
+        ],
         depth=1,
         limit=10,
     )
