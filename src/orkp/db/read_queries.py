@@ -2,7 +2,7 @@
 
 from collections.abc import Iterable
 
-from sqlalchemy import and_, select, tuple_
+from sqlalchemy import String, and_, cast, func, or_, select, tuple_
 from sqlalchemy.orm import Session
 
 from orkp.db.models import ObjectVersion, RegulatoryObject
@@ -10,6 +10,7 @@ from orkp.db.models import ObjectVersion, RegulatoryObject
 
 VersionKey = tuple[bytes, int]
 ValidationContext = tuple[RegulatoryObject, dict[int, ObjectVersion]]
+KeywordCandidate = tuple[bytes, int, str, dict]
 
 
 def list_current_object_versions(
@@ -37,6 +38,72 @@ def list_current_object_versions(
         .limit(limit)
     )
     return list(session.execute(stmt).all())
+
+
+def list_current_keyword_candidates(
+    session: Session,
+    tokens: Iterable[str],
+    *,
+    limit: int = 5000,
+) -> list[KeywordCandidate]:
+    """Prefilter keyword candidates inside the existing newest-object window.
+
+    The outer token predicate is intentionally only a superset filter. Exact
+    canonical tokenization, scoring and ranking remain caller-owned. Applying the
+    predicate after the inner ``limit`` preserves the historical scan window:
+    matching older rows cannot enter merely because newer non-matches were
+    filtered out.
+    """
+    normalized_tokens = list(dict.fromkeys(token.lower() for token in tokens if token))
+    if not normalized_tokens:
+        return []
+
+    window = (
+        select(
+            RegulatoryObject.object_uuid.label("object_uuid"),
+            RegulatoryObject.current_version.label("current_version"),
+            RegulatoryObject.object_type.label("object_type"),
+            RegulatoryObject.updated_at.label("updated_at"),
+            ObjectVersion.payload_json.label("payload_json"),
+        )
+        .join(
+            ObjectVersion,
+            and_(
+                ObjectVersion.object_uuid == RegulatoryObject.object_uuid,
+                ObjectVersion.version_no == RegulatoryObject.current_version,
+            ),
+        )
+        .where(RegulatoryObject.lifecycle_state != "deleted")
+        .order_by(RegulatoryObject.updated_at.desc())
+        .limit(limit)
+        .subquery()
+    )
+
+    serialized_payload = func.lower(cast(window.c.payload_json, String))
+    stmt = (
+        select(
+            window.c.object_uuid,
+            window.c.current_version,
+            window.c.object_type,
+            window.c.payload_json,
+        )
+        .where(window.c.object_type != "ai_draft")
+        .where(
+            or_(
+                *(
+                    serialized_payload.contains(token, autoescape=True)
+                    for token in normalized_tokens
+                )
+            )
+        )
+        .order_by(window.c.updated_at.desc())
+    )
+    return [
+        (object_uuid, current_version, object_type, payload_json)
+        for object_uuid, current_version, object_type, payload_json in session.execute(
+            stmt
+        ).all()
+    ]
 
 
 def get_object_version_validation_contexts(

@@ -7,6 +7,7 @@ from uuid import UUID
 
 from orkp.db.read_queries import (
     get_object_version_validation_contexts,
+    list_current_keyword_candidates,
     list_current_object_versions,
 )
 from orkp.db.repository import RegulatoryObjectRepository
@@ -49,13 +50,10 @@ class ObjectStoreKeywordRetrievalAdapter:
             return []
         query_normalized = " ".join(tokens)
         hits: list[RetrievalHit] = []
-        for obj, version in list_current_object_versions(
-            self.repo.session,
-            limit=self.scan_limit,
+        for object_uuid, current_version, object_type, payload in self._candidates(
+            tokens
         ):
-            if obj.object_type == "ai_draft":
-                continue
-            searchable = self._searchable_text(version.payload_json)
+            searchable = self._searchable_text(payload)
             matched = sum(1 for token in tokens if token in searchable)
             if matched == 0:
                 continue
@@ -65,10 +63,10 @@ class ObjectStoreKeywordRetrievalAdapter:
             hits.append(
                 RetrievalHit(
                     reference=VersionedObjectReference(
-                        object_uuid=UUID(bytes=obj.object_uuid).hex,
-                        object_version=obj.current_version,
+                        object_uuid=UUID(bytes=object_uuid).hex,
+                        object_version=current_version,
                     ),
-                    object_type=obj.object_type,
+                    object_type=object_type,
                     channel="keyword",
                     score=score,
                 )
@@ -82,6 +80,27 @@ class ObjectStoreKeywordRetrievalAdapter:
             )
         )
         return hits[:limit]
+
+    def _candidates(self, tokens: list[str]):
+        if all(token.isascii() for token in tokens):
+            return list_current_keyword_candidates(
+                self.repo.session,
+                tokens,
+                limit=self.scan_limit,
+            )
+        return [
+            (
+                obj.object_uuid,
+                obj.current_version,
+                obj.object_type,
+                version.payload_json,
+            )
+            for obj, version in list_current_object_versions(
+                self.repo.session,
+                limit=self.scan_limit,
+            )
+            if obj.object_type != "ai_draft"
+        ]
 
     @staticmethod
     def _tokens(value: str) -> list[str]:
