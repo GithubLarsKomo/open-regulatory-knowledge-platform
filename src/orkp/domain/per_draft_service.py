@@ -10,9 +10,7 @@ from orkp.db.models import EventLog, GeneratedArtifact
 from orkp.db.repository import RegulatoryObjectRepository
 from orkp.domain.exceptions import (
     BaselineValidationError,
-    InvalidObjectIdentifierError,
     InvalidPersistedPayloadError,
-    ObjectNotFoundError,
 )
 from orkp.domain.per_completeness_models import (
     PERCompletenessReport,
@@ -55,19 +53,17 @@ class PERDraftService:
         performance_report = PerformanceReportService(self.repo).build_report(
             baseline_hex
         )
-        baseline = self._load_baseline(baseline_hex)
+        baseline_uuid = UUID(performance_report.baseline_uuid).bytes
+        items = self.repo.list_baseline_items(baseline_uuid)
         traceability = self._build_traceability(performance_report)
-        content_blocks = self._build_content_blocks(
-            performance_report,
-            baseline.baseline_uuid,
-        )
+        content_blocks = self._build_content_blocks(performance_report, items)
         completeness_report = self._build_completeness_report(
             performance_report,
-            baseline.baseline_uuid,
+            items,
         )
         section_coverage = self._build_section_coverage(
             performance_report,
-            baseline.baseline_uuid,
+            items,
         )
         if (completeness_report is None) != (section_coverage is None):
             raise BaselineValidationError(
@@ -94,7 +90,7 @@ class PERDraftService:
         generated_by_user_id: str,
     ) -> PERDraftGenerationResponse:
         draft = self.build_draft(baseline_hex)
-        baseline = self._load_baseline(baseline_hex)
+        baseline_uuid = UUID(draft.baseline_uuid).bytes
         canonical_json = json.dumps(
             draft.model_dump(mode="json"),
             ensure_ascii=False,
@@ -105,7 +101,7 @@ class PERDraftService:
 
         try:
             artifact = GeneratedArtifact(
-                baseline_uuid=baseline.baseline_uuid,
+                baseline_uuid=baseline_uuid,
                 artifact_type="per_draft",
                 format="json",
                 file_path=None,
@@ -114,13 +110,14 @@ class PERDraftService:
             )
             self.repo.session.add(artifact)
             self.repo.session.flush()
+            artifact_uuid = UUID(bytes=artifact.artifact_uuid).hex
             self.repo.session.add(
                 EventLog(
                     aggregate_type="baseline",
-                    aggregate_uuid=baseline.baseline_uuid,
+                    aggregate_uuid=baseline_uuid,
                     event_type="artifact_generated",
                     event_data={
-                        "artifact_uuid": UUID(bytes=artifact.artifact_uuid).hex,
+                        "artifact_uuid": artifact_uuid,
                         "artifact_type": artifact.artifact_type,
                         "format": artifact.format,
                         "checksum": checksum,
@@ -134,8 +131,8 @@ class PERDraftService:
             raise
 
         return PERDraftGenerationResponse(
-            artifact_uuid=UUID(bytes=artifact.artifact_uuid).hex,
-            baseline_uuid=UUID(bytes=baseline.baseline_uuid).hex,
+            artifact_uuid=artifact_uuid,
+            baseline_uuid=draft.baseline_uuid,
             checksum_sha256=checksum,
             canonical_json=canonical_json,
             draft=draft,
@@ -144,9 +141,8 @@ class PERDraftService:
     def _build_completeness_report(
         self,
         report,
-        baseline_uuid: bytes,
+        items,
     ) -> PERCompletenessReport | None:
-        items = self.repo.list_baseline_items(baseline_uuid)
         completeness_items = [
             item for item in items if item.object_type == "report_completeness"
         ]
@@ -209,9 +205,8 @@ class PERDraftService:
     def _build_section_coverage(
         self,
         report,
-        baseline_uuid: bytes,
+        items,
     ) -> PERSectionCoverageReport | None:
-        items = self.repo.list_baseline_items(baseline_uuid)
         coverage_items = [
             item for item in items if item.object_type == "report_section_coverage"
         ]
@@ -262,7 +257,7 @@ class PERDraftService:
     def _build_content_blocks(
         self,
         report,
-        baseline_uuid: bytes,
+        items,
     ) -> list[PERContentBlock]:
         allowed_refs = self._report_reference_keys(report)
         blocks: list[PERContentBlock] = []
@@ -292,7 +287,7 @@ class PERDraftService:
                         )
                     )
 
-        for item in self.repo.list_baseline_items(baseline_uuid):
+        for item in items:
             if item.object_type != "report_content":
                 continue
             try:
@@ -389,17 +384,3 @@ class PERDraftService:
             object_uuid=snapshot.object_uuid,
             object_version=snapshot.object_version,
         )
-
-    def _load_baseline(self, baseline_hex: str):
-        try:
-            baseline_uuid = UUID(baseline_hex).bytes
-        except (ValueError, AttributeError, TypeError) as exc:
-            raise InvalidObjectIdentifierError(
-                f"Invalid baseline UUID format: {baseline_hex}"
-            ) from exc
-        baseline = self.repo.get_baseline(baseline_uuid)
-        if baseline is None:
-            raise ObjectNotFoundError(
-                f"Baseline {UUID(bytes=baseline_uuid).hex} not found"
-            )
-        return baseline
