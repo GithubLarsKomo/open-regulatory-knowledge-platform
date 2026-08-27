@@ -179,25 +179,26 @@ class PERReportBaselineService:
                 ),
                 created_by=request.created_by_user_id,
             )
+            response = PERReportBaselineResponse(
+                baseline_uuid=UUID(bytes=baseline.baseline_uuid).hex,
+                source_performance_baseline_uuid=source_baseline_hex,
+                name=baseline.name,
+                description=baseline.description,
+                item_count=len(object_versions),
+                ai_draft_block_count=len(request.ai_draft_blocks),
+                completeness_snapshot_ref=completeness_ref,
+                section_coverage_snapshot_ref={
+                    "object_uuid": section_object.uuid_hex,
+                    "object_version": section_version.version_no,
+                },
+                created_by_user_id=baseline.created_by,
+            )
             self.repo.session.commit()
         except Exception:
             self.repo.session.rollback()
             raise
 
-        return PERReportBaselineResponse(
-            baseline_uuid=UUID(bytes=baseline.baseline_uuid).hex,
-            source_performance_baseline_uuid=source_baseline_hex,
-            name=baseline.name,
-            description=baseline.description,
-            item_count=len(object_versions),
-            ai_draft_block_count=len(request.ai_draft_blocks),
-            completeness_snapshot_ref=completeness_ref,
-            section_coverage_snapshot_ref={
-                "object_uuid": section_object.uuid_hex,
-                "object_version": section_version.version_no,
-            },
-            created_by_user_id=baseline.created_by,
-        )
+        return response
 
     def _add_gap_context(self, object_versions: dict[bytes, int], gap_report) -> None:
         for claim_item in gap_report.claims:

@@ -61,20 +61,21 @@ class PerformanceReportService:
                 object_versions=object_versions,
                 created_by=request.created_by_user_id,
             )
+            response = PerformanceReportBaselineResponse(
+                baseline_uuid=UUID(bytes=baseline.baseline_uuid).hex,
+                name=baseline.name,
+                description=baseline.description,
+                product=request.product,
+                evidence_count=len(request.evidence),
+                item_count=len(object_versions),
+                created_by_user_id=baseline.created_by,
+            )
             self.repo.session.commit()
         except Exception:
             self.repo.session.rollback()
             raise
 
-        return PerformanceReportBaselineResponse(
-            baseline_uuid=UUID(bytes=baseline.baseline_uuid).hex,
-            name=baseline.name,
-            description=baseline.description,
-            product=request.product,
-            evidence_count=len(request.evidence),
-            item_count=len(object_versions),
-            created_by_user_id=baseline.created_by,
-        )
+        return response
 
     def get_baseline(self, baseline_hex: str) -> PerformanceReportBaselineResponse:
         baseline = self._load_baseline(baseline_hex)
