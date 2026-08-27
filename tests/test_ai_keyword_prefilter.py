@@ -52,7 +52,9 @@ def test_keyword_prefilter_only_canonicalizes_sql_candidates():
     engine, session, repo = _repo()
     try:
         for index in range(100):
-            wording = f"performance marker {index}" if index % 10 == 0 else f"other {index}"
+            wording = (
+                f"performance marker {index}" if index % 10 == 0 else f"other {index}"
+            )
             repo.create_object(
                 "claim",
                 {"wording": wording},
@@ -85,7 +87,9 @@ def test_keyword_prefilter_keeps_single_query_adapter_budget():
     engine, session, repo = _repo()
     try:
         for index in range(20):
-            wording = f"clinical evidence {index}" if index % 2 == 0 else f"other {index}"
+            wording = (
+                f"clinical evidence {index}" if index % 2 == 0 else f"other {index}"
+            )
             repo.create_object(
                 "evidence",
                 {"title": wording},
