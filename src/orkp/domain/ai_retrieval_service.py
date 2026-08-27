@@ -5,7 +5,10 @@ import re
 from typing import Protocol
 from uuid import UUID
 
-from orkp.db.read_queries import list_current_object_versions
+from orkp.db.read_queries import (
+    get_object_version_validation_contexts,
+    list_current_object_versions,
+)
 from orkp.db.repository import RegulatoryObjectRepository
 from orkp.domain.ai_retrieval_models import (
     HybridRetrievalCandidate,
@@ -180,33 +183,80 @@ class HybridRetrievalService:
             request.max_results,
         )
 
-        merged: dict[tuple[str, int], dict] = {}
+        prepared_hits: list[
+            tuple[str, RetrievalHit, bytes | None, Exception | None]
+        ] = []
+        validation_keys: list[tuple[bytes, int]] = []
         for expected_channel, hits in (
             ("keyword", keyword_hits),
             ("vector", vector_hits),
             ("graph", graph_hits),
         ):
             for hit in hits:
+                object_uuid: bytes | None = None
+                validation_error: Exception | None = None
                 if hit.channel != expected_channel:
-                    raise ObjectTypeMismatchError(
+                    validation_error = ObjectTypeMismatchError(
                         f"{expected_channel} retrieval adapter returned {hit.channel} hit"
                     )
-                validated_type = self._validate_hit(hit)
-                if validated_type is None:
-                    continue
-                key = (hit.reference.object_uuid, hit.reference.object_version)
-                entry = merged.setdefault(
-                    key,
-                    {
-                        "reference": hit.reference,
-                        "object_type": validated_type,
-                        "keyword_score": 0.0,
-                        "vector_score": 0.0,
-                        "graph_score": 0.0,
-                    },
+                else:
+                    try:
+                        object_uuid = UUID(hit.reference.object_uuid).bytes
+                    except (ValueError, AttributeError, TypeError):
+                        validation_error = ObjectNotFoundError(
+                            "Retrieval hit has invalid object UUID "
+                            f"{hit.reference.object_uuid}"
+                        )
+                    else:
+                        validation_keys.append(
+                            (object_uuid, hit.reference.object_version)
+                        )
+                prepared_hits.append(
+                    (expected_channel, hit, object_uuid, validation_error)
                 )
-                score_field = f"{expected_channel}_score"
-                entry[score_field] = max(entry[score_field], hit.score)
+
+        validation_contexts = get_object_version_validation_contexts(
+            self.repo.session,
+            validation_keys,
+        )
+
+        merged: dict[tuple[str, int], dict] = {}
+        for expected_channel, hit, object_uuid, validation_error in prepared_hits:
+            if validation_error is not None:
+                raise validation_error
+            assert object_uuid is not None
+            context = validation_contexts.get(object_uuid)
+            if context is None:
+                raise ObjectNotFoundError(
+                    f"Retrieval hit object {hit.reference.object_uuid} not found"
+                )
+            obj, versions = context
+            if hit.reference.object_version not in versions:
+                raise ObjectVersionNotFoundError(
+                    "Retrieval hit "
+                    f"{hit.reference.object_uuid} v{hit.reference.object_version} not found"
+                )
+            validated_type = obj.object_type
+            if validated_type != hit.object_type:
+                raise ObjectTypeMismatchError(
+                    f"Retrieval hit type {hit.object_type} does not match Object Store type {validated_type}"
+                )
+            if validated_type == "ai_draft":
+                continue
+
+            key = (hit.reference.object_uuid, hit.reference.object_version)
+            entry = merged.setdefault(
+                key,
+                {
+                    "reference": hit.reference,
+                    "object_type": validated_type,
+                    "keyword_score": 0.0,
+                    "vector_score": 0.0,
+                    "graph_score": 0.0,
+                },
+            )
+            score_field = f"{expected_channel}_score"
+            entry[score_field] = max(entry[score_field], hit.score)
 
         weights = request.weights
         total_weight = weights.keyword + weights.vector + weights.graph
@@ -244,16 +294,6 @@ class HybridRetrievalService:
             query_text=request.query_text,
             results=results[: request.max_results],
         )
-
-    def _validate_hit(self, hit: RetrievalHit) -> str | None:
-        object_type = self._validate_reference(hit.reference, "Retrieval hit")
-        if object_type != hit.object_type:
-            raise ObjectTypeMismatchError(
-                f"Retrieval hit type {hit.object_type} does not match Object Store type {object_type}"
-            )
-        if object_type == "ai_draft":
-            return None
-        return object_type
 
     def _validate_reference(
         self,
