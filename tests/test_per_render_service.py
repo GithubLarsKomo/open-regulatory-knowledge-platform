@@ -6,7 +6,7 @@ import zipfile
 from uuid import UUID
 
 import pytest
-from sqlalchemy import create_engine, select
+from sqlalchemy import create_engine, event, select
 from sqlalchemy.orm import Session
 
 from orkp.db.models import Base, EventLog, GeneratedArtifact
@@ -135,6 +135,22 @@ def _artifacts(repo):
     return list(repo.session.execute(select(GeneratedArtifact)).scalars().all())
 
 
+def _count_sql(repo, operation):
+    engine = repo.session.get_bind()
+    statements = 0
+
+    def count_statement(*args, **kwargs):
+        nonlocal statements
+        statements += 1
+
+    event.listen(engine, "before_cursor_execute", count_statement)
+    try:
+        result = operation()
+    finally:
+        event.remove(engine, "before_cursor_execute", count_statement)
+    return result, statements
+
+
 def test_side_effect_free_draft_builder_creates_no_artifact(repo):
     *_, baseline = _report_baseline(repo)
 
@@ -200,6 +216,22 @@ def test_render_formats_are_valid_and_persist_single_artifact(
             document = archive.read("word/document.xml").decode("utf-8")
             assert "Performance Evaluation Report" in document
             assert "AI clinical summary." in document
+
+
+def test_docx_render_uses_five_sql_statements(repo):
+    *_, baseline = _report_baseline(repo)
+
+    rendered, statements = _count_sql(
+        repo,
+        lambda: PERRenderService(repo).render(
+            baseline.baseline_uuid,
+            "docx",
+            "report-generator",
+        ),
+    )
+
+    assert rendered.content.startswith(b"PK")
+    assert statements == 5
 
 
 def test_repeated_render_is_byte_identical_without_intermediate_draft_artifacts(repo):
