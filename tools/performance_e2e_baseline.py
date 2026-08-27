@@ -101,8 +101,9 @@ def _baseline_create(repetitions, warmups, item_count=100):
             refs,
             "perf",
         )
+        baseline_uuid = baseline.baseline_uuid
         session.commit()
-        return len(repo.list_baseline_items(baseline.baseline_uuid))
+        return len(repo.list_baseline_items(baseline_uuid))
 
     try:
         return _measure(
