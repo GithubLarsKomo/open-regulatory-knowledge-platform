@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
-from sqlalchemy import and_, or_, select, update
+from sqlalchemy import and_, insert, or_, select, tuple_, update
 from sqlalchemy.orm import Session
 
 from orkp.db.models import (
@@ -639,21 +639,48 @@ class RegulatoryObjectRepository:
         self.session.add(baseline)
         self.session.flush()
 
+        version_context: Dict[
+            Tuple[bytes, int], Tuple[ObjectVersion, Optional[RegulatoryObject]]
+        ] = {}
+        if object_versions:
+            requested_pairs = list(dict.fromkeys(object_versions))
+            context_stmt = (
+                select(ObjectVersion, RegulatoryObject)
+                .outerjoin(
+                    RegulatoryObject,
+                    RegulatoryObject.object_uuid == ObjectVersion.object_uuid,
+                )
+                .where(
+                    tuple_(ObjectVersion.object_uuid, ObjectVersion.version_no).in_(
+                        requested_pairs
+                    )
+                )
+            )
+            version_context = {
+                (version.object_uuid, version.version_no): (version, obj)
+                for version, obj in self.session.execute(context_stmt).all()
+            }
+
+        item_rows = []
         for obj_uuid, ver_no in object_versions:
-            version = self.get_version(obj_uuid, ver_no)
-            if version is None:
+            context = version_context.get((obj_uuid, ver_no))
+            if context is None:
                 raise BaselineValidationError(
                     f"Version {ver_no} of object {_bin_to_str(obj_uuid)} does not exist"
                 )
-            obj = self.get_by_uuid_including_deleted(obj_uuid)
-            item = BaselineItem(
-                baseline_uuid=baseline.baseline_uuid,
-                object_uuid=obj_uuid,
-                object_type=obj.object_type if obj else "unknown",
-                version_no=ver_no,
-                snapshot_json=version.payload_json,
+            version, obj = context
+            item_rows.append(
+                {
+                    "baseline_uuid": baseline.baseline_uuid,
+                    "object_uuid": obj_uuid,
+                    "object_type": obj.object_type if obj else "unknown",
+                    "version_no": ver_no,
+                    "snapshot_json": version.payload_json,
+                }
             )
-            self.session.add(item)
+
+        if item_rows:
+            self.session.execute(insert(BaselineItem), item_rows)
 
         self._log_event(
             aggregate_type="baseline",
