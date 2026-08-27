@@ -93,6 +93,7 @@ def _relation_create(repetitions: int, warmups: int) -> dict:
             owner_user_id="performance-baseline",
             created_by="performance-baseline",
         )
+        product_uuid = product.object_uuid
         claims: list[bytes] = []
         for index in range(sample_count):
             claim, _ = repo.create_object(
@@ -111,7 +112,7 @@ def _relation_create(repetitions: int, warmups: int) -> dict:
             counter.reset()
             started = perf_counter_ns()
             relation = repo.create_relation(
-                source_uuid=product.object_uuid,
+                source_uuid=product_uuid,
                 source_version=1,
                 target_uuid=claim_uuid,
                 target_version=1,
