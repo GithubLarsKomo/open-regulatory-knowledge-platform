@@ -10,6 +10,6 @@
 - [x] Run Python 3.12 functional and performance harnesses on the implementation head.
 - [x] Compare read/write/E2E harnesses before/after.
 - [x] Perform simplification pass and document closure.
-- [ ] Run final Python 3.10 and 3.12 CI on the complete closure head.
-- [ ] Verify specification/backlog/generated-file gates on the complete closure head.
-- [ ] Merge only if all final functional gates are green and measured evidence remains consistent.
+- [x] Run final Python 3.10 and 3.12 CI on the complete closure head.
+- [x] Verify specification/backlog/generated-file gates on the complete closure head.
+- [x] Merge only if all final functional gates are green and measured evidence remains consistent.
