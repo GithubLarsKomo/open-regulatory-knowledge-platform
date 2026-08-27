@@ -5,6 +5,7 @@ import re
 from typing import Protocol
 from uuid import UUID
 
+from orkp.db.read_queries import list_current_object_versions
 from orkp.db.repository import RegulatoryObjectRepository
 from orkp.domain.ai_retrieval_models import (
     HybridRetrievalCandidate,
@@ -45,11 +46,11 @@ class ObjectStoreKeywordRetrievalAdapter:
             return []
         query_normalized = " ".join(tokens)
         hits: list[RetrievalHit] = []
-        for obj in self.repo.list_objects(limit=self.scan_limit):
+        for obj, version in list_current_object_versions(
+            self.repo.session,
+            limit=self.scan_limit,
+        ):
             if obj.object_type == "ai_draft":
-                continue
-            version = self.repo.get_version(obj.object_uuid, obj.current_version)
-            if version is None:
                 continue
             searchable = self._searchable_text(version.payload_json)
             matched = sum(1 for token in tokens if token in searchable)
