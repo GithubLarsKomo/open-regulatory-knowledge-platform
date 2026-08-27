@@ -146,7 +146,9 @@ def _prepare_per(repo):
         "owner",
     )
     _approve(repo, claim)
-    repo.create_relation(product.object_uuid, 1, claim.object_uuid, 1, "has_claim", "owner")
+    repo.create_relation(
+        product.object_uuid, 1, claim.object_uuid, 1, "has_claim", "owner"
+    )
     repo.session.commit()
     study = PerformanceStudyService(repo).create_study(
         product.uuid_hex,
@@ -237,7 +239,9 @@ def _graph_traceability(repetitions, warmups, node_count=51):
         child, _ = repo.create_object(
             "evidence", {"title": f"child {index}"}, "perf", "perf"
         )
-        repo.create_relation(root.object_uuid, 1, child.object_uuid, 1, "supersedes", "perf")
+        repo.create_relation(
+            root.object_uuid, 1, child.object_uuid, 1, "supersedes", "perf"
+        )
     session.commit()
     root_hex = root.uuid_hex
     counter = QueryCounter(engine)
@@ -266,7 +270,11 @@ def _hybrid_keyword(repetitions, warmups, object_count=1000):
     session = Session(engine)
     repo = RegulatoryObjectRepository(session)
     for index in range(object_count):
-        text = f"performance evidence marker {index}" if index % 10 == 0 else f"other {index}"
+        text = (
+            f"performance evidence marker {index}"
+            if index % 10 == 0
+            else f"other {index}"
+        )
         repo.create_object("claim", {"wording": text}, "perf", "perf")
     session.commit()
     session.expunge_all()
