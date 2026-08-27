@@ -17,11 +17,11 @@ Reduce `per_render_docx` from 10 SQL statements to 5 without changing determinis
 - [x] Remove redundant PER renderer Baseline reload.
 - [x] Capture artifact UUID before commit to avoid post-commit ORM refresh.
 - [x] Add an exact 5-statement DOCX render regression guard.
-- [ ] Run full Python 3.10 and 3.12 CI.
-- [ ] Confirm persistent `per_render_docx` E2E count is exactly 5 on both runtimes.
-- [ ] Confirm Baseline Create, Graph, Hybrid, read and write budgets are unchanged.
-- [ ] Run simplification pass and document closure.
-- [ ] Merge only after both runtime matrices are green.
+- [x] Run full Python 3.10 and 3.12 verification suites.
+- [x] Confirm persistent `per_render_docx` E2E count is exactly 5 on both runtimes.
+- [x] Confirm Baseline Create, Graph, Hybrid, read and write budgets are unchanged.
+- [x] Run simplification pass and document closure.
+- [ ] Merge only after the final closure head is green on both runtime matrices.
 
 ## Functional gate
 
