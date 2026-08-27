@@ -51,6 +51,7 @@ from orkp.api.post_market_router import create_post_market_router
 from orkp.api.risk_control_requirement_router import (
     create_risk_control_requirement_router,
 )
+from orkp.api.workflow_router import create_workflow_router
 
 
 # Domain-governed object types must not be created or versioned through generic
@@ -469,6 +470,7 @@ def create_app(session_factory_override=None) -> FastAPI:
     app.include_router(create_risk_control_requirement_router(get_repo))
     app.include_router(create_graph_router(get_repo))
     app.include_router(create_ai_router(get_repo))
+    app.include_router(create_workflow_router(get_repo))
 
     return app
 
