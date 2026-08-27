@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
-from sqlalchemy import select, update, and_
+from sqlalchemy import and_, or_, select, update
 from sqlalchemy.orm import Session
 
 from orkp.db.models import (
@@ -429,13 +429,37 @@ class RegulatoryObjectRepository:
         Raises:
             InvalidRelationError: version not found, invalid type, or type mismatch
         """
-        sv = self.get_version(source_uuid, source_version)
-        tv = self.get_version(target_uuid, target_version)
-        if sv is None:
+        endpoint_stmt = (
+            select(ObjectVersion, RegulatoryObject)
+            .join(
+                RegulatoryObject,
+                RegulatoryObject.object_uuid == ObjectVersion.object_uuid,
+            )
+            .where(
+                or_(
+                    and_(
+                        ObjectVersion.object_uuid == source_uuid,
+                        ObjectVersion.version_no == source_version,
+                    ),
+                    and_(
+                        ObjectVersion.object_uuid == target_uuid,
+                        ObjectVersion.version_no == target_version,
+                    ),
+                )
+            )
+        )
+        endpoint_context = {
+            (version.object_uuid, version.version_no): obj
+            for version, obj in self.session.execute(endpoint_stmt).all()
+        }
+
+        src_obj = endpoint_context.get((source_uuid, source_version))
+        tgt_obj = endpoint_context.get((target_uuid, target_version))
+        if src_obj is None:
             raise InvalidRelationError(
                 f"Source version {source_version} of {_bin_to_str(source_uuid)} not found"
             )
-        if tv is None:
+        if tgt_obj is None:
             raise InvalidRelationError(
                 f"Target version {target_version} of {_bin_to_str(target_uuid)} not found"
             )
@@ -447,11 +471,7 @@ class RegulatoryObjectRepository:
                 f"Invalid relation type '{relation_type}'. Valid: {', '.join(RELATION_TYPES)}"
             )
 
-        # Centralized canonical relation validation
-        src_obj = self.get_by_uuid_including_deleted(source_uuid)
-        tgt_obj = self.get_by_uuid_including_deleted(target_uuid)
-        if src_obj and tgt_obj:
-            validate_relation(src_obj.object_type, relation_type, tgt_obj.object_type)
+        validate_relation(src_obj.object_type, relation_type, tgt_obj.object_type)
 
         relation = ObjectRelation(
             source_uuid=source_uuid,
