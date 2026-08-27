@@ -43,13 +43,14 @@ def test_baseline_freeze_100_items_has_constant_query_budget(repo, engine):
             refs,
             "baseline-performance",
         )
+        baseline_uuid = baseline.baseline_uuid
         repo.session.commit()
-        return repo.list_baseline_items(baseline.baseline_uuid)
+        return repo.list_baseline_items(baseline_uuid)
 
     items, statements = _count_sql(engine, freeze_and_verify)
 
     assert len(items) == 100
-    assert statements <= 6
+    assert statements == 5
     assert {item.version_no for item in items} == {1}
     assert {item.object_type for item in items} == {"claim"}
 
@@ -71,9 +72,10 @@ def test_baseline_freeze_preserves_deleted_object_snapshot(repo):
         [(obj.object_uuid, 1)],
         "baseline-performance",
     )
+    baseline_uuid = baseline.baseline_uuid
     repo.session.commit()
 
-    [item] = repo.list_baseline_items(baseline.baseline_uuid)
+    [item] = repo.list_baseline_items(baseline_uuid)
     assert item.object_type == "claim"
     assert item.version_no == 1
     assert item.snapshot_json == {"wording": "frozen before deletion"}
@@ -87,9 +89,10 @@ def test_baseline_freeze_event_keeps_original_item_count(repo):
         refs,
         "baseline-performance",
     )
+    baseline_uuid = baseline.baseline_uuid
     repo.session.commit()
 
-    events = repo.get_event_history(baseline.baseline_uuid)
+    events = repo.get_event_history(baseline_uuid)
     frozen = [event for event in events if event.event_type == "baseline_frozen"]
 
     assert len(frozen) == 1
