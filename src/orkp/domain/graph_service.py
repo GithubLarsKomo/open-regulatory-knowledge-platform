@@ -3,6 +3,7 @@
 from collections import deque
 from uuid import UUID
 
+from orkp.db.graph_read_repository import GraphReadRepository
 from orkp.db.repository import RegulatoryObjectRepository
 from orkp.domain.exceptions import (
     InvalidObjectIdentifierError,
@@ -44,6 +45,7 @@ class GraphProjectionService:
 
     def __init__(self, repo: RegulatoryObjectRepository):
         self.repo = repo
+        self.graph_reads = GraphReadRepository(repo.session)
 
     def traceability(
         self,
@@ -61,36 +63,47 @@ class GraphProjectionService:
                 "Graph traversal depth must be between 0 and 10"
             )
 
-        self._load_node(root_uuid, object_version)
-
-        queue = deque([(root_uuid, object_version, 0)])
-        visited: set[tuple[bytes, int]] = set()
-        nodes: dict[tuple[bytes, int], GraphNode] = {}
+        root_key = (root_uuid, object_version)
+        nodes: dict[tuple[bytes, int], GraphNode] = {
+            root_key: self._load_node(root_uuid, object_version)
+        }
         edges: dict[bytes, GraphEdge] = {}
+        discovered: set[tuple[bytes, int]] = {root_key}
+        frontier: set[tuple[bytes, int]] = {root_key}
 
-        while queue:
-            current_uuid, current_version, level = queue.popleft()
-            current_key = (current_uuid, current_version)
-            if current_key in visited:
-                continue
-            visited.add(current_key)
-            nodes[current_key] = self._load_node(current_uuid, current_version)
+        for _level in range(depth):
+            if not frontier:
+                break
 
-            if level >= depth:
-                continue
+            relations = self.graph_reads.list_active_relations_for_version_pairs(frontier)
+            next_frontier: set[tuple[bytes, int]] = set()
 
-            relations = self._relations_for_exact_version(current_uuid, current_version)
             for relation in relations:
+                source_key = (relation.source_uuid, relation.source_version)
+                target_key = (relation.target_uuid, relation.target_version)
+                source_in_frontier = source_key in frontier
+                target_in_frontier = target_key in frontier
+                if not source_in_frontier and not target_in_frontier:
+                    continue
+
                 edges[relation.relation_uuid] = self._project_edge(relation)
-                if (
-                    relation.source_uuid == current_uuid
-                    and relation.source_version == current_version
-                ):
-                    adjacent = (relation.target_uuid, relation.target_version)
-                else:
-                    adjacent = (relation.source_uuid, relation.source_version)
-                if adjacent not in visited:
-                    queue.append((*adjacent, level + 1))
+                if source_in_frontier and target_key not in discovered:
+                    next_frontier.add(target_key)
+                if target_in_frontier and source_key not in discovered:
+                    next_frontier.add(source_key)
+
+            discovered.update(next_frontier)
+            frontier = next_frontier
+
+        non_root = discovered - {root_key}
+        contexts = self.graph_reads.get_object_version_contexts(non_root)
+        for node_key in non_root:
+            context = contexts.get(node_key)
+            if context is None:
+                nodes[node_key] = self._load_node(*node_key)
+                continue
+            version, obj = context
+            nodes[node_key] = self._project_node(obj, version)
 
         sorted_nodes = sorted(
             nodes.values(),
@@ -217,48 +230,32 @@ class GraphProjectionService:
             edges=graph.edges,
         )
 
-    def _relations_for_exact_version(self, object_uuid: bytes, version: int):
-        by_uuid = {}
-        for relation in self.repo.list_active_relations_for_source(object_uuid):
-            if relation.source_version == version:
-                by_uuid[relation.relation_uuid] = relation
-        for relation in self.repo.list_active_relations_for_target(object_uuid):
-            if relation.target_version == version:
-                by_uuid[relation.relation_uuid] = relation
-        return sorted(
-            by_uuid.values(),
-            key=lambda relation: (
-                relation.relation_type,
-                UUID(bytes=relation.source_uuid).hex,
-                relation.source_version,
-                UUID(bytes=relation.target_uuid).hex,
-                relation.target_version,
-                UUID(bytes=relation.relation_uuid).hex,
-            ),
-        )
-
     def _load_node(self, object_uuid: bytes, object_version: int) -> GraphNode:
-        obj = self.repo.get_by_uuid_including_deleted(object_uuid)
+        obj, version = self.graph_reads.get_object_version_context(
+            object_uuid, object_version
+        )
         if obj is None:
             raise ObjectNotFoundError(f"Object {UUID(bytes=object_uuid).hex} not found")
-        version = self.repo.get_version(object_uuid, object_version)
         if version is None:
             raise ObjectVersionNotFoundError(
                 f"Version {object_version} of object {UUID(bytes=object_uuid).hex} not found"
             )
+        return self._project_node(obj, version)
+
+    def _project_node(self, obj, version) -> GraphNode:
         return GraphNode(
-            object_uuid=UUID(bytes=object_uuid).hex,
-            object_version=object_version,
+            object_uuid=UUID(bytes=obj.object_uuid).hex,
+            object_version=version.version_no,
             object_type=obj.object_type,
             label=self._label_for(
                 obj.object_type,
-                object_uuid,
-                object_version,
+                obj.object_uuid,
+                version.version_no,
                 version.payload_json,
             ),
             version_status=version.status,
             current_lifecycle_state=obj.lifecycle_state,
-            is_current_version=obj.current_version == object_version,
+            is_current_version=obj.current_version == version.version_no,
         )
 
     @staticmethod
