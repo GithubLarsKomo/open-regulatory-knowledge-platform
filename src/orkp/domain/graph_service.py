@@ -75,7 +75,9 @@ class GraphProjectionService:
             if not frontier:
                 break
 
-            relations = self.graph_reads.list_active_relations_for_version_pairs(frontier)
+            relations = self.graph_reads.list_active_relations_for_version_pairs(
+                frontier
+            )
             next_frontier: set[tuple[bytes, int]] = set()
 
             for relation in relations:
