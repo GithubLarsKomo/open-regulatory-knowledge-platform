@@ -117,3 +117,25 @@ def test_keyword_prefilter_keeps_single_query_adapter_budget():
     finally:
         session.close()
         engine.dispose()
+
+
+def test_keyword_retrieval_preserves_unicode_matching_without_sql_prefilter():
+    engine, session, repo = _repo()
+    try:
+        expected = _object(
+            repo,
+            "Überprüfung der klinischen Sensitivität",
+            datetime(2026, 1, 5),
+        )
+        _object(repo, "other", datetime(2026, 1, 4))
+
+        hits = ObjectStoreKeywordRetrievalAdapter(repo, scan_limit=10).search(
+            "überprüfung", limit=10
+        )
+
+        assert len(hits) == 1
+        assert hits[0].reference.object_uuid == expected.uuid_hex
+        assert hits[0].score == 1.0
+    finally:
+        session.close()
+        engine.dispose()
