@@ -1,7 +1,7 @@
 # Specification Linter Report
 
 - **Repository:** .
-- **Files scanned:** 31
+- **Files scanned:** 37
 - **Unique IDs defined:** 168
 - **Duplicates:** 0
 - **Invalid format:** 0
