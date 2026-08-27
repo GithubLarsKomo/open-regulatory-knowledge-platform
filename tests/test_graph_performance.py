@@ -33,11 +33,12 @@ def _create_evidence(repo, title: str):
 def test_traceability_depth_zero_uses_one_statement(repo, engine):
     root = _create_evidence(repo, "root")
     repo.session.commit()
+    root_hex = root.uuid_hex
     repo.session.expunge_all()
 
     graph, statements = _count_sql(
         engine,
-        lambda: GraphProjectionService(repo).traceability(root.uuid_hex, 1, depth=0),
+        lambda: GraphProjectionService(repo).traceability(root_hex, 1, depth=0),
     )
 
     assert len(graph.nodes) == 1
