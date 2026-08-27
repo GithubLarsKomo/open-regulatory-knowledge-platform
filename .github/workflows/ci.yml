@@ -66,16 +66,23 @@ jobs:
       - name: Run tests
         run: python -m pytest -q
 
-      - name: Capture performance baseline
+      - name: Capture read performance baseline
         run: |
           python tools/performance_baseline.py --output /tmp/performance-baseline.json
           cat /tmp/performance-baseline.json
 
-      - name: Upload performance baseline
+      - name: Capture write performance baseline
+        run: |
+          python tools/performance_write_baseline.py --output /tmp/performance-write-baseline.json
+          cat /tmp/performance-write-baseline.json
+
+      - name: Upload performance baselines
         uses: actions/upload-artifact@v4
         with:
           name: performance-baseline-py${{ matrix.python-version }}
-          path: /tmp/performance-baseline.json
+          path: |
+            /tmp/performance-baseline.json
+            /tmp/performance-write-baseline.json
           if-no-files-found: error
 
       - name: Run specification linter (strict mode)
