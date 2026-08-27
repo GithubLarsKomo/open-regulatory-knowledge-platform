@@ -62,13 +62,13 @@ class PERRenderService:
         else:
             content = self._render_pdf(blocks)
 
-        baseline = self._load_baseline(draft.baseline_uuid)
+        baseline_uuid = UUID(draft.baseline_uuid).bytes
         checksum = hashlib.sha256(content).hexdigest()
         filename = f"per-{draft.baseline_uuid[:8]}.{render_format}"
 
         try:
             artifact = GeneratedArtifact(
-                baseline_uuid=baseline.baseline_uuid,
+                baseline_uuid=baseline_uuid,
                 artifact_type="per_report",
                 format=render_format,
                 file_path=None,
@@ -77,13 +77,14 @@ class PERRenderService:
             )
             self.repo.session.add(artifact)
             self.repo.session.flush()
+            artifact_uuid = UUID(bytes=artifact.artifact_uuid).hex
             self.repo.session.add(
                 EventLog(
                     aggregate_type="baseline",
-                    aggregate_uuid=baseline.baseline_uuid,
+                    aggregate_uuid=baseline_uuid,
                     event_type="artifact_generated",
                     event_data={
-                        "artifact_uuid": UUID(bytes=artifact.artifact_uuid).hex,
+                        "artifact_uuid": artifact_uuid,
                         "artifact_type": artifact.artifact_type,
                         "format": artifact.format,
                         "checksum": checksum,
@@ -98,7 +99,7 @@ class PERRenderService:
             raise
 
         return PERRenderResult(
-            artifact_uuid=UUID(bytes=artifact.artifact_uuid).hex,
+            artifact_uuid=artifact_uuid,
             baseline_uuid=draft.baseline_uuid,
             format=render_format,
             media_type=_MEDIA_TYPES[render_format],
@@ -106,18 +107,6 @@ class PERRenderService:
             checksum_sha256=checksum,
             content=content,
         )
-
-    def _load_baseline(self, baseline_hex: str):
-        try:
-            baseline_uuid = UUID(baseline_hex).bytes
-        except (ValueError, AttributeError, TypeError) as exc:
-            raise BaselineValidationError(
-                f"Invalid PER baseline UUID format: {baseline_hex}"
-            ) from exc
-        baseline = self.repo.get_baseline(baseline_uuid)
-        if baseline is None:
-            raise BaselineValidationError(f"PER baseline {baseline_hex} not found")
-        return baseline
 
     @classmethod
     def _document_blocks(cls, draft: PERDraftPayload) -> list[_DocumentBlock]:
