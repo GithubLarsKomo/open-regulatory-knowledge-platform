@@ -110,12 +110,13 @@ def get_object_version_validation_contexts(
     session: Session,
     object_versions: Iterable[VersionKey],
 ) -> dict[bytes, ValidationContext]:
-    """Load Object Store validation context for many exact references at once.
+    """Load non-deleted Object Store validation context for exact refs in bulk.
 
-    The outer join intentionally keeps an existing object visible even when none
-    of the requested exact versions exists. Callers can therefore preserve the
-    distinction between "object not found" and "version not found" without an
-    object/version query pair for every retrieval hit.
+    The outer join intentionally keeps an existing non-deleted object visible even
+    when none of the requested exact versions exists. Callers can therefore
+    preserve the distinction between "object not found" and "version not found"
+    without an object/version query pair for every retrieval hit. Soft-deleted
+    objects remain invisible, matching ``RegulatoryObjectRepository.get_by_uuid``.
     """
     requested = list(dict.fromkeys(object_versions))
     if not requested:
@@ -134,7 +135,10 @@ def get_object_version_validation_contexts(
                 ).in_(requested),
             ),
         )
-        .where(RegulatoryObject.object_uuid.in_(object_uuids))
+        .where(
+            RegulatoryObject.object_uuid.in_(object_uuids),
+            RegulatoryObject.lifecycle_state != "deleted",
+        )
     )
 
     contexts: dict[bytes, ValidationContext] = {}
