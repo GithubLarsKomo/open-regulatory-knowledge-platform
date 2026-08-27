@@ -56,7 +56,9 @@ class GraphReadRepository:
                 RegulatoryObject.object_uuid == ObjectVersion.object_uuid,
             )
             .where(
-                tuple_(ObjectVersion.object_uuid, ObjectVersion.version_no).in_(requested)
+                tuple_(ObjectVersion.object_uuid, ObjectVersion.version_no).in_(
+                    requested
+                )
             )
         )
         return {
