@@ -153,7 +153,9 @@ class HybridRetrievalService:
     ):
         self.repo = repo
         self.vector_adapter = vector_adapter
-        self.keyword_adapter = keyword_adapter or ObjectStoreKeywordRetrievalAdapter(repo)
+        self.keyword_adapter = keyword_adapter or ObjectStoreKeywordRetrievalAdapter(
+            repo
+        )
         self.graph_adapter = graph_adapter or GraphRetrievalAdapter(repo)
 
     def retrieve(self, request: HybridRetrievalRequest) -> HybridRetrievalResponse:
@@ -266,7 +268,9 @@ class HybridRetrievalService:
             ) from exc
         obj = self.repo.get_by_uuid(object_uuid)
         if obj is None:
-            raise ObjectNotFoundError(f"{label} object {reference.object_uuid} not found")
+            raise ObjectNotFoundError(
+                f"{label} object {reference.object_uuid} not found"
+            )
         version = self.repo.get_version(object_uuid, reference.object_version)
         if version is None:
             raise ObjectVersionNotFoundError(
