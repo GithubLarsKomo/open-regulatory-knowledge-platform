@@ -76,6 +76,11 @@ jobs:
           python tools/performance_write_baseline.py --output /tmp/performance-write-baseline.json
           cat /tmp/performance-write-baseline.json
 
+      - name: Capture end-to-end performance baseline
+        run: |
+          python tools/performance_e2e_baseline.py --output /tmp/performance-e2e-baseline.json
+          cat /tmp/performance-e2e-baseline.json
+
       - name: Upload performance baselines
         uses: actions/upload-artifact@v4
         with:
@@ -83,6 +88,7 @@ jobs:
           path: |
             /tmp/performance-baseline.json
             /tmp/performance-write-baseline.json
+            /tmp/performance-e2e-baseline.json
           if-no-files-found: error
 
       - name: Run specification linter (strict mode)
