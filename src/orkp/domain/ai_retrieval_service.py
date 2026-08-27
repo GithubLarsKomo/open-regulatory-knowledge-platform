@@ -5,6 +5,7 @@ import re
 from typing import Protocol
 from uuid import UUID
 
+from orkp.db.read_queries import list_current_object_versions
 from orkp.db.repository import RegulatoryObjectRepository
 from orkp.domain.ai_retrieval_models import (
     HybridRetrievalCandidate,
@@ -45,11 +46,11 @@ class ObjectStoreKeywordRetrievalAdapter:
             return []
         query_normalized = " ".join(tokens)
         hits: list[RetrievalHit] = []
-        for obj in self.repo.list_objects(limit=self.scan_limit):
+        for obj, version in list_current_object_versions(
+            self.repo.session,
+            limit=self.scan_limit,
+        ):
             if obj.object_type == "ai_draft":
-                continue
-            version = self.repo.get_version(obj.object_uuid, obj.current_version)
-            if version is None:
                 continue
             searchable = self._searchable_text(version.payload_json)
             matched = sum(1 for token in tokens if token in searchable)
@@ -152,7 +153,9 @@ class HybridRetrievalService:
     ):
         self.repo = repo
         self.vector_adapter = vector_adapter
-        self.keyword_adapter = keyword_adapter or ObjectStoreKeywordRetrievalAdapter(repo)
+        self.keyword_adapter = keyword_adapter or ObjectStoreKeywordRetrievalAdapter(
+            repo
+        )
         self.graph_adapter = graph_adapter or GraphRetrievalAdapter(repo)
 
     def retrieve(self, request: HybridRetrievalRequest) -> HybridRetrievalResponse:
@@ -265,7 +268,9 @@ class HybridRetrievalService:
             ) from exc
         obj = self.repo.get_by_uuid(object_uuid)
         if obj is None:
-            raise ObjectNotFoundError(f"{label} object {reference.object_uuid} not found")
+            raise ObjectNotFoundError(
+                f"{label} object {reference.object_uuid} not found"
+            )
         version = self.repo.get_version(object_uuid, reference.object_version)
         if version is None:
             raise ObjectVersionNotFoundError(
