@@ -137,7 +137,9 @@ def _measure(
     }
 
 
-def _seed_objects(session: Session, count: int, object_type: str = "claim") -> list[bytes]:
+def _seed_objects(
+    session: Session, count: int, object_type: str = "claim"
+) -> list[bytes]:
     repo = RegulatoryObjectRepository(session)
     uuids: list[bytes] = []
     for index in range(count):
