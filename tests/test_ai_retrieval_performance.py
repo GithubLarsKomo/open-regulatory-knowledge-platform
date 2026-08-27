@@ -1,17 +1,30 @@
 """Deterministic query-budget regressions for hybrid keyword retrieval."""
 
+from uuid import UUID
+
+import pytest
 from sqlalchemy import event
 
-from orkp.domain.ai_retrieval_models import HybridRetrievalRequest
+from orkp.domain.ai_retrieval_models import HybridRetrievalRequest, RetrievalHit
 from orkp.domain.ai_retrieval_service import (
     HybridRetrievalService,
     ObjectStoreKeywordRetrievalAdapter,
 )
+from orkp.domain.exceptions import ObjectNotFoundError, ObjectVersionNotFoundError
+from orkp.domain.risk_models import VersionedObjectReference
 
 
 class EmptyVectorAdapter:
     def search(self, query_text: str, limit: int):
         return []
+
+
+class StaticVectorAdapter:
+    def __init__(self, hits):
+        self.hits = list(hits)
+
+    def search(self, query_text: str, limit: int):
+        return list(self.hits[:limit])
 
 
 def _seed_claims(repo, count: int = 100) -> None:
@@ -75,3 +88,62 @@ def test_hybrid_keyword_retrieval_batches_exact_hit_validation(repo, engine):
     assert len(response.results) == 10
     assert all(result.channels == ["keyword"] for result in response.results)
     assert statements == 2
+
+
+def test_batch_validation_preserves_missing_object_error(repo):
+    unknown_uuid = UUID(int=1).hex
+    vector = StaticVectorAdapter(
+        [
+            RetrievalHit(
+                reference=VersionedObjectReference(
+                    object_uuid=unknown_uuid,
+                    object_version=1,
+                ),
+                object_type="claim",
+                channel="vector",
+                score=1.0,
+            )
+        ]
+    )
+
+    with pytest.raises(ObjectNotFoundError, match=f"object {unknown_uuid} not found"):
+        HybridRetrievalService(repo, vector).retrieve(
+            HybridRetrievalRequest(query_text="unmatched", keyword_limit=1)
+        )
+
+
+def test_batch_validation_preserves_first_grounding_error_order(repo):
+    obj, _ = repo.create_object(
+        "claim",
+        {"wording": "validation ordering"},
+        "performance-test",
+        "performance-test",
+    )
+    repo.session.commit()
+    vector = StaticVectorAdapter(
+        [
+            RetrievalHit(
+                reference=VersionedObjectReference(
+                    object_uuid=obj.uuid_hex,
+                    object_version=99,
+                ),
+                object_type="claim",
+                channel="vector",
+                score=1.0,
+            ),
+            RetrievalHit(
+                reference=VersionedObjectReference(
+                    object_uuid=obj.uuid_hex,
+                    object_version=1,
+                ),
+                object_type="claim",
+                channel="keyword",
+                score=0.9,
+            ),
+        ]
+    )
+
+    with pytest.raises(ObjectVersionNotFoundError, match="v99 not found"):
+        HybridRetrievalService(repo, vector).retrieve(
+            HybridRetrievalRequest(query_text="unmatched", keyword_limit=1)
+        )
