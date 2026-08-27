@@ -60,7 +60,7 @@ def test_keyword_scan_loads_current_versions_in_one_statement(repo, engine):
     assert statements == 1
 
 
-def test_hybrid_keyword_retrieval_stays_within_validation_budget(repo, engine):
+def test_hybrid_keyword_retrieval_batches_exact_hit_validation(repo, engine):
     _seed_claims(repo)
     service = HybridRetrievalService(repo, EmptyVectorAdapter())
     request = HybridRetrievalRequest(
@@ -74,4 +74,4 @@ def test_hybrid_keyword_retrieval_stays_within_validation_budget(repo, engine):
 
     assert len(response.results) == 10
     assert all(result.channels == ["keyword"] for result in response.results)
-    assert statements <= 21
+    assert statements == 2
