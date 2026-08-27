@@ -304,6 +304,11 @@ class RegulatoryObjectRepository:
                 f"Cannot transition from '{current}' to '{new_state}'"
             )
 
+        if new_state == "rejected" and (comments is None or not comments.strip()):
+            raise InvalidLifecycleTransitionError(
+                "Reject transition requires non-blank reviewer comments"
+            )
+
         if not self._increment_lock(obj, expected_lock_version):
             raise OptimisticLockError(
                 f"Stale lock version for object {_bin_to_str(object_uuid)}"
@@ -515,7 +520,7 @@ class RegulatoryObjectRepository:
         return self.session.execute(stmt).scalar_one_or_none()
 
     def get_relation_or_raise(self, relation_uuid_hex: str) -> ObjectRelation:
-        """Get a relation by hex UUID or raise RelationNotFoundError."""
+        """Get relation by hex UUID or raise RelationNotFoundError."""
         try:
             ruuid = uuid.UUID(hex=relation_uuid_hex).bytes
         except (ValueError, AttributeError):
