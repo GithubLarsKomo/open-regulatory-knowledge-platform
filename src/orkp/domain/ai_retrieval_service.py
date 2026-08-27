@@ -50,7 +50,9 @@ class ObjectStoreKeywordRetrievalAdapter:
             return []
         query_normalized = " ".join(tokens)
         hits: list[RetrievalHit] = []
-        for object_uuid, current_version, object_type, payload in self._candidates(tokens):
+        for object_uuid, current_version, object_type, payload in self._candidates(
+            tokens
+        ):
             searchable = self._searchable_text(payload)
             matched = sum(1 for token in tokens if token in searchable)
             if matched == 0:
