@@ -8,7 +8,7 @@ API-REST-0003 (pagination, filtering, sorting) and API-REST-0004 (version histor
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 # ---------------------------------------------------------------------------
@@ -103,6 +103,15 @@ class StateTransitionRequest(BaseModel):
     new_state: str = Field(..., description="Target lifecycle state")
     actor_user_id: str = Field(..., description="User performing the transition")
     comments: Optional[str] = Field(None, description="Reviewer comments")
+
+    @model_validator(mode="after")
+    def require_rejection_rationale(self):
+        """Rejected workflow decisions require a non-blank reviewer rationale."""
+        if self.new_state == "rejected" and (
+            self.comments is None or not self.comments.strip()
+        ):
+            raise ValueError("Rejected transitions require reviewer comments")
+        return self
 
 
 # ---------------------------------------------------------------------------
