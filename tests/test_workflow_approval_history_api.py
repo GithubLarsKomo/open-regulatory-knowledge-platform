@@ -110,8 +110,6 @@ def test_history_is_deterministic_across_reject_revision_and_approval(client):
 
 
 def test_approval_history_returns_404_for_missing_object(client):
-    response = client.get(
-        "/api/v1/objects/00000000000000000000000000000000/approvals"
-    )
+    response = client.get("/api/v1/objects/00000000000000000000000000000000/approvals")
 
     assert response.status_code == 404

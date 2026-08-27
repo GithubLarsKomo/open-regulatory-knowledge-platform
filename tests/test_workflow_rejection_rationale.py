@@ -21,7 +21,9 @@ def workflow_context():
     )
     Base.metadata.create_all(engine)
     session_factory = sessionmaker(bind=engine)
-    return TestClient(create_app(session_factory_override=session_factory)), session_factory
+    return TestClient(
+        create_app(session_factory_override=session_factory)
+    ), session_factory
 
 
 def _create_in_review_object(client: TestClient) -> str:
